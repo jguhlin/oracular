@@ -8,6 +8,8 @@ extern crate fnv;
 extern crate bitvec;
 
 use twox_hash::XxHash64;
+use std::sync::mpsc::TrySendError::Full;
+
 
 #[macro_use]
 use bitvec::prelude::*;
@@ -63,7 +65,7 @@ fn main() {
 
     let pool = ThreadPool::new(32);
 
-    let (tx, rx) = sync_channel(16);
+    let (tx, rx) = sync_channel(64);
 
     /*let mut output = match matches.value_of("output") {
         None => { let output_fh = match OpenOptions::new().create(true).write(true).append(false).open("out.oracular") {
@@ -84,121 +86,48 @@ fn main() {
 
     // let kmer_table: HashMap<Vec<u8>, Vec<u8>, BuildHasherDefault<SeaHasher>> = Default::default();
 
-    let kmer = "ATGTTGGCAAACAAGAAATACTAAGTGGTCTGGA";
-    let kmer2 = "ATGTTGGCAAACAAGAAATACTAAGTGGTCTGGAA";
-    let kmer3 = "ATGTTGGCAAACAAGAAATACTAAGTGGTCTGGAAA";
-
-    println!("{:#?}", convert_kmer_to_bits(kmer));
-    println!("{:#?}", convert_kmer_to_bits(kmer2));
-    println!("{:#?}", convert_kmer_to_bits(kmer3));
-
     let mut total: usize = 0;
     let mut total_jobs: u64 = 0;
 
-    let mut kmer_dict: FnvHashMap<Vec<u8>, u32> = Default::default();
-    let mut dict_kmer: Vec<Vec<u8>> = Vec::new();
-    let mut kmer_dict_id: u32 = 0;
-    let mut kmer_counts: FnvHashMap<Vec<u8>, usize> = Default::default();
-    let mut total_kmers: usize = 0;
-    let mut unique_kmers: FnvHashSet<Vec<u8>> = Default::default();
-
-    {
-        let entries = opinionated::fasta::fasta_entries(test_file).unwrap();
-        for i in entries {
-            println!("Processed");
-            let x = match i {
-                Ok(x)    => x,
-                Err(y)  => panic!("{}", y)
-            };
-
-            let result: (FnvHashSet<Vec<u8>>, usize) = 
-                get_good_sequence_coords(&x.seq)
-                .par_iter()
-                .map(|(start_coords, end_coords)| {
-                    let mut slice = x.seq[*start_coords..*end_coords].to_vec();
-                    slice.make_ascii_uppercase();
-
-                    let kmers = get_all_kmers(&mut slice, &kmer_size, &minn, &maxn, &step_size);
-                    let mut unique_kmers: FnvHashSet<Vec<u8>> = Default::default();
-                    let mut total_count: usize = kmers.len();
-                    unique_kmers.extend(kmers);
-                    (unique_kmers, total_count)
-                })
-                .reduce(
-                    || (Default::default(), 0 as usize),
-                    |mut a, b| {
-                            (a.0).extend(b.0); 
-                            (a.0, a.1 + b.1)
-                    });
-
-            unique_kmers.extend(result.0);
-            total_kmers += result.1;
-
-        }
-
-        dict_kmer.resize(unique_kmers.len(), Vec::new()); // Probably speeds things up
-
-        unique_kmers
-            .iter()
-            .enumerate()
-            .for_each(|(id, kmer)|
-                {
-                    kmer_dict.insert(kmer.clone(), id as u32);
-                    dict_kmer[id] = kmer.clone()
-                });
-    }
-
-    println!("{}", kmer_dict_id);
-
-    println!("{}", String::from_utf8(kmer_dict.keys().next().unwrap().to_vec()).unwrap());
-
-    drop(unique_kmers); // Don't need this anymore...
-    drop(kmer_counts); // Not using this one just yet...
-
-
-
-    // let keep = counts.clone().into_iter().enumerate().filter(|&(_x, y)| y >= 5).collect::<Vec<_>>();
-    // counts = counts.into_iter().filter(|&x| x >= 5).collect::<Vec<u32>>();
-
-    // for (x,y) in keep {
-    //    if y > 10000 {
-    //        let kmer = String::from_utf8(dict_kmer[x as usize].clone()).unwrap();
-    //        println!("{} {}", kmer, y);
-    //    }
-    //}
-    
-    // println!("Most occurences of a single kmer: {}", counts.iter().max().unwrap());
-    // println!("Fewest occurences of a single kmer: {}", counts.iter().min().unwrap());
-    // println!("Mean occurences of kmers: {}", mean(&counts));
-
-    println!("Found {} unique kmers", kmer_dict.len());
-    println!("Found {} total kmers", total_kmers);
-//    println!("Total after removing those with fewer than 5: {}", counts.len());
-   
-    let kmer_dict = Arc::new(kmer_dict);
-    let dict_kmer = Arc::new(dict_kmer);
+    // let mut kmer_dict: FnvHashMap<Vec<u8>, u32> = Default::default();
+    // let mut dict_kmer: Vec<Vec<u8>> = Vec::new();
+    // let mut kmer_dict_id: u32 = 0;
+    // let mut kmer_counts: FnvHashMap<Vec<u8>, usize> = Default::default();
+    // let mut total_kmers: usize = 0;
+    // let mut unique_kmers: FnvHashSet<Vec<u8>> = Default::default();
 
     {
         let entries = opinionated::fasta::fasta_entries(test_file).unwrap();
 
         for i in entries {
-            // data.clear();
             let x = match i {
                         Ok(x)  => x,
                         Err(y) => panic!("{}", y)
                     };
 
             let coords = get_good_sequence_coords(&x.seq);
+            let mut slices_x = Vec::new();
+            let mut seqlength: usize = 0;
             for (start_coords, end_coords) in coords {
-                let slice = x.seq[start_coords..end_coords].to_vec();
+                slices_x.push(x.seq[start_coords..end_coords].to_vec());
+                seqlength += end_coords - start_coords;
 
-                let kmer_dict = Arc::clone(&kmer_dict);
-                let dict_kmer = Arc::clone(&dict_kmer);
+                if seqlength > 1024 * 1024 * 5 {
+                    let tx = tx.clone();
+                    pool.execute(move|| {
+                        parse_kmers(tx, kmer_size, step_size, w, minn, maxn, slices_x);
+                    });
+                    total_jobs += 1;
+                    slices_x = Vec::new();
+                    seqlength = 0;
+                }
+            }
 
+            if slices_x.len() > 0 {
                 let tx = tx.clone();
-                pool.execute(move|| {
-                    parse_kmers(tx, kmer_size, step_size, w, minn, maxn, slice, kmer_dict, dict_kmer);
-                });
+                    pool.execute(move|| {
+                        parse_kmers(tx, kmer_size, step_size, w, minn, maxn, slices_x);
+                    });
                 total_jobs += 1;
             }
         }
@@ -211,7 +140,7 @@ fn main() {
 /*    let mut m: HashMap<u32, 
         HashMap<u32, usize, BuildHasherDefault<XxHash64>>,
         BuildHasherDefault<XxHash64>> = Default::default(); */
-    let mut m: FnvHashMap<u32, FnvHashMap<u32, usize>> = Default::default();
+    let mut m: FnvHashMap<DnaKmerBinary, FnvHashMap<DnaKmerBinary, usize>> = Default::default();
 
     let pb = ProgressBar::new(total_jobs);
     pb.set_style(ProgressStyle::default_bar()
@@ -239,131 +168,148 @@ fn main() {
     pool.join();
 }
 
-fn parse_kmers( tx: std::sync::mpsc::SyncSender<FnvHashMap<u32, FnvHashMap<u32, usize>>>,
+fn parse_kmers( tx: std::sync::mpsc::SyncSender<FnvHashMap<DnaKmerBinary, FnvHashMap<DnaKmerBinary, usize>>>,
                 kmer_size: usize, 
                 step_size: usize, 
                 w: usize,
                 minn: usize,
                 maxn: usize,
-                mut x: Vec<u8>,
-                kmer_dict: Arc<FnvHashMap<Vec<u8>,u32>>,
-                dict_kmer: Arc<Vec<Vec<u8>>>) 
+                xs: Vec<Vec<u8>>) 
         -> () {
         //-> Vec< (Arc<Vec<u8>>, Arc<Vec<u8>>) > {
 
-    let mut collated: FnvHashMap<u32, FnvHashMap<u32, usize>> = Default::default();
+    let mut collated: FnvHashMap<DnaKmerBinary, FnvHashMap<DnaKmerBinary, usize>> = Default::default();
 
-    x.make_ascii_uppercase(); // I think this one is faster
-    let kmers: Vec<_> = Kmers::with_step(&x, kmer_size, step_size)
-        .filter(|x| 
-            match x {
-                KmerOption::Kmer(_) => true,
-                _                   => false
-            })
-        .map(|x| x.unwrap().to_vec().clone()).into_iter().collect();
-    let len = kmers.len();
-    let mut start;
-    let mut end;
-    let mut target;
-    let mut context: Vec<u32> = Vec::new();
-    // let mut data: Vec< (Vec<u8>, Vec<u8>) > = Vec::new();
-    let mut worked_on_counter: usize = 0;
+    // println!("{}", xs.len());
 
-    // println!("{}", len);
+    for mut x in xs {
+        x.make_ascii_uppercase(); // I think this one is faster
+        // TODO: Step size here is wrong for the context we are going for!
+        // Need to change step size after processing entire sequence, not during...
 
-    for pos in 0..len {
-        context.clear();
-        worked_on_counter += 1;
+        let kmers: Vec<_> = Kmers::with_step(&x, kmer_size, step_size)
+            .filter(|x| 
+                match x {
+                    KmerOption::Kmer(_) => true,
+                    _                   => false
+                })
+            .map(|x| x.unwrap().to_vec().clone()).into_iter().collect();
 
-        start = pos.saturating_sub(w);
-        end   = pos.saturating_add(w);
-        if end > len {
-            end = len;
-        }
-                
-        target = kmer_dict.get(&kmers[pos]).expect("Kmer is missing! 1");
+        let len = kmers.len();
+        let mut start;
+        let mut end;
+        let mut target;
+        let mut context: Vec<DnaKmerBinary> = Vec::new();
+        let mut worked_on_counter: usize = 0;
 
-        let mut target_hash = collated.entry(*target).or_insert(Default::default());
-        let mut ptr;
+        // println!("{}", len);
 
-        if start < pos {
-            for context_kmer in start..pos {
-                context.push(*kmer_dict.get(&kmers[context_kmer]).expect("Kmer is missing! 2"));
+        for pos in 0..len {
+            context.clear();
+            worked_on_counter += 1;
+
+            start = pos.saturating_sub(w);
+            end   = pos.saturating_add(w);
+            if end > len {
+                end = len;
             }
-        }
+                    
+            target = convert_kmer_to_bits(&kmers[pos]);
 
-        if end >= pos {
-            for context_kmer in pos..end {
-                context.push(*kmer_dict.get(&kmers[context_kmer]).expect("Kmer is missing! 3"));
-            }
-        }
+            let mut target_hash = collated.entry(target).or_insert(Default::default());
+            let mut ptr;
 
-        for ctx in &context {
-            ptr = target_hash.entry(*ctx).or_insert(0);
-            *ptr += 1;
-            // data.push( (target.to_vec(), ctx.to_vec()) ); //(get_kmer(&kmer_table, target), get_kmer(&kmer_table, ctx) ) );
-        }
-
-        let target_kmer = (&kmers[pos]).to_vec();
-
-        let mut rc = target_kmer.clone();
-        complement_nucleotides(&mut rc);
-        rc.reverse();
-
-        // Errors are here...
-        target_hash = collated.entry(*kmer_dict.get(&rc.to_vec()).expect("Kmer is missing! 4")).or_insert(Default::default());
-
-        for ctx in &context {
-            ptr = target_hash.entry(ctx.clone()).or_insert(0);
-            *ptr += 1;
-        }
-
-        // Process subkmers
-
-        for k in minn..=maxn {
-            for subkmer in Kmers::with_step(&target_kmer, k, 1) {
-                match subkmer {
-                    KmerOption::Kmer(subkmer) => {
-                        target_hash = collated.entry(*kmer_dict.get(subkmer).expect("Kmer is missing! 5")).or_insert(Default::default());
-                        for ctx in &context {
-                            ptr = target_hash.entry(*ctx).or_insert(0);
-                            *ptr += 1;
-                            //data.push( (subkmer.to_vec(), ctx.to_vec() ) ); //(get_kmer(&kmer_table, subkmer), get_kmer(&kmer_table, ctx) ) );
-                        }
-                    },
-                    _ => () // Ignore partials, ignore empty
+            if start < pos {
+                for context_kmer in start..pos {
+                    context.push(convert_kmer_to_bits(&kmers[context_kmer]));
                 }
             }
-        }
 
-        for k in minn..=maxn {
-            for subkmer in Kmers::with_step(&rc, k, 1) {
-                match subkmer {
-                    KmerOption::Kmer(subkmer) => {
-                        target_hash = collated.entry(*kmer_dict.get(subkmer).expect("Kmer is missing! 6")).or_insert(Default::default());
-                        for ctx in &context {
-                            ptr = target_hash.entry(*ctx).or_insert(0);
-                            *ptr += 1;
-                            //data.push( (subkmer.to_vec(), ctx.to_vec() )); //(get_kmer(&kmer_table, subkmer), get_kmer(&kmer_table, ctx) ) );
-                        }
-                    },
-                    _ => () // Ignore partials, ignore empty
+            if end >= pos {
+                for context_kmer in pos..end {
+                    context.push(convert_kmer_to_bits(&kmers[context_kmer]));
                 }
             }
+
+            for ctx in &context {
+                ptr = target_hash.entry((*ctx).clone()).or_insert(0);
+                *ptr += 1;
+                // data.push( (target.to_vec(), ctx.to_vec()) ); //(get_kmer(&kmer_table, target), get_kmer(&kmer_table, ctx) ) );
+            }
+
+            let target_kmer = (&kmers[pos]).to_vec();
+
+            let mut rc = target_kmer.clone();
+            complement_nucleotides(&mut rc);
+            rc.reverse();
+
+            // Errors are here...
+            target_hash = collated.entry(convert_kmer_to_bits(&rc.to_vec())).or_insert(Default::default());
+
+            for ctx in &context {
+                ptr = target_hash.entry((*ctx).clone()).or_insert(0);
+                *ptr += 1;
+            }
+
+            // Process subkmers
+
+            for k in minn..=maxn {
+                for subkmer in Kmers::with_step(&target_kmer, k, 1) {
+                    match subkmer {
+                        KmerOption::Kmer(subkmer) => {
+                            target_hash = collated.entry(convert_kmer_to_bits(&subkmer)).or_insert(Default::default());
+                            for ctx in &context {
+                                ptr = target_hash.entry((*ctx).clone()).or_insert(0);
+                                *ptr += 1;
+                                //data.push( (subkmer.to_vec(), ctx.to_vec() ) ); //(get_kmer(&kmer_table, subkmer), get_kmer(&kmer_table, ctx) ) );
+                            }
+                        },
+                        _ => () // Ignore partials, ignore empty
+                    }
+                }
+            }
+
+            for k in minn..=maxn {
+                for subkmer in Kmers::with_step(&rc, k, 1) {
+                    match subkmer {
+                        KmerOption::Kmer(subkmer) => {
+                            target_hash = collated.entry(convert_kmer_to_bits(&subkmer)).or_insert(Default::default());
+                            for ctx in &context {
+                                ptr = target_hash.entry((*ctx).clone()).or_insert(0);
+                                *ptr += 1;
+                                //data.push( (subkmer.to_vec(), ctx.to_vec() )); //(get_kmer(&kmer_table, subkmer), get_kmer(&kmer_table, ctx) ) );
+                            }
+                        },
+                        _ => () // Ignore partials, ignore empty
+                    }
+                }
+            }
+
+            // TODO: Do rc of contexts as well
+
+/*            if worked_on_counter > 1024 * 512 { // 1024 * 1024 * 1 @ 50 is 28m
+                                                // 1024 * 512 is 28m
+                match tx.try_send(collated) {
+                    Ok(_) => { println!("Sent..."); },
+                    Err(x) => match x {
+                        Full(x) => {
+                            println!("Queue is full");
+                            tx.send(x).expect("Unable to send hash-map to be collated");
+                        }
+                        _       => panic!("Ahhh!!!")
+                    },
+                    _  => panic!("Ahh!!!!!!")
+                };
+                // tx.send(collated).expect("Unable to send hash-map to be collated");
+                collated = Default::default();
+                worked_on_counter = 0;
+            }
+*/
+    /*        if data.len() > 1024 * 512 {
+                let collated = combine_entries(&mut data);
+                tx.send(collated).expect("Unable to send data packet");
+            } */
         }
-
-        // TODO: Do rc of contexts as well
-
-        if worked_on_counter > 1024 * 512 {
-            tx.send(collated).expect("Unable to send hash-map to be collated");
-            collated = Default::default();
-            worked_on_counter = 0;
-        }
-
-/*        if data.len() > 1024 * 512 {
-            let collated = combine_entries(&mut data);
-            tx.send(collated).expect("Unable to send data packet");
-        } */
     }
     
     if collated.len() > 0 {
@@ -401,58 +347,49 @@ fn get_good_sequence_coords (seq: &[u8]) -> Vec<(usize, usize)> {
     coords
 }
 
-fn get_all_kmers(seq: &mut [u8], &kmer_size: &usize, &minn: &usize, &maxn: &usize, &step_size: &usize) -> Vec<Vec<u8>> {
-    let mut result: Vec<Vec<u8>> = Vec::new();
-
-    seq.make_ascii_uppercase();
-
-    // Get all kmers in reverse complement of sequence as well
-    let mut rc = seq.to_vec();
-    complement_nucleotides(&mut rc);
-    rc.reverse();
-
-    let kmers = Kmers::with_step(&seq, kmer_size, step_size)
-                    .chain(Kmers::with_step(&rc, kmer_size, step_size));
-
-    // Get subkmers
-    let maxnmer = if maxn == kmer_size {
-            maxn - 1
-        } else {
-            maxn
-        };
-
-    for k in minn..=maxnmer {
-        // Step size has to be 1 for subkmers
-        for kmer in Kmers::with_step(&seq, k, 1) {
-            if let KmerOption::Kmer(k) = kmer {
-                result.push(k.to_vec());
-            }
-        }
-
-        for kmer in Kmers::with_step(&rc,  k, 1)  {
-            if let KmerOption::Kmer(k) = kmer {
-                result.push(k.to_vec());
-            }
-        }
-    }
-
-    for kmer in kmers {
-        if let KmerOption::Kmer(k) = kmer {
-            result.push(k.to_vec());
-        }
-    }
-
-    result
-}
-
 #[inline(always)]
-fn convert_kmer_to_bits(kmer: &str) -> DnaKmerBinary {
-    kmer.as_bytes()
-        .chunks(2)
+fn convert_kmer_to_bits(kmer: &[u8]) -> DnaKmerBinary {
+    let mut binrep: DnaKmerBinary = BitVec::new();
+    kmer.chunks(2)
         .map(convert_to_bits)
-        .fold(BitVec::new(), |mut acc, mut x| { acc.append(&mut x); acc})
+        .for_each(|mut x| binrep.append(&mut x));
+    binrep
+        // .fold(BitVec::new(), |mut acc, mut x| { acc.append(&mut x); acc})
 }
 
+// 00000 AA !
+// 00001 AT !
+// 00010 GC !
+// 00011 GG !
+// 00100 AC !
+// 00101 AG !
+// 00110 CA !
+// 00111 CT !
+// 01000 AN !
+// 01001 CN !
+// 01010 NA !
+// 01011 NC !
+// Singletons for end of string
+// 01100 A ! 
+// 01101 C !
+// 01110 N ! // Singleton
+// 01111 NN // Placeholder, if "N" is flipped
+// 10000 NN // Placeholder for double N's
+// 10001 N ! // Singleton, if "N" is flipped
+// 10010 G !
+// 10011 T ! 
+// 10100 NG !
+// 10101 NT !
+// 10110 GN !
+// 10111 TN !
+// 11000 GA !
+// 11001 GT !
+// 11010 TC !
+// 11011 TG !
+// 11100 CC !
+// 11101 CG !
+// 11110 TA !
+// 11111 TT !
 
 #[inline(always)]
 fn convert_to_bits(i: &[u8]) -> BitVec {
@@ -482,10 +419,13 @@ fn convert_to_bits(i: &[u8]) -> BitVec {
         [78, 67] => bitvec![0,1,0,1,1], // NC
         [78, 71] => bitvec![1,0,1,0,0], // NG
         [78, 78] => bitvec![1,0,0,0,0], // NN
+        // [78, 78] => bitvec![0,1,1,1,1], // NN
         [65]     => bitvec![0,1,1,0,0], // A
         [84]     => bitvec![1,0,0,1,1], // T
         [67]     => bitvec![0,1,1,0,1], // C
         [71]     => bitvec![1,0,0,1,0], // G
+        [78]     => bitvec![1,0,0,0,1], // N
+        // [78]     => bitvec![0,1,1,1,0], // N
         _        => panic!("Error, unknown doublet")
     }
 }
