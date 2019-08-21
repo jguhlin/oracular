@@ -1,0 +1,43 @@
+name: oracular
+version: "0.1.0"
+author: Joseph Guhlin <joseph.guhlin@gmail.com>
+about: Does stuff.... maybe, we will see.
+args:
+    - fasta:
+        help: Sets the FASTA input file(s) to use (may be compressed)
+        required: false
+        short: f
+        multiple: true
+        takes_value: true
+    - fastq:
+        short: q
+        multiple: true
+        help: Sets the FASTQ input file(s) to use (may be compressed)
+        takes_value: true
+    - output:
+        short: o
+        help: Output prefix (default 'out')
+        multiple: false
+        takes_value: true
+    - window:
+        short: w
+        help: Window size (symmetric, so -w to +w from target)
+        default_value: "4"
+    - minn:
+        short: m
+        help: Minimum subword size, inclusive
+        default_value: "13"
+        takes_value: true
+    - maxn:
+        short: n
+        help: Maximum subword size, inclusive, defaults to kmer size
+        takes_value: true
+    - kmer:
+        short: k
+        help: Kmer size
+        default_value: "15"
+        takes_value: true
+    - step:
+        short: s
+        help: Step size of the sliding window, default is to use the kmer size. Good to reduce for rare sequences
+        takes_value: true

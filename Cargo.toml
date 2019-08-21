@@ -1,0 +1,32 @@
+[package]
+name = "oracular"
+version = "0.1.0"
+authors = ["Joseph Guhlin <joseph.guhlin@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+flate2 = "1.0.9"
+itertools = "0.8"
+fnv = "1.0.6"
+rayon = "1.1.0"
+serde = { version = "1.0.92", features = ["derive", "rc"] }
+bincode = "1.1.4"
+indicatif = "0.11.0"
+seahash = "3.0.6"
+twox-hash = "1.5.0"
+threadpool = "1.7.1"
+nalgebra = "0.18.0"
+bitvec = "0.14.0"
+opinionated = { path = "../opinionated/opinionated/opinionated/"}
+
+[profile.dev]
+opt-level = 3
+debug = true
+
+[profile.release]
+opt-level = 3
+# debug = true # Eventually remove this.... but good to valgrind
+
+[dependencies.clap]
+version = "2.33"
+features = [ "suggestions", "color", "yaml", "wrap_help"]

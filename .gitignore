@@ -1,0 +1,10 @@
+/target
+**/*.rs.bk
+*.faa
+*.gz
+*.fna
+*.fasta
+*.fastq
+*.oracular
+*.txt
+*.png
