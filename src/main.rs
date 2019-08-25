@@ -30,6 +30,8 @@ use fnv::{FnvHashMap, FnvHashSet};
 
 type DnaKmerBinary = BitVec<BigEndian, u64>;
 
+mod dictionary;
+
 //use std::fs::{OpenOptions};
 //use std::io::{BufWriter};
 use std::hash::BuildHasherDefault;
@@ -45,27 +47,259 @@ use rayon::prelude::*;
 // use rayon::prelude::ParallelIterator;
 
 use opinionated::kmers::{Kmers, KmerOption};
-use opinionated::fasta::{complement_nucleotides};
+use opinionated::fasta::{complement_nucleotides, capitalize_nucleotides};
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::{BufReader, Read, Result, IoSliceMut};
+use std::time::{Duration, Instant};
 
 fn mean(numbers: &[u32]) -> u32 {
     numbers.iter().sum::<u32>() as u32 / numbers.len() as u32
 }
 
+/* Kmer size experiments...
+
+capitalize before good seq
+77.03user 4.61system 1:21.76elapsed 99%CPU (0avgtext+0avgdata 19030228maxresident)k
+
+capitalize after good seq
+76.83user 4.61system 1:21.55elapsed 99%CPU (0avgtext+0avgdata 19030136maxresident)k
+
+
+without RC check...
+76.88user 4.76system 1:21.75elapsed 99%CPU (0avgtext+0avgdata 19030152maxresident)k
+
+with RC check...
+76.83user 4.61system 1:21.55elapsed 99%CPU (0avgtext+0avgdata 19030136maxresident)k
+
+
+WITH rc and proper capitalization
+
+k=13
+    342981308
+     52270360
+     6.561679
+
+k=12
+    343080666
+     16353228
+    20.979385
+
+k=11
+    343180024
+      4235398
+    81.026634
+
+k=21
+    342186444
+    319348610
+    1.0715138
+
+
+
+
+
+// So the stats below (not timing, but kmer stats) are marred by an issue...
+
+WITH reverse complement
+   k=13 342981308
+         66930112
+         expected average: 5.12
+
+   k=10 343279382 total
+          5237227 unique
+          expected average: 65.546
+
+   k=11 343180024 total 
+         11746932 unique
+          expected average: 29.214
+
+   k=9  343378740
+          2235941
+        expected average: 153.57
+
+
+   These do not include reverse complement...
+ * k=11 171590012 total tokens (This is what I suggest)
+         10769668 unique kmers
+         expected average: 15.93
+   
+   k=10 171639691
+          4780515
+         expected average: 35.9
+
+   k=9  171689370 total
+          2079595 unique
+          expected avg: 82.559 (probably going towards useless?)
+
+   k=25 171093222 total
+        162723215 unique
+        expected average: 1.05 (probably useless)
+
+   k=17 171291938 total
+        150872681 unique
+        expected average: 1.135 (probably useless)
+
+*/
+
+/* Speed tests:
+Just straight add
+k=13
+153.88user 11.19system 2:45.25elapsed 99%CPU (0avgtext+0avgdata 12136604maxresident)k
+
+// With RwLock but single-threaded...
+166.41user 12.44system 2:59.09elapsed 99%CPU (0avgtext+0avgdata 18407048maxresident)k
+0inputs+0outputs (0major+10285501minor)pagefaults 0swaps
+
+// With RwLock but multi-threaded...
+
+sort and add based on previous id !!! ... so no
+9683.21user 686.98system 5:49.42elapsed 2967%CPU (0avgtext+0avgdata 12135664maxresident)k
+0inputs+0outputs (0major+126610995minor)pagefaults 0swaps
+
+
+
+*/
+
 fn main() {
     let yaml = load_yaml!("cli.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
-    let kmer_size = value_t!(matches, "kmer", usize).unwrap_or(15);
+    let kmer_size = value_t!(matches, "kmer", usize).unwrap_or(17);
     let minn = value_t!(matches, "minn", usize).unwrap_or(13);
     let maxn = value_t!(matches, "maxn", usize).unwrap_or(kmer_size.clone());
     let step_size = value_t!(matches, "step", usize).unwrap_or(kmer_size.clone());
     let w = value_t!(matches, "window", usize).unwrap_or(4);
     
-    let test_file = "/mnt/data/3wasps/anno-refinement-run/genomes/Vvulg.fna";
+    println!("{}", kmer_size);
 
-    let pool = ThreadPool::new(32);
+    let test_file = "/mnt/data/nt/nt.gz";
+    // let test_file = "/mnt/data/3wasps/anno-refinement-run/genomes/Vvulg.fna";
 
+    let mut dict = dictionary::Dict::new();
+/*
+    let mut f = File::open(test_file).expect("Unable to open file");
+    let mut byte_buffer = [0; 1024 * 1024 * 4];
+    let mut buffer = Vec::new();
+    
+    let mut bytes_read: usize = 1;
+    
+    let now = Instant::now();
+    let mut total: usize = 0;
+
+    while bytes_read > 0 {
+        bytes_read = f.read(&mut byte_buffer).expect("Unable to read file...");
+        total += bytes_read;
+    }
+    println!("{} {}", now.elapsed().as_secs(), total);
+
+    total = 0;
+
+    drop(f);
+
+    let mut f = File::open(test_file).expect("Unable to open file");
+    buffer.push(IoSliceMut::new(&mut byte_buffer));
+
+    bytes_read = 1;
+
+    let now = Instant::now();
+
+    while bytes_read > 0 {
+        bytes_read = f.read_vectored(&mut buffer).expect("Unable to read file...");
+        total += bytes_read;
+    }
+    println!("{} {}", now.elapsed().as_secs(), total);
+
+
+
+    
+    println!("Done"); */
+
+/*    let pool = ThreadPool::new(32);
     let (tx, rx) = sync_channel(64);
+
+    pool.execute(move|| {
+        for mut kmers in rx.iter() {
+            
+        }        
+    });
+
+            pool.execute(move|| {
+                        parse_kmers(tx, kmer_size, step_size, w, minn, maxn, slices_x);
+                    });
+
+    */
+
+    let entries = opinionated::fasta::fasta_entries(test_file).unwrap();
+
+    for i in entries {
+        let mut x = match i {
+                    Ok(x)  => x,
+                    Err(y) => panic!("{}", y)
+                };
+
+        capitalize_nucleotides(&mut x.seq);
+        let coords = get_good_sequence_coords(&x.seq);
+        for (start_coords, end_coords) in coords {
+            let mut seq = x.seq[start_coords..end_coords].to_vec();
+            
+            
+            let mut kmers: Vec<_> = Kmers::with_step(&seq, kmer_size, 1)
+                .filter(|x| 
+                    match x {
+                        KmerOption::Kmer(_) => true,
+                        _                   => false
+                })
+                .map(|x| x.unwrap()).into_iter().collect();
+            
+            /*
+            kmers.par_sort();
+
+            let mut previous_id: usize = 0;
+            let mut previous_kmer: Vec<u8> = Vec::new();
+            let mut previous_rc_id: usize = 0;
+
+            for i in kmers {
+                if i != previous_kmer {
+                    previous_id = dict.add(&i);
+                    
+                    let mut rc = i.clone();
+                    complement_nucleotides(&mut rc);
+                    rc.reverse();
+
+                    previous_rc_id = dict.add(&rc);
+                    previous_kmer = i.to_vec();
+                } else {
+                    dict.add_to_id(previous_id);
+                    dict.add_to_id(previous_rc_id);
+                }
+
+            } */
+
+            
+            kmers.iter().for_each(|x| { dict.add(x) });
+            /* kmers.iter().for_each(|x| { 
+                let mut rc = x.to_vec();
+                complement_nucleotides(&mut rc);
+                rc.reverse();
+                dict.add(&rc)
+            }); */
+        }
+    }
+
+    println!("{}", dict.tokens);
+    println!("{}", dict.size);
+
+    println!("{}", (dict.tokens as f32 / dict.size as f32));
+}
+
+
+
+
+//    let pool = ThreadPool::new(32);
+
+    // let (tx, rx) = sync_channel(64);
 
     /*let mut output = match matches.value_of("output") {
         None => { let output_fh = match OpenOptions::new().create(true).write(true).append(false).open("out.oracular") {
@@ -86,8 +320,8 @@ fn main() {
 
     // let kmer_table: HashMap<Vec<u8>, Vec<u8>, BuildHasherDefault<SeaHasher>> = Default::default();
 
-    let mut total: usize = 0;
-    let mut total_jobs: u64 = 0;
+    // let mut total: usize = 0;
+    // let mut total_jobs: u64 = 0;
 
     // let mut kmer_dict: FnvHashMap<Vec<u8>, u32> = Default::default();
     // let mut dict_kmer: Vec<Vec<u8>> = Vec::new();
@@ -95,6 +329,8 @@ fn main() {
     // let mut kmer_counts: FnvHashMap<Vec<u8>, usize> = Default::default();
     // let mut total_kmers: usize = 0;
     // let mut unique_kmers: FnvHashSet<Vec<u8>> = Default::default();
+
+    /*
 
     {
         let entries = opinionated::fasta::fasta_entries(test_file).unwrap();
@@ -166,8 +402,11 @@ fn main() {
     println!("Finishing up");
 
     pool.join();
-}
 
+    */
+// }
+
+/*
 fn parse_kmers( tx: std::sync::mpsc::SyncSender<FnvHashMap<DnaKmerBinary, FnvHashMap<DnaKmerBinary, usize>>>,
                 kmer_size: usize, 
                 step_size: usize, 
@@ -316,7 +555,7 @@ fn parse_kmers( tx: std::sync::mpsc::SyncSender<FnvHashMap<DnaKmerBinary, FnvHas
         tx.send(collated).expect("Unable to send hash-map to be collated");
     }
 }
-
+*/
 fn get_good_sequence_coords (seq: &[u8]) -> Vec<(usize, usize)> {
     let mut start: Option<usize> = None;
     let mut end: usize;
@@ -346,7 +585,7 @@ fn get_good_sequence_coords (seq: &[u8]) -> Vec<(usize, usize)> {
 
     coords
 }
-
+/*
 #[inline(always)]
 fn convert_kmer_to_bits(kmer: &[u8]) -> DnaKmerBinary {
     let mut binrep: DnaKmerBinary = BitVec::new();
@@ -429,3 +668,5 @@ fn convert_to_bits(i: &[u8]) -> BitVec {
         _        => panic!("Error, unknown doublet")
     }
 }
+
+*/
