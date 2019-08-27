@@ -17,6 +17,7 @@ twox-hash = "1.5.0"
 threadpool = "1.7.1"
 nalgebra = "0.18.0"
 bitvec = "0.14.0"
+crossbeam = "0.7.2"
 opinionated = { path = "../opinionated/opinionated/opinionated/"}
 
 [profile.dev]
