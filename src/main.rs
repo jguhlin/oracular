@@ -12,6 +12,7 @@ extern crate crossbeam;
 use twox_hash::XxHash64;
 use crossbeam::queue::{ArrayQueue, PushError};
 use crossbeam::utils::Backoff;
+use crossbeam::atomic::AtomicCell;
 
 use std::sync::mpsc::TrySendError::Full;
 
@@ -170,9 +171,11 @@ sort and add based on previous id !!! ... so no
 const BUFSIZE: usize = 128 * 1024 * 1024; // 128 Mb buffer size...
 const SEQBUFSIZE: usize = 8 * 1024 * 1024; // 8 Mb buffer for sequences
 const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
-const JOBSIZE: usize = 8 * 1024 * 1024; // 16 Mb, job size to send off to kmer processor.
+//const JOBSIZE: usize = 512 * 1024; // 16 Mb, job size to send off to kmer processor.
                                          // Once buffered sequence length exceeds this, a job is sent
                                          // to the threadpool
+
+const JOBSIZE: usize = 2 * 1024 * 1024;
 
 type Sequences = Vec<Sequence>;
 type Sequence = Vec<u8>;
@@ -192,11 +195,23 @@ impl ThreadCommand<Sequences> {
     }
 }
 
+impl ThreadCommand<Sequence> {
+    // Consumes the ThreadCommand, which is just fine...
+    fn unwrap(self) -> Sequence {
+        match self {
+            ThreadCommand::Work(x)   => x,
+            ThreadCommand::Terminate => panic!("Unable to unwrap terminate command"),
+        }
+    }
+}
+
+
 fn main() {
+
     let yaml = load_yaml!("cli.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
-    let kmer_size = value_t!(matches, "kmer", usize).unwrap_or(17);
+    let kmer_size = value_t!(matches, "kmer", usize).unwrap_or(11);
     let minn = value_t!(matches, "minn", usize).unwrap_or(13);
     let maxn = value_t!(matches, "maxn", usize).unwrap_or(kmer_size.clone());
     let step_size = value_t!(matches, "step", usize).unwrap_or(kmer_size.clone());
@@ -206,6 +221,8 @@ fn main() {
 
     let test_file = "/mnt/data/nt/nt.gz";
     // let test_file = "/mnt/data/3wasps/anno-refinement-run/genomes/Vvulg.fna";
+
+    let jobs = Arc::new(AtomicCell::new(0 as usize));
 
 /*
     let mut f = File::open(test_file).expect("Unable to open file");
@@ -260,13 +277,13 @@ fn main() {
 
     */
 
+    let num_threads = 64;
 
-    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequences>>::new(128));
+    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(num_threads + 2048));
     let queue = Arc::new(ArrayQueue::<Vec<Vec<(usize, Vec<u8>)>>>::new(16));
     let done = Arc::new(RwLock::new(false));
     let generator_done = Arc::new(RwLock::new(false));
     let dict = Arc::new(dictionary::Dict::new());
-    let num_threads = 64;
 
     // let aggregator;
     let generator;
@@ -320,10 +337,11 @@ fn main() {
     for _ in 0..num_threads {
         let dict = Arc::clone(&dict);
         let seq_queue = Arc::clone(&seq_queue);
+        let jobs = Arc::clone(&jobs);
 
         let child = match Builder::new()
                         .name("Worker".into())
-                        .spawn(move || _worker_thread(kmer_size, dict, seq_queue)) {
+                        .spawn(move || _worker_thread(kmer_size, dict, seq_queue, jobs)) {
                             Ok(x)  => x,
                             Err(y) => panic!("{}", y)
                         };
@@ -335,6 +353,7 @@ fn main() {
         let queue = Arc::clone(&queue);
         let generator_done = Arc::clone(&generator_done);
         let seq_queue = Arc::clone(&seq_queue);
+        let jobs = Arc::clone(&jobs);
 
         generator = thread::Builder::new()
                             .name("Generator".to_string())
@@ -366,6 +385,7 @@ fn main() {
             };
 
             let mut reader = BufReader::with_capacity(32 * 1024 * 1024, fasta);
+            let backoff = Backoff::new();
 
             while let Ok(bytes_read) = reader.read_until(b'\n', &mut buffer) {
                 // File is empty, we are done!
@@ -377,20 +397,52 @@ fn main() {
                     // 62 is a > meaning we have a new sequence id.
                     // TODO: We don't care yet about the ID, but will soon...
                     62 => {
-                        if seqlen > 0 {
-                            work_packet.push((&seqbuffer[..seqlen]).to_vec());
+                        capitalize_nucleotides(&mut seqbuffer[..seqlen]);
+                        let coords = get_good_sequence_coords(&seqbuffer[..seqlen]);
+                        
+                        for (start_coords, end_coords) in coords {
+
+                            // let mut push = Vec::new();
+                            // push.push(seqbuffer[start_coords..end_coords].to_vec());
+                            // jobseqlen.saturating_add(seqlen);
+
+                            jobs.fetch_add(1);
+                            let mut added = false;
+                            let mut wp = ThreadCommand::Work(seqbuffer[start_coords..end_coords].to_vec());
+
+
+                            let mut result = seq_queue.push(wp);
+                            while let Err(PushError(wp)) = result {
+                                backoff.spin();
+                                result = seq_queue.push(wp);
+                            }
+                            
                         }
                         jobseqlen = jobseqlen.saturating_add(seqlen);
                         seqlen = 0;
                         seqbuffer.clear();
 
+                        /* if seqlen > 0 {
+                            work_packet.push((&seqbuffer[..seqlen]).to_vec());
+                        }
+
+                        jobseqlen = jobseqlen.saturating_add(seqlen);
+                        seqlen = 0;
+                        seqbuffer.clear();
+
                         if jobseqlen > JOBSIZE {
-                            let backoff = Backoff::new();
-                            seq_queue.push(ThreadCommand::Work(work_packet));
+                            jobs.fetch_add(1);
+                            let wp = ThreadCommand::Work(work_packet);
+
+                            let mut result = seq_queue.push(wp);
+                            while let Err(PushError(wp)) = result {
+                                backoff.spin();
+                                result = seq_queue.push(wp);
+                            }
 
                             work_packet = Vec::new();
                             jobseqlen = 0;
-                        }
+                        } */
 
                     },
                     // Anything else is likely sequence we need...
@@ -485,11 +537,18 @@ fn main() {
 
     generator.join().expect("Unable to join generator thread...");
 
+    println!("Waiting for seq_queue to be empty...Currently at: {}", seq_queue.len());
+
     while !seq_queue.is_empty() {
         backoff.spin();
     }
 
     println!("Seq queue is empty, sending terminate command...");
+
+    while jobs.load() > 0 {
+        backoff.spin();
+        // println!("{}", jobs.load());
+    }
 
     for _ in 0..num_threads {
         seq_queue.push(ThreadCommand::Terminate);
@@ -781,9 +840,7 @@ fn get_good_sequence_coords (seq: &[u8]) -> Vec<(usize, usize)> {
     let mut cur: usize = 0;
     let mut start_coords;
     let mut end_coords;
-
     let mut coords: Vec<(usize, usize)> = Vec::new();
-
     let results = seq.windows(3).enumerate().filter(|(_y, x)| x != &[78, 78, 78]).map(|(y, _x)| y);
     for pos in results {
         match start {
@@ -892,13 +949,14 @@ fn convert_to_bits(i: &[u8]) -> BitVec {
 
 fn _worker_thread(kmer_size: usize, 
                 dict: Arc<dictionary::Dict>, 
-                seq_queue: Arc<ArrayQueue<ThreadCommand<Sequences>>>) {
+                seq_queue: Arc<ArrayQueue<ThreadCommand<Sequence>>>,
+                jobs: Arc<AtomicCell<usize>>) {
 
-    let mut seq = Vec::new();
+    // let mut seq = Vec::new();
     // let mut results_packet;
 
     loop {
-        seq.clear();
+        //seq.clear();
         // results_packet = Vec::new();
 
         let backoff = Backoff::new();
@@ -916,32 +974,42 @@ fn _worker_thread(kmer_size: usize,
                 break;
             }          
 
-            for mut rawseq in command.unwrap() {
-                capitalize_nucleotides(&mut rawseq);
-                let coords = get_good_sequence_coords(&rawseq);
-                for (start_coords, end_coords) in coords {
-                    seq.clear();
-                    seq.extend_from_slice(&rawseq[start_coords..end_coords]);
-                    
-                    let kmers: Vec<(usize, Vec<u8>)> = Kmers::with_step(&seq, kmer_size, 1)
-                        .filter(|x|
-                            match x {
-                            KmerOption::Kmer(_) => true,
-                            _                   => false
-                        })
-                        .map(|x|
-                        {
-                            let kmer = x.unwrap().to_vec();
-                            (seahash::hash(&kmer) as usize % dictionary::MAX_VOCAB,
-                            kmer )
-                        }).into_iter().collect();
-                    for (hash, kmer) in kmers {
-                        dict.add(hash, kmer);
+            let rawseq = command.unwrap();
+            // for mut rawseq in command.unwrap() {
+            // println!("Got job of size: {}", rawseq.len());
+                jobs.fetch_sub(1);
+                // capitalize_nucleotides(&mut rawseq);
+                // let coords = get_good_sequence_coords(&rawseq);
+                // for (start_coords, end_coords) in coords {
+                    // seq.clear();
+                    // seq.extend_from_slice(&rawseq[start_coords..end_coords]);
+                    // seq.extend_from_slice(&rawseq[..]);
+               
+                // let kmers: Vec<Vec<u8>> = Kmers::with_step(&rawseq, kmer_size, 1)
+                let kmers: Vec<Vec<u8>> = Kmers::with_step(&rawseq, kmer_size, 1)
+                    .filter(|x|
+                        match x {
+                        KmerOption::Kmer(_) => true,
+                        _                   => false
+                    })
+                    .map(|x|
+                    {
+                        let kmer = x.unwrap().to_vec();
+                        kmer
+                    }).into_iter().collect();
+
+                    for kmer in kmers {
+                        dict.add(kmer);
                     }
+                //}
+            // }
+
+
+            // println!("Processed... {} {} remaining", jobs.load(), dict.tokens.load());
                     // println!("Added to dictionary, current total: {} {}", dict.size.load(), dict.tokens.load());
                     //results_packet.push(kmers);
-                }
-            }
+                //}
+            // }
 
             // let mut dict_w = dict.write().unwrap();
 
