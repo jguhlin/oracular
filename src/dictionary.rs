@@ -5,6 +5,8 @@ use crossbeam::utils::Backoff;
 use twox_hash::XxHash64;
 use std::sync::{Arc, RwLock, RwLockWriteGuard, Mutex};
 use std::hash::Hasher;
+use num_traits::PrimInt;
+// use num_traits::int::{u64, u8, usize};
 
 // use std::sync::RwLock;
 
@@ -80,7 +82,7 @@ impl Dict {
 
     #[inline]
     pub fn get_rc(&self, kmer: &[u8]) -> Vec<u8> {
-        let mut rc = kmer.to_vec();
+        let mut rc: Vec<u8> = kmer.to_vec();
         super::complement_nucleotides(&mut rc);
         rc.reverse();
         rc.to_vec()
@@ -105,6 +107,12 @@ impl Dict {
 
         let x = seahash::hash(&kmer) as usize % MAX_VOCAB;
         let y = seahash::hash(&rc) as usize % MAX_VOCAB;
+        // let val = super::convert_seq_to_bits(&kmer);
+        // let  rc = super::bits_rc(val.clone());
+
+        // let x = val.as_slice()[0] as usize % MAX_VOCAB;
+        // let y = rc.as_slice()[0] as usize % MAX_VOCAB;
+
         std::cmp::min(x,y)
     }
 

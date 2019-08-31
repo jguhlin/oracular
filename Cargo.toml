@@ -19,6 +19,8 @@ nalgebra = "0.18.0"
 bitvec = "0.14.0"
 crossbeam = "0.7.2"
 opinionated = { path = "../opinionated/opinionated/opinionated/"}
+num-traits = "0.2"
+
 
 [profile.dev]
 opt-level = 3

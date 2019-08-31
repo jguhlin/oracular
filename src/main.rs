@@ -1,3 +1,4 @@
+extern crate num_traits;
 extern crate flate2;
 extern crate indicatif;
 extern crate opinionated;
@@ -8,11 +9,13 @@ extern crate fnv;
 extern crate bitvec;
 extern crate crossbeam;
 
-
 use twox_hash::XxHash64;
 use crossbeam::queue::{ArrayQueue, PushError};
 use crossbeam::utils::Backoff;
 use crossbeam::atomic::AtomicCell;
+use std::ops::Not;
+use num_traits::PrimInt;
+// use num_traits::{u64, u8, usize};
 
 use std::sync::mpsc::TrySendError::Full;
 
@@ -185,7 +188,7 @@ enum ThreadCommand<T> {
     Terminate,
 }
 
-impl ThreadCommand<Sequences> {
+/* impl ThreadCommand<Sequences> {
     // Consumes the ThreadCommand, which is just fine...
     fn unwrap(self) -> Sequences {
         match self {
@@ -193,7 +196,7 @@ impl ThreadCommand<Sequences> {
             ThreadCommand::Terminate => panic!("Unable to unwrap terminate command"),
         }
     }
-}
+} */
 
 impl ThreadCommand<Sequence> {
     // Consumes the ThreadCommand, which is just fine...
@@ -205,8 +208,16 @@ impl ThreadCommand<Sequence> {
     }
 }
 
-
 fn main() {
+
+    let k1 = "CACTACNNNAT".to_string();
+    let mut x = convert_seq_to_bits(&k1.into_bytes());
+    
+    println!("{:#?}", x.as_slice());
+
+    x = bits_rc(x.clone());
+    
+    println!("{:#?}", x.as_slice());
 
     let yaml = load_yaml!("cli.yaml");
     let matches = App::from_yaml(yaml).get_matches();
@@ -219,8 +230,8 @@ fn main() {
     
     println!("k={}", kmer_size);
 
-    let test_file = "/mnt/data/nt/nt.gz";
-    // let test_file = "/mnt/data/3wasps/anno-refinement-run/genomes/Vvulg.fna";
+    // let test_file = "/mnt/data/nt/nt.gz";
+    let test_file = "/mnt/data/3wasps/anno-refinement-run/genomes/Vvulg.fna";
 
     let jobs = Arc::new(AtomicCell::new(0 as usize));
 
@@ -406,7 +417,7 @@ fn main() {
                             // push.push(seqbuffer[start_coords..end_coords].to_vec());
                             // jobseqlen.saturating_add(seqlen);
 
-                            jobs.fetch_add(1);
+                            jobs.fetch_add(1 as usize);
                             let mut added = false;
                             let mut wp = ThreadCommand::Work(seqbuffer[start_coords..end_coords].to_vec());
 
@@ -861,16 +872,45 @@ fn get_good_sequence_coords (seq: &[u8]) -> Vec<(usize, usize)> {
 
     coords
 }
-/*
+
 #[inline(always)]
-fn convert_kmer_to_bits(kmer: &[u8]) -> DnaKmerBinary {
+fn convert_seq_to_bits(seq: &[u8]) -> DnaKmerBinary {
     let mut binrep: DnaKmerBinary = BitVec::new();
-    kmer.chunks(2)
-        .map(convert_to_bits)
+    seq.iter().map(convert_to_bits)
         .for_each(|mut x| binrep.append(&mut x));
     binrep
         // .fold(BitVec::new(), |mut acc, mut x| { acc.append(&mut x); acc})
 }
+
+#[inline(always)]
+fn bits_rc(seq: DnaKmerBinary) -> DnaKmerBinary {
+    let mut seq = seq.not(); // Complement
+    seq.reverse(); // And reverse
+    seq
+}
+
+// Since we want to preserve N's, we can't use 2-bits. Trying out 3 bits here
+#[inline(always)]
+fn convert_to_bits(i: &u8) -> BitVec {
+    match i {
+        65 => bitvec![0,0,0], // A
+        84 => bitvec![1,1,1], // T
+        71 => bitvec![0,1,0], // G
+        67 => bitvec![1,0,1], // C
+        78 => bitvec![0,1,1], // N
+        // [78] => bitvec![1,0,0], // N (for complement)
+        // [78] => bitvec![1,1,0], // N (for reverse)
+        // [78] => bitvec![0,0,1], // N (for reverse)
+
+        97  => bitvec![0,0,0], // a -> A
+        116 => bitvec![1,1,1], // t -> T
+        103 => bitvec![0,1,0], // g -> G
+        99  => bitvec![1,0,1], // c -> C
+        110 => bitvec![0,1,1], // n -> N
+        _        => panic!("Error, unknown nucleotide")
+    }
+}
+
 
 // 00000 AA !
 // 00001 AT !
@@ -906,30 +946,31 @@ fn convert_kmer_to_bits(kmer: &[u8]) -> DnaKmerBinary {
 // 11110 TA !
 // 11111 TT !
 
+
 #[inline(always)]
-fn convert_to_bits(i: &[u8]) -> BitVec {
+fn convert_to_bits_5bits(i: &[u8]) -> BitVec {
     match i {
-        [65, 65] => bitvec![0,0,0,0,0], // AA
-        [84, 84] => bitvec![1,1,1,1,1], // TT
-        [65, 84] => bitvec![0,0,0,0,1], // AT
-        [84, 65] => bitvec![1,1,1,1,0], // TA
-        [71, 67] => bitvec![0,0,0,1,0], // GC
-        [67, 71] => bitvec![1,1,1,0,1], // CG
-        [71, 71] => bitvec![0,0,0,1,1], // GG
-        [67, 67] => bitvec![1,1,1,0,0], // CC
-        [65, 67] => bitvec![0,0,1,0,0], // AC
-        [84, 71] => bitvec![1,1,0,1,1], // TG
-        [65, 71] => bitvec![0,0,1,0,1], // AG
-        [84, 67] => bitvec![1,1,0,1,0], // TC
-        [67, 65] => bitvec![0,0,1,1,0], // CA
-        [71, 84] => bitvec![1,1,0,0,1], // GT
-        [67, 84] => bitvec![0,0,1,1,1], // CT
-        [71, 65] => bitvec![1,1,0,0,0], // GA
-        [65, 78] => bitvec![0,1,0,0,0], // AN
-        [84, 78] => bitvec![1,0,1,1,1], // TN
-        [67, 78] => bitvec![0,1,0,0,1], // CN
-        [71, 78] => bitvec![1,0,1,1,0], // GN
-        [78, 65] => bitvec![0,1,0,1,0], // NA
+        [65, 65] => bitvec![0,0,0,0,0], // AA complement is TT
+        [84, 84] => bitvec![1,1,1,1,1], // TT -> AA
+        [65, 84] => bitvec![0,0,0,0,1], // AT -> TA
+        [84, 65] => bitvec![1,1,1,1,0], // TA -> AT
+        [71, 67] => bitvec![0,0,0,1,0], // GC -> CG
+        [67, 71] => bitvec![1,1,1,0,1], // CG -> GC
+        [71, 71] => bitvec![0,0,0,1,1], // GG -> CC
+        [67, 67] => bitvec![1,1,1,0,0], // CC -> GG
+        [65, 67] => bitvec![0,0,1,0,0], // AC -> TG
+        [84, 71] => bitvec![1,1,0,1,1], // TG -> AC
+        [65, 71] => bitvec![0,0,1,0,1], // AG -> TC
+        [84, 67] => bitvec![1,1,0,1,0], // TC -> AG
+        [67, 65] => bitvec![0,0,1,1,0], // CA -> GT
+        [71, 84] => bitvec![1,1,0,0,1], // GT -> CA
+        [67, 84] => bitvec![0,0,1,1,1], // CT -> GA
+        [71, 65] => bitvec![1,1,0,0,0], // GA -> CT
+        [65, 78] => bitvec![0,1,0,0,0], // AN -> TN
+        [84, 78] => bitvec![1,0,1,1,1], // TN -> AN
+        [67, 78] => bitvec![0,1,0,0,1], // CN -> GN
+        [71, 78] => bitvec![1,0,1,1,0], // GN -> CN
+        [78, 65] => bitvec![0,1,0,1,0], // NA -> 
         [78, 84] => bitvec![1,0,1,0,1], // NT
         [78, 67] => bitvec![0,1,0,1,1], // NC
         [78, 71] => bitvec![1,0,1,0,0], // NG
@@ -944,8 +985,6 @@ fn convert_to_bits(i: &[u8]) -> BitVec {
         _        => panic!("Error, unknown doublet")
     }
 }
-
-*/
 
 fn _worker_thread(kmer_size: usize, 
                 dict: Arc<dictionary::Dict>, 
