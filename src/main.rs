@@ -8,6 +8,7 @@ extern crate twox_hash;
 extern crate fnv;
 extern crate bitvec;
 extern crate crossbeam;
+extern crate dashmap;
 
 use twox_hash::XxHash64;
 use crossbeam::queue::{ArrayQueue, PushError};
@@ -210,15 +211,6 @@ impl ThreadCommand<Sequence> {
 
 fn main() {
 
-    let k1 = "CACTACNNNAT".to_string();
-    let mut x = convert_seq_to_bits(&k1.into_bytes());
-    
-    println!("{:#?}", x.as_slice());
-
-    x = bits_rc(x.clone());
-    
-    println!("{:#?}", x.as_slice());
-
     let yaml = load_yaml!("cli.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
@@ -230,8 +222,8 @@ fn main() {
     
     println!("k={}", kmer_size);
 
-    // let test_file = "/mnt/data/nt/nt.gz";
-    let test_file = "/mnt/data/3wasps/anno-refinement-run/genomes/Vvulg.fna";
+    let test_file = "/mnt/data/nt/nt.gz";
+    // let test_file = "/mnt/data/3wasps/anno-refinement-run/genomes/Vvulg.fna";
 
     let jobs = Arc::new(AtomicCell::new(0 as usize));
 
@@ -290,11 +282,10 @@ fn main() {
 
     let num_threads = 64;
 
-    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(num_threads + 2048));
-    let queue = Arc::new(ArrayQueue::<Vec<Vec<(usize, Vec<u8>)>>>::new(16));
+    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(num_threads + 16));
+    // let queue = Arc::new(ArrayQueue::<Vec<Vec<(usize, Vec<u8>)>>>::new(16));
     let done = Arc::new(RwLock::new(false));
     let generator_done = Arc::new(RwLock::new(false));
-    let dict = Arc::new(dictionary::Dict::new());
 
     // let aggregator;
     let generator;
@@ -345,23 +336,18 @@ fn main() {
 
     let mut children = Vec::new();
 
-    for _ in 0..num_threads {
-        let dict = Arc::clone(&dict);
-        let seq_queue = Arc::clone(&seq_queue);
-        let jobs = Arc::clone(&jobs);
+    let dict_builder = match Builder::new()
+                        .name("Dict Builder".into())
+                        .spawn(|| Arc::new(dictionary::Dict::new()))
+                    {
+                        Ok(x)  => x,
+                        Err(y) => panic!("{}", y)
+                    };
 
-        let child = match Builder::new()
-                        .name("Worker".into())
-                        .spawn(move || _worker_thread(kmer_size, dict, seq_queue, jobs)) {
-                            Ok(x)  => x,
-                            Err(y) => panic!("{}", y)
-                        };
-        
-        children.push(child);
-    }
+    // let dict = Arc::new(dictionary::Dict::new());
 
     {
-        let queue = Arc::clone(&queue);
+        // let queue = Arc::clone(&queue);
         let generator_done = Arc::clone(&generator_done);
         let seq_queue = Arc::clone(&seq_queue);
         let jobs = Arc::clone(&jobs);
@@ -400,6 +386,7 @@ fn main() {
 
             while let Ok(bytes_read) = reader.read_until(b'\n', &mut buffer) {
                 // File is empty, we are done!
+                backoff.reset();
                 if bytes_read == 0 {
                     break;
                 }
@@ -409,6 +396,8 @@ fn main() {
                     // TODO: We don't care yet about the ID, but will soon...
                     62 => {
                         capitalize_nucleotides(&mut seqbuffer[..seqlen]);
+                        // Rust's built-in uppercase function doesn't seem to save any time...
+                        // seqbuffer[..seqlen].make_ascii_uppercase();
                         let coords = get_good_sequence_coords(&seqbuffer[..seqlen]);
                         
                         for (start_coords, end_coords) in coords {
@@ -417,15 +406,17 @@ fn main() {
                             // push.push(seqbuffer[start_coords..end_coords].to_vec());
                             // jobseqlen.saturating_add(seqlen);
 
-                            jobs.fetch_add(1 as usize);
-                            let mut added = false;
-                            let mut wp = ThreadCommand::Work(seqbuffer[start_coords..end_coords].to_vec());
+                            if (end_coords - start_coords) > (kmer_size * 2) {
 
+                                jobs.fetch_add(1 as usize);
+                                let mut added = false;
+                                let mut wp = ThreadCommand::Work(seqbuffer[start_coords..end_coords].to_vec());
 
-                            let mut result = seq_queue.push(wp);
-                            while let Err(PushError(wp)) = result {
-                                backoff.spin();
-                                result = seq_queue.push(wp);
+                                let mut result = seq_queue.push(wp);
+                                while let Err(PushError(wp)) = result {
+                                    backoff.snooze();
+                                    result = seq_queue.push(wp);
+                                }
                             }
                             
                         }
@@ -473,6 +464,24 @@ fn main() {
             *generator_done.write().unwrap() = true;
         }).unwrap();
     }
+
+    let dict = dict_builder.join().unwrap();
+
+    for _ in 0..num_threads {
+        let dict = Arc::clone(&dict);
+        let seq_queue = Arc::clone(&seq_queue);
+        let jobs = Arc::clone(&jobs);
+
+        let child = match Builder::new()
+                        .name("Worker".into())
+                        .spawn(move || _worker_thread(kmer_size, dict, seq_queue, jobs)) {
+                            Ok(x)  => x,
+                            Err(y) => panic!("{}", y)
+                        };
+        
+        children.push(child);
+    }
+
 
 /*
     let entries = opinionated::fasta::fasta_entries(test_file).unwrap();
@@ -541,7 +550,7 @@ fn main() {
 
     let backoff = Backoff::new();
     while !*generator_done.read().unwrap() {
-        backoff.spin();
+        backoff.snooze();
     }
 
     println!("Generator done, joining...");
@@ -551,13 +560,13 @@ fn main() {
     println!("Waiting for seq_queue to be empty...Currently at: {}", seq_queue.len());
 
     while !seq_queue.is_empty() {
-        backoff.spin();
+        backoff.snooze();
     }
 
     println!("Seq queue is empty, sending terminate command...");
 
     while jobs.load() > 0 {
-        backoff.spin();
+        backoff.snooze();
         // println!("{}", jobs.load());
     }
 
@@ -1001,11 +1010,12 @@ fn _worker_thread(kmer_size: usize,
         let backoff = Backoff::new();
 
         while seq_queue.is_empty() {
-            backoff.spin();
+            backoff.snooze();
         }
 
         // Even when not empty, not guaranteed to be the thread to grab the work first...
         if let Ok(command) = seq_queue.pop() {
+            backoff.reset();
             // We got the work packet!
 
             // We are finished, end the thread...
@@ -1025,7 +1035,12 @@ fn _worker_thread(kmer_size: usize,
                     // seq.extend_from_slice(&rawseq[..]);
                
                 // let kmers: Vec<Vec<u8>> = Kmers::with_step(&rawseq, kmer_size, 1)
-                let kmers: Vec<Vec<u8>> = Kmers::with_step(&rawseq, kmer_size, 1)
+                rawseq.windows(kmer_size).for_each(|x| { 
+                    if x.len() == kmer_size {
+                        dict.add(&x);
+                    }
+                });
+/*                let kmers: Vec<Vec<u8>> = Kmers::with_step(&rawseq, kmer_size, 1)
                     .filter(|x|
                         match x {
                         KmerOption::Kmer(_) => true,
@@ -1039,7 +1054,7 @@ fn _worker_thread(kmer_size: usize,
 
                     for kmer in kmers {
                         dict.add(kmer);
-                    }
+                    } */
                 //}
             // }
 

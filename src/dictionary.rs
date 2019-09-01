@@ -6,6 +6,7 @@ use twox_hash::XxHash64;
 use std::sync::{Arc, RwLock, RwLockWriteGuard, Mutex};
 use std::hash::Hasher;
 use num_traits::PrimInt;
+
 // use num_traits::int::{u64, u8, usize};
 
 // use std::sync::RwLock;
@@ -16,16 +17,18 @@ pub const MAX_VOCAB: usize = 500000000; //real
 
 pub struct Dict {
     wordidx: Vec<AtomicCell<Option<usize>>>, // Randomish, based on hash
-    words:   ShardedLock<Vec<Entry>>, // Sequential
+    words: dashmap::DashMap<usize, Vec<u8>>,
+    // words:   RwLock<Vec<Entry>>, // Sequential
+    // words: Vec<AtomicCell<Option<Vec<u8>>>>,
     counts:  Vec<AtomicCell<usize>>, // Storing the counts separately now...
     pub tokens:  AtomicCell<usize>,
     pub size:    AtomicCell<u32>,
     pub entries: AtomicCell<usize>,
     minimum_threshold: AtomicCell<u32>,
     maximum_threshold: AtomicCell<u32>,
-    ignore_table: RwLock<Vec<bool>>,
-    pct75: u32,
-    discard_table: RwLock<Vec<usize>>
+    // ignore_table: RwLock<Vec<bool>>,
+    // pct75: u32,
+    // discard_table: RwLock<Vec<usize>>
 }
 
 #[derive(Debug)]
@@ -45,19 +48,24 @@ impl Dict {
         let mut counts = Vec::new();
         counts.resize_with(MAX_VOCAB, || AtomicCell::new(0));
 
+        // let mut words = Vec::new();
+        // words.resize_with(MAX_VOCAB, || AtomicCell::new(None));
+
         Dict {
             // vec![None; MAX_VOCAB],
             wordidx: wordidx,
-            words: ShardedLock::new(Vec::with_capacity((MAX_VOCAB as f64 * 0.75) as usize)),
+            // words: RwLock::new(Vec::with_capacity((MAX_VOCAB as f64 * 0.75) as usize)),
+            words: dashmap::DashMap::with_capacity(18, MAX_VOCAB),
+            // words: words,
             counts: counts,
-            ignore_table: RwLock::new(vec![false; MAX_VOCAB]),
+            // ignore_table: RwLock::new(vec![false; MAX_VOCAB]),
             tokens: AtomicCell::new(0),
             size: AtomicCell::new(0),
             entries: AtomicCell::new(0),
             minimum_threshold: AtomicCell::new(1),
             maximum_threshold: AtomicCell::new(std::u16::MAX as u32),
-            pct75: (0.75 * MAX_VOCAB as f64) as u32,
-            discard_table: RwLock::new(Vec::new())
+            // pct75: (0.75 * MAX_VOCAB as f64) as u32,
+            // discard_table: RwLock::new(Vec::new())
         }
     }
 
@@ -69,9 +77,14 @@ impl Dict {
 
         while self.wordidx[id].load() != None 
             && 
-            self.words.read().unwrap()[self.wordidx[id].load().unwrap()].kmer != kmer
+            // self.words[id].load() != Some(kmer)
+            // &&
+            // self.words[id].load() != Some(rc)
+            // self.words.read().unwrap()[self.wordidx[id].load().unwrap()].kmer != kmer
+            *self.words.index(&id) != kmer
             &&
-            self.words.read().unwrap()[self.wordidx[id].load().unwrap()].kmer != rc
+            *self.words.index(&id) != rc
+            // self.words.read().unwrap()[self.wordidx[id].load().unwrap()].kmer != rc
         {
 
             id = (id + 1) % MAX_VOCAB;
@@ -126,22 +139,26 @@ impl Dict {
     } */
 
     //pub fn add(&mut self, kmer: &[u8]) -> usize {
-    pub fn add(&self, kmer: Vec<u8>) {
+    pub fn add(&self, kmer: &[u8]) {
         self.tokens.fetch_add(1);
 
 //        if *self.ignore_table.read().unwrap().get(hash).unwrap() {
 //            return ()
 //        }
 
-        let id = self.get_id(&kmer);
+        let id = self.get_id(kmer);
 
         if self.wordidx[id].load() == None {
             // self.entrieself.wordidxs += 2;
             self.entries.fetch_add(1);
 
-            let mut words_w = self.words.write().unwrap();
+            self.words.insert(id, kmer.to_vec());
+
+            // match self.words.try_get_mut()
+
+            // let mut words_w = self.words.write().unwrap();
             
-            let wordidx = match self.discard_table.write().unwrap().pop() {
+            /* let wordidx = match self.discard_table.write().unwrap().pop() {
                 None => {
                     let id = Some(self.size.load() as usize);
                     self.size.fetch_add(1);
@@ -153,25 +170,34 @@ impl Dict {
                     Some(x)
                 },
             };
+            drop(words_w); */
 
+            /* match self.words[id].compare_and_swap(None, kmer) {
+                None => (),
+                Some => // Collision
+                 { self.add(kmer);
+                   return();
+                 }
+            }; */
+
+            let wordidx = Some(self.size.fetch_add(1) as usize);
+            
             match self.wordidx[id].compare_and_swap(None, wordidx) {
                 None  => (),
                 Some(x) => // Collision
                 {
                     // So nevermind, start over and add this entry to the discard table...
-                    self.discard_table.write().unwrap().push(x);
-                    drop(words_w);
+                    // self.discard_table.write().unwrap().push(x);
                     self.add(kmer);
                     return();
                 }
             }; // Points to word
 
-            drop(words_w);
 
             // RC's are either +1 or -1 so we can't simply add one...
 
             // k of 13 gives LOTS of singletons...
-            if self.size.load() >= self.pct75 {
+            /* if self.size.load() >= self.pct75 {
                 println!("Pruning...which probably doesn't work anymore...");
                 // self.minimum_threshold += 1;
                 self.minimum_threshold.fetch_add(1);
@@ -221,7 +247,7 @@ impl Dict {
                 println!("Done with the pruning...");
                 println!("{}", self.size.load());
                 println!("");
-            }
+            } */
 
         }
         
