@@ -10,7 +10,7 @@ use num_traits::PrimInt;
 // use num_traits::int::{u64, u8, usize};
 
 // use std::sync::RwLock;
-
+// TODO: Try out https://github.com/matklad/once_cell/ instead of DashMap
                              // 224 757 086 nt unique kmers at k=13
 pub const MAX_VOCAB: usize = 500000000; //real
 // pub const MAX_VOCAB: usize = 20000000; // Debugging...
