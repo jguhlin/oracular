@@ -6,18 +6,24 @@ use twox_hash::XxHash64;
 use std::sync::{Arc, RwLock, RwLockWriteGuard, Mutex};
 use std::hash::Hasher;
 use num_traits::PrimInt;
+use once_cell::sync::OnceCell;
+use fnv::FnvHasher;
+use wyhash::WyHash;
+use std::mem;
+use wyhash::wyhash;
 
 // use num_traits::int::{u64, u8, usize};
 
 // use std::sync::RwLock;
 // TODO: Try out https://github.com/matklad/once_cell/ instead of DashMap
                              // 224 757 086 nt unique kmers at k=13
-pub const MAX_VOCAB: usize = 500000000; //real
+pub const MAX_VOCAB: usize = 300000000; //real
 // pub const MAX_VOCAB: usize = 20000000; // Debugging...
 
 pub struct Dict {
     wordidx: Vec<AtomicCell<Option<usize>>>, // Randomish, based on hash
-    words: dashmap::DashMap<usize, Vec<u8>>,
+    // words: dashmap::DashMap<usize, Vec<u8>>,
+    words: Vec<OnceCell<Vec<u8>>>,
     // words:   RwLock<Vec<Entry>>, // Sequential
     // words: Vec<AtomicCell<Option<Vec<u8>>>>,
     counts:  Vec<AtomicCell<usize>>, // Storing the counts separately now...
@@ -51,12 +57,15 @@ impl Dict {
         // let mut words = Vec::new();
         // words.resize_with(MAX_VOCAB, || AtomicCell::new(None));
 
+        let mut words = Vec::with_capacity(MAX_VOCAB);
+        words.resize_with(MAX_VOCAB, || OnceCell::new());
+
         Dict {
             // vec![None; MAX_VOCAB],
             wordidx: wordidx,
             // words: RwLock::new(Vec::with_capacity((MAX_VOCAB as f64 * 0.75) as usize)),
-            words: dashmap::DashMap::with_capacity(18, MAX_VOCAB),
-            // words: words,
+            // words: dashmap::DashMap::with_capacity(18, MAX_VOCAB),
+            words: words,
             counts: counts,
             // ignore_table: RwLock::new(vec![false; MAX_VOCAB]),
             tokens: AtomicCell::new(0),
@@ -74,6 +83,8 @@ impl Dict {
         let rc = self.get_rc(&kmer);
 
         let mut id = self.calc_hash(&kmer, &rc);
+        let mut cur_word = self.words[id].get();
+        // let kvec = kmer.to_vec();
 
         while self.wordidx[id].load() != None 
             && 
@@ -81,13 +92,20 @@ impl Dict {
             // &&
             // self.words[id].load() != Some(rc)
             // self.words.read().unwrap()[self.wordidx[id].load().unwrap()].kmer != kmer
-            *self.words.index(&id) != kmer
-            &&
-            *self.words.index(&id) != rc
+            // DashMap below
+            //*self.words.index(&id) != kmer
+            // &&
+            // *self.words.index(&id) != rc
             // self.words.read().unwrap()[self.wordidx[id].load().unwrap()].kmer != rc
+            cur_word != None 
+            &&
+            cur_word.unwrap() != &kmer
+            &&
+            cur_word.unwrap() != &rc
         {
-
+            
             id = (id + 1) % MAX_VOCAB;
+            cur_word = self.words[id].get();
         }
 
         id as usize
@@ -118,16 +136,56 @@ impl Dict {
 
         // SeaHash seems to be faster for this datatype...
 
-        let x = seahash::hash(&kmer) as usize % MAX_VOCAB;
-        let y = seahash::hash(&rc) as usize % MAX_VOCAB;
+        // let x = seahash::hash(&kmer) as usize % MAX_VOCAB;
+        // let y = seahash::hash(&rc) as usize % MAX_VOCAB;
+        
+        // Converting to bits seems slower
         // let val = super::convert_seq_to_bits(&kmer);
         // let  rc = super::bits_rc(val.clone());
-
         // let x = val.as_slice()[0] as usize % MAX_VOCAB;
         // let y = rc.as_slice()[0] as usize % MAX_VOCAB;
 
+        // Trying FNV hash
+        // Fastest so far...
+        /* let mut hasher = FnvHasher::with_key(0);
+        hasher.write(&kmer);
+        let x = hasher.finish() as usize % MAX_VOCAB;
+
+        let mut hasher = FnvHasher::with_key(0);
+        hasher.write(&rc);
+        let y = hasher.finish() as usize % MAX_VOCAB; */
+
+        // Trying Wy Hash
+        // let mut hasher = WyHash::with_seed(3);
+        // hasher.write(&kmer);
+        // let x = hasher.finish() as usize % MAX_VOCAB;
+        let x = wyhash(&kmer, 43988123) as usize % MAX_VOCAB;
+
+        // let mut hasher = WyHash::with_seed(3);
+        // hasher.write(&rc);
+        // let y = hasher.finish() as usize % MAX_VOCAB;
+        let y = wyhash(&rc, 43988123) as usize % MAX_VOCAB;
+
+        // Very slow...
+        // let x: usize = self.transmute_hash(&kmer) % MAX_VOCAB;
+        // let y: usize = self.transmute_hash(&rc) % MAX_VOCAB;
+
         std::cmp::min(x,y)
     }
+
+/*     fn transmute_hash(&self, data: &[u8]) -> usize {
+        let mut x_raw = data[..].chunks_exact(8);
+        let mut xrem = x_raw.remainder().to_vec();
+        xrem.resize(8, 0);
+        let mut x: u64 = unsafe { mem::transmute(&xrem) };
+        x_raw.for_each(|xs| {
+            unsafe { 
+                x = x.wrapping_add(mem::transmute_copy::<_, u64>(&xs));
+            };
+        });
+
+        x as usize
+    } */
 
     /* fn get_id_prev(&self, kmer: &[u8]) -> usize {
         let mut id = (seahash::hash(kmer) as usize) % MAX_VOCAB;
@@ -150,9 +208,13 @@ impl Dict {
 
         if self.wordidx[id].load() == None {
             // self.entrieself.wordidxs += 2;
-            self.entries.fetch_add(1);
 
-            self.words.insert(id, kmer.to_vec());
+            // For DashMap
+            // self.words.insert(id, kmer.to_vec());
+            match self.words[id].set(kmer.to_vec()) {
+                Err(val) => { self.add(&val); return(); },
+                Ok(_)    => ()
+            };
 
             // match self.words.try_get_mut()
 
@@ -192,6 +254,8 @@ impl Dict {
                     return();
                 }
             }; // Points to word
+
+            self.entries.fetch_add(1);
 
 
             // RC's are either +1 or -1 so we can't simply add one...

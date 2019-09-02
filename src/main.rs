@@ -5,10 +5,18 @@ extern crate opinionated;
 extern crate seahash;
 extern crate rayon;
 extern crate twox_hash;
-extern crate fnv;
 extern crate bitvec;
 extern crate crossbeam;
 extern crate dashmap;
+extern crate mimalloc;
+extern crate fnv;
+extern crate wyhash;
+
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 
 use twox_hash::XxHash64;
 use crossbeam::queue::{ArrayQueue, PushError};
@@ -175,6 +183,7 @@ sort and add based on previous id !!! ... so no
 const BUFSIZE: usize = 128 * 1024 * 1024; // 128 Mb buffer size...
 const SEQBUFSIZE: usize = 8 * 1024 * 1024; // 8 Mb buffer for sequences
 const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
+const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 //const JOBSIZE: usize = 512 * 1024; // 16 Mb, job size to send off to kmer processor.
                                          // Once buffered sequence length exceeds this, a job is sent
                                          // to the threadpool
@@ -222,8 +231,8 @@ fn main() {
     
     println!("k={}", kmer_size);
 
-    let test_file = "/mnt/data/nt/nt.gz";
-    // let test_file = "/mnt/data/3wasps/anno-refinement-run/genomes/Vvulg.fna";
+    // let test_file = "/mnt/data/nt/nt.gz";
+    let test_file = "/mnt/data/3wasps/anno-refinement-run/genomes/Vvulg.fna";
 
     let jobs = Arc::new(AtomicCell::new(0 as usize));
 
@@ -282,7 +291,7 @@ fn main() {
 
     let num_threads = 64;
 
-    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(num_threads + 16));
+    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(1024 * 1));
     // let queue = Arc::new(ArrayQueue::<Vec<Vec<(usize, Vec<u8>)>>>::new(16));
     let done = Arc::new(RwLock::new(false));
     let generator_done = Arc::new(RwLock::new(false));
@@ -466,6 +475,7 @@ fn main() {
     }
 
     let dict = dict_builder.join().unwrap();
+    // let dict = OnceCell::new();
 
     for _ in 0..num_threads {
         let dict = Arc::clone(&dict);
@@ -474,6 +484,7 @@ fn main() {
 
         let child = match Builder::new()
                         .name("Worker".into())
+                        .stack_size(WORKERSTACKSIZE)
                         .spawn(move || _worker_thread(kmer_size, dict, seq_queue, jobs)) {
                             Ok(x)  => x,
                             Err(y) => panic!("{}", y)
@@ -481,6 +492,8 @@ fn main() {
         
         children.push(child);
     }
+
+    // dict.set(dict_builder.join().unwrap());
 
 
 /*
@@ -1035,11 +1048,12 @@ fn _worker_thread(kmer_size: usize,
                     // seq.extend_from_slice(&rawseq[..]);
                
                 // let kmers: Vec<Vec<u8>> = Kmers::with_step(&rawseq, kmer_size, 1)
-                rawseq.windows(kmer_size).for_each(|x| { 
-                    if x.len() == kmer_size {
+                for i in (0..kmer_size) {
+                    rawseq[i..].chunks_exact(kmer_size).for_each(|x| { 
                         dict.add(&x);
-                    }
-                });
+                    });
+                }
+
 /*                let kmers: Vec<Vec<u8>> = Kmers::with_step(&rawseq, kmer_size, 1)
                     .filter(|x|
                         match x {
@@ -1076,5 +1090,4 @@ fn _worker_thread(kmer_size: usize,
         }
 
     }
-
 }
