@@ -11,6 +11,7 @@ extern crate dashmap;
 extern crate mimalloc;
 extern crate fnv;
 extern crate wyhash;
+extern crate thincollections;
 
 use mimalloc::MiMalloc;
 
@@ -18,18 +19,14 @@ use mimalloc::MiMalloc;
 static GLOBAL: MiMalloc = MiMalloc;
 
 
-use twox_hash::XxHash64;
 use crossbeam::queue::{ArrayQueue, PushError};
 use crossbeam::utils::Backoff;
 use crossbeam::atomic::AtomicCell;
-use std::ops::Not;
-use num_traits::PrimInt;
+// use std::ops::Not;
+
 // use num_traits::{u64, u8, usize};
 
-use std::sync::mpsc::TrySendError::Full;
-
-#[macro_use]
-use bitvec::prelude::*;
+// use bitvec::prelude::*;
 
 // Oracular is somehow a synonym of opinionated... a distant one, but still.
 // That's where the name comes from.
@@ -43,40 +40,40 @@ use clap::App;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 
-use fnv::{FnvHashMap, FnvHashSet};
+// use fnv::{FnvHashMap, FnvHashSet};
 
-type DnaKmerBinary = BitVec<BigEndian, u64>;
+// type DnaKmerBinary = BitVec<BigEndian, u64>;
 
 mod dictionary;
 
 //use std::fs::{OpenOptions};
 //use std::io::{BufWriter};
-use std::hash::BuildHasherDefault;
-use std::collections::HashMap;
+// use std::hash::BuildHasherDefault;
+// use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use std::sync::mpsc::{sync_channel};
+// use std::sync::mpsc::{sync_channel};
 use std::thread;
-use std::thread::{sleep, Builder, JoinHandle};
-use std::time;
+use std::thread::Builder;
+// use std::time;
 
 // use seahash::SeaHasher;
 
-use threadpool::ThreadPool;
-use rayon::prelude::*;
+// use threadpool::ThreadPool;
+// use rayon::prelude::*;
 // use rayon::iter::ParallelBridge;
 // use rayon::prelude::ParallelIterator;
 
-use opinionated::kmers::{Kmers, KmerOption};
+// use opinionated::kmers::{Kmers, KmerOption};
 use opinionated::fasta::{complement_nucleotides, capitalize_nucleotides};
 
 use std::fs::File;
 use std::io::prelude::*;
-use std::io::{BufReader, Read, Result, IoSliceMut};
-use std::time::{Duration, Instant};
+use std::io::{BufReader, Read};
+// use std::time::{Duration, Instant};
 
-fn mean(numbers: &[u32]) -> u32 {
+/* fn mean(numbers: &[u32]) -> u32 {
     numbers.iter().sum::<u32>() as u32 / numbers.len() as u32
-}
+} */
 
 /* Kmer size experiments...
 
@@ -180,17 +177,17 @@ sort and add based on previous id !!! ... so no
 
 */
 
-const BUFSIZE: usize = 128 * 1024 * 1024; // 128 Mb buffer size...
-const SEQBUFSIZE: usize = 8 * 1024 * 1024; // 8 Mb buffer for sequences
+// const BUFSIZE: usize = 128 * 1024 * 1024; // 128 Mb buffer size...
+// const SEQBUFSIZE: usize = 8 * 1024 * 1024; // 8 Mb buffer for sequences
 const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 //const JOBSIZE: usize = 512 * 1024; // 16 Mb, job size to send off to kmer processor.
                                          // Once buffered sequence length exceeds this, a job is sent
                                          // to the threadpool
 
-const JOBSIZE: usize = 2 * 1024 * 1024;
+// const JOBSIZE: usize = 2 * 1024 * 1024;
 
-type Sequences = Vec<Sequence>;
+// type Sequences = Vec<Sequence>;
 type Sequence = Vec<u8>;
 
 enum ThreadCommand<T> {
@@ -224,10 +221,10 @@ fn main() {
     let matches = App::from_yaml(yaml).get_matches();
 
     let kmer_size = value_t!(matches, "kmer", usize).unwrap_or(11);
-    let minn = value_t!(matches, "minn", usize).unwrap_or(13);
-    let maxn = value_t!(matches, "maxn", usize).unwrap_or(kmer_size.clone());
-    let step_size = value_t!(matches, "step", usize).unwrap_or(kmer_size.clone());
-    let w = value_t!(matches, "window", usize).unwrap_or(4);
+    // let minn = value_t!(matches, "minn", usize).unwrap_or(13);
+    // let maxn = value_t!(matches, "maxn", usize).unwrap_or(kmer_size.clone());
+    // let step_size = value_t!(matches, "step", usize).unwrap_or(kmer_size.clone());
+    // let w = value_t!(matches, "window", usize).unwrap_or(4);
     
     println!("k={}", kmer_size);
 
@@ -371,7 +368,6 @@ fn main() {
             let mut seqbuffer: Sequence = Vec::with_capacity(2 * 1024 * 1024); // 2 Mb to start, will likely increase...
             let mut jobseqlen: usize = 0;
             let mut seqlen: usize = 0;
-            let mut work_packet: Sequences = Vec::new();
             // let pool = ThreadPool::new(48);
 
             let file = match File::open(&filename) {
@@ -404,6 +400,7 @@ fn main() {
                     // 62 is a > meaning we have a new sequence id.
                     // TODO: We don't care yet about the ID, but will soon...
                     62 => {
+                        backoff.reset();
                         capitalize_nucleotides(&mut seqbuffer[..seqlen]);
                         // Rust's built-in uppercase function doesn't seem to save any time...
                         // seqbuffer[..seqlen].make_ascii_uppercase();
@@ -418,8 +415,7 @@ fn main() {
                             if (end_coords - start_coords) > (kmer_size * 2) {
 
                                 jobs.fetch_add(1 as usize);
-                                let mut added = false;
-                                let mut wp = ThreadCommand::Work(seqbuffer[start_coords..end_coords].to_vec());
+                                let wp = ThreadCommand::Work(seqbuffer[start_coords..end_coords].to_vec());
 
                                 let mut result = seq_queue.push(wp);
                                 while let Err(PushError(wp)) = result {
@@ -584,13 +580,19 @@ fn main() {
     }
 
     for _ in 0..num_threads {
-        seq_queue.push(ThreadCommand::Terminate);
+        match seq_queue.push(ThreadCommand::Terminate) {
+            Ok(_) => (),
+            Err(x) => panic!("Unable to send command... {:#?}", x)
+        }
     }
 
     println!("Terminate commands sent, joining children");
 
     for child in children {
-        child.join();
+        match child.join() {
+            Ok(_) => (),
+            Err(x) => panic!("Error joining worker thread... {:#?}", x)
+        }
     }
 
     println!("Children joined, getting dictionary stats...");
@@ -895,6 +897,7 @@ fn get_good_sequence_coords (seq: &[u8]) -> Vec<(usize, usize)> {
     coords
 }
 
+/*
 #[inline(always)]
 fn convert_seq_to_bits(seq: &[u8]) -> DnaKmerBinary {
     let mut binrep: DnaKmerBinary = BitVec::new();
@@ -931,7 +934,7 @@ fn convert_to_bits(i: &u8) -> BitVec {
         110 => bitvec![0,1,1], // n -> N
         _        => panic!("Error, unknown nucleotide")
     }
-}
+} */
 
 
 // 00000 AA !
@@ -968,7 +971,7 @@ fn convert_to_bits(i: &u8) -> BitVec {
 // 11110 TA !
 // 11111 TT !
 
-
+/*
 #[inline(always)]
 fn convert_to_bits_5bits(i: &[u8]) -> BitVec {
     match i {
@@ -1006,7 +1009,7 @@ fn convert_to_bits_5bits(i: &[u8]) -> BitVec {
         // [78]     => bitvec![0,1,1,1,0], // N
         _        => panic!("Error, unknown doublet")
     }
-}
+} */
 
 fn _worker_thread(kmer_size: usize, 
                 dict: Arc<dictionary::Dict>, 
@@ -1048,7 +1051,7 @@ fn _worker_thread(kmer_size: usize,
                     // seq.extend_from_slice(&rawseq[..]);
                
                 // let kmers: Vec<Vec<u8>> = Kmers::with_step(&rawseq, kmer_size, 1)
-                for i in (0..kmer_size) {
+                for i in 0..kmer_size {
                     rawseq[i..].chunks_exact(kmer_size).for_each(|x| { 
                         dict.add(&x);
                     });

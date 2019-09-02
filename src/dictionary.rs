@@ -1,16 +1,17 @@
-use seahash;
+// use seahash;
 use crossbeam::atomic::AtomicCell;
-use crossbeam::sync::ShardedLock;
-use crossbeam::utils::Backoff;
-use twox_hash::XxHash64;
-use std::sync::{Arc, RwLock, RwLockWriteGuard, Mutex};
-use std::hash::Hasher;
-use num_traits::PrimInt;
+// use crossbeam::sync::ShardedLock;
+// use crossbeam::utils::Backoff;
+// use twox_hash::XxHash64;
+// use std::sync::{Arc, RwLock, RwLockWriteGuard, Mutex};
+// use std::hash::Hasher;
+// use num_traits::PrimInt;
 use once_cell::sync::OnceCell;
-use fnv::FnvHasher;
-use wyhash::WyHash;
-use std::mem;
+// use fnv::FnvHasher;
+// use wyhash::WyHash;
+// use std::mem;
 use wyhash::wyhash;
+use thincollections::thin_vec::ThinVec;
 
 // use num_traits::int::{u64, u8, usize};
 
@@ -23,25 +24,25 @@ pub const MAX_VOCAB: usize = 300000000; //real
 pub struct Dict {
     wordidx: Vec<AtomicCell<Option<usize>>>, // Randomish, based on hash
     // words: dashmap::DashMap<usize, Vec<u8>>,
-    words: Vec<OnceCell<Vec<u8>>>,
+    words: Vec<OnceCell<ThinVec<u8>>>,
     // words:   RwLock<Vec<Entry>>, // Sequential
     // words: Vec<AtomicCell<Option<Vec<u8>>>>,
     counts:  Vec<AtomicCell<usize>>, // Storing the counts separately now...
     pub tokens:  AtomicCell<usize>,
     pub size:    AtomicCell<u32>,
     pub entries: AtomicCell<usize>,
-    minimum_threshold: AtomicCell<u32>,
-    maximum_threshold: AtomicCell<u32>,
+    // minimum_threshold: AtomicCell<u32>,
+    // maximum_threshold: AtomicCell<u32>,
     // ignore_table: RwLock<Vec<bool>>,
     // pct75: u32,
     // discard_table: RwLock<Vec<usize>>
 }
 
-#[derive(Debug)]
+/*#[derive(Debug)]
 pub struct Entry {
     pub kmer: Vec<u8>,
     pub count: AtomicCell<u32>,
-}
+}*/
 
 impl Dict {
     pub fn new() -> Dict {
@@ -71,8 +72,8 @@ impl Dict {
             tokens: AtomicCell::new(0),
             size: AtomicCell::new(0),
             entries: AtomicCell::new(0),
-            minimum_threshold: AtomicCell::new(1),
-            maximum_threshold: AtomicCell::new(std::u16::MAX as u32),
+            // minimum_threshold: AtomicCell::new(1),
+            // maximum_threshold: AtomicCell::new(std::u16::MAX as u32),
             // pct75: (0.75 * MAX_VOCAB as f64) as u32,
             // discard_table: RwLock::new(Vec::new())
         }
@@ -112,11 +113,14 @@ impl Dict {
     }
 
     #[inline]
-    pub fn get_rc(&self, kmer: &[u8]) -> Vec<u8> {
-        let mut rc: Vec<u8> = kmer.to_vec();
+    pub fn get_rc(&self, kmer: &[u8]) -> ThinVec<u8> {
+        // let mut rc: Vec<u8> = kmer.to_vec();
+        let mut rc: ThinVec<u8> = ThinVec::new();
+        rc.extend_from_slice(&kmer);
         super::complement_nucleotides(&mut rc);
         rc.reverse();
-        rc.to_vec()
+        rc
+
     }
 
     #[inline]
@@ -211,7 +215,9 @@ impl Dict {
 
             // For DashMap
             // self.words.insert(id, kmer.to_vec());
-            match self.words[id].set(kmer.to_vec()) {
+            let mut word = ThinVec::with_capacity(kmer.len());
+            word.extend_from_slice(&kmer);
+            match self.words[id].set(word) {
                 Err(val) => { self.add(&val); return(); },
                 Ok(_)    => ()
             };
@@ -246,7 +252,7 @@ impl Dict {
             
             match self.wordidx[id].compare_and_swap(None, wordidx) {
                 None  => (),
-                Some(x) => // Collision
+                Some(_) => // Collision
                 {
                     // So nevermind, start over and add this entry to the discard table...
                     // self.discard_table.write().unwrap().push(x);
