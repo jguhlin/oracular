@@ -18,7 +18,6 @@ use mimalloc::MiMalloc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-
 use crossbeam::queue::{ArrayQueue, PushError};
 use crossbeam::utils::Backoff;
 use crossbeam::atomic::AtomicCell;
@@ -363,7 +362,7 @@ fn main() {
                             .stack_size(STACKSIZE)
                             .spawn(move||
         {
-            let filename = test_file.clone();
+            let filename = test_file.to_string();
             let mut buffer: Sequence = Vec::with_capacity(256);
             let mut seqbuffer: Sequence = Vec::with_capacity(2 * 1024 * 1024); // 2 Mb to start, will likely increase...
             let mut jobseqlen: usize = 0;
@@ -381,9 +380,10 @@ fn main() {
                 .progress_chars("█▇▆▅▄▃▂▁  "));
 
             // If file ends with .gz use flate2 to process it
-            let fasta: Box<dyn Read> = match filename.ends_with("gz") {
-                true  => Box::new(flate2::read::GzDecoder::new(pb.wrap_read(file))),
-                false => Box::new(pb.wrap_read(file))
+            let fasta: Box<dyn Read> = if filename.ends_with("gz") {
+                Box::new(flate2::read::GzDecoder::new(pb.wrap_read(file)))
+            } else {
+                Box::new(pb.wrap_read(file))
             };
 
             let mut reader = BufReader::with_capacity(32 * 1024 * 1024, fasta);

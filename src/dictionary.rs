@@ -18,7 +18,7 @@ use thincollections::thin_vec::ThinVec;
 // use std::sync::RwLock;
 // TODO: Try out https://github.com/matklad/once_cell/ instead of DashMap
                              // 224 757 086 nt unique kmers at k=13
-pub const MAX_VOCAB: usize = 300000000; //real
+pub const MAX_VOCAB: usize = 300_000_000; //real
 // pub const MAX_VOCAB: usize = 20000000; // Debugging...
 
 pub struct Dict {
@@ -59,15 +59,15 @@ impl Dict {
         // words.resize_with(MAX_VOCAB, || AtomicCell::new(None));
 
         let mut words = Vec::with_capacity(MAX_VOCAB);
-        words.resize_with(MAX_VOCAB, || OnceCell::new());
+        words.resize_with(MAX_VOCAB, OnceCell::new);
 
         Dict {
             // vec![None; MAX_VOCAB],
-            wordidx: wordidx,
+            wordidx,
             // words: RwLock::new(Vec::with_capacity((MAX_VOCAB as f64 * 0.75) as usize)),
             // words: dashmap::DashMap::with_capacity(18, MAX_VOCAB),
-            words: words,
-            counts: counts,
+            words,
+            counts,
             // ignore_table: RwLock::new(vec![false; MAX_VOCAB]),
             tokens: AtomicCell::new(0),
             size: AtomicCell::new(0),
@@ -163,12 +163,12 @@ impl Dict {
         // let mut hasher = WyHash::with_seed(3);
         // hasher.write(&kmer);
         // let x = hasher.finish() as usize % MAX_VOCAB;
-        let x = wyhash(&kmer, 43988123) as usize % MAX_VOCAB;
+        let x = wyhash(&kmer, 43_988_123) as usize % MAX_VOCAB;
 
         // let mut hasher = WyHash::with_seed(3);
         // hasher.write(&rc);
         // let y = hasher.finish() as usize % MAX_VOCAB;
-        let y = wyhash(&rc, 43988123) as usize % MAX_VOCAB;
+        let y = wyhash(&rc, 43_988_123) as usize % MAX_VOCAB;
 
         // Very slow...
         // let x: usize = self.transmute_hash(&kmer) % MAX_VOCAB;
@@ -217,10 +217,9 @@ impl Dict {
             // self.words.insert(id, kmer.to_vec());
             let mut word = ThinVec::with_capacity(kmer.len());
             word.extend_from_slice(&kmer);
-            match self.words[id].set(word) {
-                Err(val) => { self.add(&val); return(); },
-                Ok(_)    => ()
-            };
+            if let Err(val) = self.words[id].set(word) {
+                self.add(&val); return; 
+            }
 
             // match self.words.try_get_mut()
 
@@ -257,7 +256,7 @@ impl Dict {
                     // So nevermind, start over and add this entry to the discard table...
                     // self.discard_table.write().unwrap().push(x);
                     self.add(kmer);
-                    return();
+                    return;
                 }
             }; // Points to word
 
