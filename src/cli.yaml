@@ -35,7 +35,7 @@ args:
     - kmer:
         short: k
         help: Kmer size
-        default_value: "11" 
+        default_value: "13"
         takes_value: true
     - step:
         short: s

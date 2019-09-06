@@ -1,15 +1,5 @@
-// use seahash;
 use crossbeam::atomic::AtomicCell;
-// use crossbeam::sync::ShardedLock;
-// use crossbeam::utils::Backoff;
-// use twox_hash::XxHash64;
-// use std::sync::{Arc, RwLock, RwLockWriteGuard, Mutex};
-// use std::hash::Hasher;
-// use num_traits::PrimInt;
 use once_cell::sync::OnceCell;
-// use fnv::FnvHasher;
-// use wyhash::WyHash;
-// use std::mem;
 use wyhash::wyhash;
 use thincollections::thin_vec::ThinVec;
 
@@ -22,12 +12,12 @@ pub const MAX_VOCAB: usize = 300_000_000; //real
 // pub const MAX_VOCAB: usize = 20000000; // Debugging...
 
 pub struct Dict {
-    wordidx: Vec<AtomicCell<Option<usize>>>, // Randomish, based on hash
+    pub wordidx: Vec<AtomicCell<Option<usize>>>, // Randomish, based on hash
     // words: dashmap::DashMap<usize, Vec<u8>>,
-    words: Vec<OnceCell<ThinVec<u8>>>,
+    pub words: Vec<OnceCell<ThinVec<u8>>>,
     // words:   RwLock<Vec<Entry>>, // Sequential
     // words: Vec<AtomicCell<Option<Vec<u8>>>>,
-    counts:  Vec<AtomicCell<usize>>, // Storing the counts separately now...
+    pub counts:  Vec<AtomicCell<usize>>, // Storing the counts separately now...
     pub tokens:  AtomicCell<usize>,
     pub size:    AtomicCell<u32>,
     pub entries: AtomicCell<usize>,

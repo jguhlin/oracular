@@ -12,6 +12,7 @@ extern crate fnv;
 extern crate wyhash;
 extern crate thincollections;
 extern crate num_cpus;
+extern crate finalfrontier;
 
 // Not convinced this actually works...
 // Mimalloc compilation on windows is complicated. But
@@ -51,6 +52,7 @@ use indicatif::ProgressStyle;
 // type DnaKmerBinary = BitVec<BigEndian, u64>;
 
 mod dictionary;
+mod vocab;
 
 //use std::fs::{OpenOptions};
 //use std::io::{BufWriter};

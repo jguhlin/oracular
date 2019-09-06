@@ -36,7 +36,7 @@ debug = true
 
 [profile.release]
 opt-level = 3
-# debug = true # Eventually remove this.... but good to valgrind
+debug = true # Eventually remove this.... but good to valgrind
 
 [dependencies.clap]
 version = "2.33"
