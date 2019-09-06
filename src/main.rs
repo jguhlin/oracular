@@ -8,15 +8,22 @@ extern crate twox_hash;
 extern crate bitvec;
 extern crate crossbeam;
 extern crate dashmap;
-extern crate mimalloc;
 extern crate fnv;
 extern crate wyhash;
 extern crate thincollections;
+extern crate num_cpus;
 
-use mimalloc::MiMalloc;
+// Not convinced this actually works...
+// Mimalloc compilation on windows is complicated. But
+// the performance is worth it on unix.
+#[cfg(target_family = "unix")]
+mod unix_specific {
+    extern crate mimalloc;
+    use mimalloc::MiMalloc;
+    #[global_allocator]
+    static GLOBAL: MiMalloc = MiMalloc;
+}
 
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
 
 use crossbeam::queue::{ArrayQueue, PushError};
 use crossbeam::utils::Backoff;
@@ -228,7 +235,8 @@ fn main() {
     println!("k={}", kmer_size);
 
     // let test_file = "/mnt/data/nt/nt.gz";
-    let test_file = "/mnt/data/3wasps/anno-refinement-run/genomes/Vvulg.fna";
+    //  let test_file = "/mnt/data/3wasps/anno-refinement-run/genomes/Vvulg.fna";
+    let test_file = "Vvulg.fna.gz";
 
     let jobs = Arc::new(AtomicCell::new(0 as usize));
 
@@ -285,7 +293,8 @@ fn main() {
 
     */
 
-    let num_threads = 64;
+    // For testing at home, otherwise should be passable
+    let num_threads = num_cpus::get();
 
     let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(1024 * 1));
     // let queue = Arc::new(ArrayQueue::<Vec<Vec<(usize, Vec<u8>)>>>::new(16));
