@@ -13,6 +13,9 @@ extern crate wyhash;
 extern crate thincollections;
 extern crate num_cpus;
 extern crate finalfrontier;
+extern crate finalfrontier_utils;
+extern crate finalfusion;
+extern crate finalfusion_utils;
 
 // Not convinced this actually works...
 // Mimalloc compilation on windows is complicated. But
@@ -52,7 +55,7 @@ use indicatif::ProgressStyle;
 // type DnaKmerBinary = BitVec<BigEndian, u64>;
 
 mod dictionary;
-mod vocab;
+mod trainer;
 
 //use std::fs::{OpenOptions};
 //use std::io::{BufWriter};
@@ -613,6 +616,9 @@ fn main() {
     println!("{}", dict.tokens.load());
     println!("{}", dict.size.load());
     println!("{}", (dict.tokens.load() as f32 / dict.size.load() as f32));
+
+
+    crate::trainer::create_embeddings(dict);
 
     
     // aggregator.join().expect("Unable to join aggregator thread...");

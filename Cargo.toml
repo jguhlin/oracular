@@ -21,11 +21,15 @@ nalgebra = "0.18.1"
 thincollections = "0.5.3"
 crossbeam = "0.7.2"
 opinionated = { path = "../opinionated/opinionated/"}
-finalfrontier = { path = "../finalfrontier/finalfrontier/"}
 num-traits = "0.2"
 wyhash = "0.3.0"
 dashmap = "1.0.4"
 num_cpus = "1.10.1"
+finalfrontier = "0.6.1"
+finalfusion-utils = "0.7.0"
+finalfusion = "0.7.0"
+finalfrontier-utils = "0.6.1"
+
 
 [target.'cfg(unix)'.dependencies]
 mimalloc = { version = "0.1.6", default-features = false }
