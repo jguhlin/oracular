@@ -29,7 +29,8 @@ finalfrontier = "0.6.1"
 finalfusion-utils = "0.7.0"
 finalfusion = "0.7.0"
 finalfrontier-utils = "0.6.1"
-
+rand_xorshift = "0.2.0"
+rand = "0.6"
 
 [target.'cfg(unix)'.dependencies]
 mimalloc = { version = "0.1.6", default-features = false }

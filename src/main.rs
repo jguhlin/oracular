@@ -16,6 +16,8 @@ extern crate finalfrontier;
 extern crate finalfrontier_utils;
 extern crate finalfusion;
 extern crate finalfusion_utils;
+extern crate rand;
+extern crate rand_xorshift;
 
 // Not convinced this actually works...
 // Mimalloc compilation on windows is complicated. But
