@@ -12,23 +12,21 @@ extern crate fnv;
 extern crate wyhash;
 extern crate thincollections;
 extern crate num_cpus;
-extern crate finalfrontier;
-extern crate finalfrontier_utils;
-extern crate finalfusion;
-extern crate finalfusion_utils;
 extern crate rand;
 extern crate rand_xorshift;
+
+mod dictionary;
 
 // Not convinced this actually works...
 // Mimalloc compilation on windows is complicated. But
 // the performance is worth it on unix.
-#[cfg(target_family = "unix")]
+/* #[cfg(target_family = "unix")]
 mod unix_specific {
     extern crate mimalloc;
     use mimalloc::MiMalloc;
     #[global_allocator]
     static GLOBAL: MiMalloc = MiMalloc;
-}
+} */
 
 
 use crossbeam::queue::{ArrayQueue, PushError};
@@ -55,9 +53,6 @@ use indicatif::ProgressStyle;
 // use fnv::{FnvHashMap, FnvHashSet};
 
 // type DnaKmerBinary = BitVec<BigEndian, u64>;
-
-mod dictionary;
-mod trainer;
 
 //use std::fs::{OpenOptions};
 //use std::io::{BufWriter};
@@ -620,9 +615,6 @@ fn main() {
     println!("{}", (dict.tokens.load() as f32 / dict.size.load() as f32));
 
 
-    crate::trainer::create_embeddings(dict);
-
-    
     // aggregator.join().expect("Unable to join aggregator thread...");
 }
 
