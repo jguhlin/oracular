@@ -14,6 +14,7 @@ extern crate thincollections;
 extern crate num_cpus;
 extern crate rand;
 extern crate rand_xorshift;
+extern crate bitpacker;
 
 mod dictionary;
 
