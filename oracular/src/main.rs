@@ -155,27 +155,6 @@ sort and add based on previous id !!! ... so no
 
 */
 
-const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
-const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
-
-// type Sequences = Vec<Sequence>;
-type Sequence = Vec<u8>;
-
-enum ThreadCommand<T> {
-    Work(T),
-    Terminate,
-}
-
-impl ThreadCommand<Sequence> {
-    // Consumes the ThreadCommand, which is just fine...
-    fn unwrap(self) -> Sequence {
-        match self {
-            ThreadCommand::Work(x)   => x,
-            ThreadCommand::Terminate => panic!("Unable to unwrap terminate command"),
-        }
-    }
-}
-
 fn main() {
 
     let yaml = load_yaml!("cli.yaml");
@@ -501,33 +480,6 @@ fn main() {
 
 }
 
-fn get_good_sequence_coords (seq: &[u8]) -> Vec<(usize, usize)> {
-    let mut start: Option<usize> = None;
-    let mut end: usize;
-    let mut cur: usize = 0;
-    let mut start_coords;
-    let mut end_coords;
-    let mut coords: Vec<(usize, usize)> = Vec::new();
-    let results = seq.windows(3).enumerate().filter(|(_y, x)| x != &[78, 78, 78]).map(|(y, _x)| y);
-    for pos in results {
-        match start {
-            None    => { start = Some(pos); cur = pos; }
-            Some(_x) => ()
-        };
-
-        if pos - cur > 1 {
-            end = cur;
-            start_coords = start.unwrap();
-            end_coords = end;
-            coords.push( (start_coords, end_coords) );
-            start = None;
-        } else {
-            cur = pos;
-        }
-    }
-
-    coords
-}
 fn _worker_thread(kmer_size: usize, 
                 dict: Arc<dictionary::Dict>, 
                 seq_queue: Arc<ArrayQueue<ThreadCommand<Sequence>>>,

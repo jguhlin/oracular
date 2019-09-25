@@ -7,3 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+crossbeam = "0.7.2"
+thincollections = "0.5.3"
+wyhash = "0.3.0"
+once_cell = "1.2.0"
+opinionated = { path = "../../opinionated/opinionated/opinionated/"}
+bytecount = "0.6.0"

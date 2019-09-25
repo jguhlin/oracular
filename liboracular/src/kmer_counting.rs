@@ -2,6 +2,31 @@ use crossbeam::atomic::AtomicCell;
 use once_cell::sync::OnceCell;
 use wyhash::wyhash;
 use thincollections::thin_vec::ThinVec;
+use opinionated::fasta::{complement_nucleotides, capitalize_nucleotides};
+
+
+const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
+const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
+
+// type Sequences = Vec<Sequence>;
+type Sequence = Vec<u8>;
+
+enum ThreadCommand<T> {
+    Work(T),
+    Terminate,
+}
+
+impl ThreadCommand<Sequence> {
+    // Consumes the ThreadCommand, which is just fine...
+    fn unwrap(self) -> Sequence {
+        match self {
+            ThreadCommand::Work(x)   => x,
+            ThreadCommand::Terminate => panic!("Unable to unwrap terminate command"),
+        }
+    }
+}
+
+
 
 // use num_traits::int::{u64, u8, usize};
 
@@ -107,7 +132,7 @@ impl Dict {
         // let mut rc: Vec<u8> = kmer.to_vec();
         let mut rc: ThinVec<u8> = ThinVec::new();
         rc.extend_from_slice(&kmer);
-        super::complement_nucleotides(&mut rc);
+        complement_nucleotides(&mut rc);
         rc.reverse();
         rc
 
