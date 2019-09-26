@@ -4,6 +4,31 @@ use wyhash::wyhash;
 use thincollections::thin_vec::ThinVec;
 use opinionated::fasta::{complement_nucleotides, capitalize_nucleotides};
 
+use std::sync::{Arc, RwLock};
+
+use std::thread;
+use std::thread::Builder;
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::{BufReader, Read, BufRead};
+use std::hash::BuildHasherDefault;
+use std::collections::HashMap;
+
+use crossbeam::queue::{ArrayQueue, PushError};
+use crossbeam::utils::Backoff;
+
+use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
+
+use std::time::{Instant};
+
+use serde::{Serialize, Deserialize};
+
+use twox_hash::XxHash;
+use fasthash::*;
+
+use std::convert::TryInto;
 
 const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
@@ -26,71 +51,116 @@ impl ThreadCommand<Sequence> {
     }
 }
 
-
-
-// use num_traits::int::{u64, u8, usize};
-
-// use std::sync::RwLock;
-// TODO: Try out https://github.com/matklad/once_cell/ instead of DashMap
-                             // 224 757 086 nt unique kmers at k=13
-pub const MAX_VOCAB: usize = 300_000_000; //real
-// pub const MAX_VOCAB: usize = 20000000; // Debugging...
+pub const MAX_VOCAB: usize = 300_000_000;
 
 pub struct Dict {
-    pub wordidx: Vec<AtomicCell<Option<usize>>>, // Randomish, based on hash
-    // words: dashmap::DashMap<usize, Vec<u8>>,
-    pub words: Vec<OnceCell<ThinVec<u8>>>,
-    // words:   RwLock<Vec<Entry>>, // Sequential
-    // words: Vec<AtomicCell<Option<Vec<u8>>>>,
-    pub counts:  Vec<AtomicCell<usize>>, // Storing the counts separately now...
-    pub tokens:  AtomicCell<usize>,
-    pub size:    AtomicCell<u32>,
-    pub entries: AtomicCell<usize>,
-    // minimum_threshold: AtomicCell<u32>,
-    // maximum_threshold: AtomicCell<u32>,
-    // ignore_table: RwLock<Vec<bool>>,
-    // pct75: u32,
-    // discard_table: RwLock<Vec<usize>>
+    pub wordidx: Vec<AtomicCell<Option<core::num::NonZeroU64>>>,
+    pub words:   Vec<OnceCell<ThinVec<u8>>>,
+    pub counts:  Vec<AtomicCell<u64>>,
+    pub tokens:  AtomicCell<u64>,
+    pub size:    AtomicCell<u64>,
+    pub entries: AtomicCell<u64>,
 }
 
-/*#[derive(Debug)]
-pub struct Entry {
-    pub kmer: Vec<u8>,
-    pub count: AtomicCell<u32>,
-}*/
+#[derive(Serialize, Deserialize)]
+pub struct FinalDict {
+    pub words: HashMap<Vec<u8>, u64, BuildHasherDefault<XxHash>>,
+    pub entries: u64,
+    pub size: u64,
+    pub tokens: u64,
+}
 
 impl Dict {
+
+    pub fn convert_to_final(&self) -> FinalDict {
+
+        let mut words: HashMap<Vec<u8>, u64, BuildHasherDefault<XxHash>> = Default::default(); //HashMap::with_capacity(self.size.load() as usize);
+        words.reserve(self.size.load() as usize);
+
+        for x in self.words
+                    .iter()
+                    .filter_map(|x| x.get())
+                    .map(|x| x.to_vec()) {
+            let id = self.get_id(&x);
+            let count = self.counts[self.wordidx[id].load().expect("Error getting wordidx[id]").get() as usize].load();
+            words.insert(x, count);
+        }
+
+        FinalDict { words, 
+                    entries: self.entries.load(), 
+                    size: self.size.load(), 
+                    tokens: self.tokens.load() 
+                }
+    }
+
     pub fn new() -> Dict {
-        let mut wordidx = Vec::new();
+
+        // Multi-threaded initialization: 24 seconds
+        // Single-threaded: 63 seconds...
+
+        /* let mut wordidx = Vec::with_capacity(MAX_VOCAB);
         wordidx.resize_with(MAX_VOCAB, || AtomicCell::new(None));
-
-//        let rcidx = RwLock::new(Vec::new());
-//        rcidx.write().unwrap().resize_with(MAX_VOCAB, || None);
-
-        let mut counts = Vec::new();
+        // wordidx = (0..MAX_VOCAB).map(|_| AtomicCell::new(None)).collect();
+        let mut counts = Vec::with_capacity(MAX_VOCAB);
+        // counts = (0..MAX_VOCAB).map(|_| AtomicCell::new(0)).collect();
         counts.resize_with(MAX_VOCAB, || AtomicCell::new(0));
-
-        // let mut words = Vec::new();
-        // words.resize_with(MAX_VOCAB, || AtomicCell::new(None));
-
         let mut words = Vec::with_capacity(MAX_VOCAB);
-        words.resize_with(MAX_VOCAB, OnceCell::new);
+        // words = (0..MAX_VOCAB).map(|_| OnceCell::new()).collect();
+        words.resize_with(MAX_VOCAB, OnceCell::new); */
+
+
+        let wordidx_builder = match Builder::new()
+                        .name("WordIdx Builder".into())
+                        .spawn(|| 
+                        {
+                            let mut wordidx = Vec::with_capacity(MAX_VOCAB);
+                            wordidx.resize_with(MAX_VOCAB, || AtomicCell::new(None));
+                            wordidx
+                        })
+                    {
+                        Ok(x)  => x,
+                        Err(y) => panic!("{}", y)
+                    };
+
+        let counts_builder = match Builder::new()
+                        .name("Counts Builder".into())
+                        .spawn(|| 
+                        {
+                            let mut counts = Vec::with_capacity(MAX_VOCAB);
+                            counts.resize_with(MAX_VOCAB, || AtomicCell::new(0));
+                            counts
+                        })
+                    {
+                        Ok(x)  => x,
+                        Err(y) => panic!("{}", y)
+                    };
+
+        let words_builder = match Builder::new()
+                        .name("Words Builder".into())
+                        .spawn(|| 
+                        {
+                            let mut words = Vec::with_capacity(MAX_VOCAB);
+                            words.resize_with(MAX_VOCAB, OnceCell::new);
+                            words
+                        })
+                    {
+                        Ok(x)  => x,
+                        Err(y) => panic!("{}", y)
+                    };
+
+
+        let wordidx = wordidx_builder.join().unwrap();
+        let counts = counts_builder.join().unwrap();
+        let words = words_builder.join().unwrap(); 
+
 
         Dict {
-            // vec![None; MAX_VOCAB],
             wordidx,
-            // words: RwLock::new(Vec::with_capacity((MAX_VOCAB as f64 * 0.75) as usize)),
-            // words: dashmap::DashMap::with_capacity(18, MAX_VOCAB),
             words,
             counts,
-            // ignore_table: RwLock::new(vec![false; MAX_VOCAB]),
             tokens: AtomicCell::new(0),
-            size: AtomicCell::new(0),
+            size: AtomicCell::new(1),
             entries: AtomicCell::new(0),
-            // minimum_threshold: AtomicCell::new(1),
-            // maximum_threshold: AtomicCell::new(std::u16::MAX as u32),
-            // pct75: (0.75 * MAX_VOCAB as f64) as u32,
-            // discard_table: RwLock::new(Vec::new())
         }
     }
 
@@ -119,7 +189,6 @@ impl Dict {
             &&
             cur_word.unwrap() != &rc
         {
-            
             id = (id + 1) % MAX_VOCAB;
             cur_word = self.words[id].get();
         }
@@ -130,7 +199,7 @@ impl Dict {
     #[inline]
     pub fn get_rc(&self, kmer: &[u8]) -> ThinVec<u8> {
         // let mut rc: Vec<u8> = kmer.to_vec();
-        let mut rc: ThinVec<u8> = ThinVec::new();
+        let mut rc: ThinVec<u8> = ThinVec::with_capacity(kmer.len());
         rc.extend_from_slice(&kmer);
         complement_nucleotides(&mut rc);
         rc.reverse();
@@ -138,7 +207,7 @@ impl Dict {
 
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn calc_hash(&self, kmer: &[u8], rc: &[u8]) -> usize {
         // let mut hasher = twox_hash::XxHash64::with_seed(0);
         // hasher.consume(&kmer);
@@ -178,261 +247,393 @@ impl Dict {
         // let mut hasher = WyHash::with_seed(3);
         // hasher.write(&kmer);
         // let x = hasher.finish() as usize % MAX_VOCAB;
-        let x = wyhash(&kmer, 43_988_123) as usize % MAX_VOCAB;
 
         // let mut hasher = WyHash::with_seed(3);
         // hasher.write(&rc);
         // let y = hasher.finish() as usize % MAX_VOCAB;
-        let y = wyhash(&rc, 43_988_123) as usize % MAX_VOCAB;
 
         // Very slow...
         // let x: usize = self.transmute_hash(&kmer) % MAX_VOCAB;
         // let y: usize = self.transmute_hash(&rc) % MAX_VOCAB;
 
+        // Super slow...
+        // let x = read_ne_u64(&kmer) as usize % MAX_VOCAB;
+        // let y = read_ne_u64(&rc) as usize % MAX_VOCAB;
+
+        let x = wyhash(&kmer, 43_988_123) as usize % MAX_VOCAB;
+        let y = wyhash(&rc, 43_988_123) as usize % MAX_VOCAB;
+
+        // Slightly faster than wyhash
+        // let x = fasthash::xxh3::hash64(&kmer) as usize % MAX_VOCAB;
+        // let y = fasthash::xxh3::hash64(&rc) as usize % MAX_VOCAB;
+
+        // let x = enumerate_sum(&kmer) as usize % MAX_VOCAB;
+        // let y = enumerate_sum(&rc) as usize % MAX_VOCAB;
+
+        // Equal to xxh3
+        // let x = fasthash::t1ha::hash64(&kmer) as usize % MAX_VOCAB;
+        // let y = fasthash::t1ha::hash64(&rc) as usize % MAX_VOCAB;
+
         std::cmp::min(x,y)
     }
 
-/*     fn transmute_hash(&self, data: &[u8]) -> usize {
-        let mut x_raw = data[..].chunks_exact(8);
-        let mut xrem = x_raw.remainder().to_vec();
-        xrem.resize(8, 0);
-        let mut x: u64 = unsafe { mem::transmute(&xrem) };
-        x_raw.for_each(|xs| {
-            unsafe { 
-                x = x.wrapping_add(mem::transmute_copy::<_, u64>(&xs));
-            };
-        });
-
-        x as usize
-    } */
-
-    /* fn get_id_prev(&self, kmer: &[u8]) -> usize {
-        let mut id = (seahash::hash(kmer) as usize) % MAX_VOCAB;
-        while self.wordidx[id] != None && self.words[self.wordidx[id].unwrap()].kmer != kmer {
-            id = (id + 1) % MAX_VOCAB;
-        }
-
-        id as usize
-    } */
-
-    //pub fn add(&mut self, kmer: &[u8]) -> usize {
     pub fn add(&self, kmer: &[u8]) {
         self.tokens.fetch_add(1);
-
-//        if *self.ignore_table.read().unwrap().get(hash).unwrap() {
-//            return ()
-//        }
 
         let id = self.get_id(kmer);
 
         if self.wordidx[id].load() == None {
-            // self.entrieself.wordidxs += 2;
 
-            // For DashMap
-            // self.words.insert(id, kmer.to_vec());
             let mut word = ThinVec::with_capacity(kmer.len());
             word.extend_from_slice(&kmer);
             if let Err(val) = self.words[id].set(word) {
-                self.add(&val); return; 
+                // Another thread beat us to it, start over...
+                self.add(&val); 
+                return; 
             }
 
-            // match self.words.try_get_mut()
-
-            // let mut words_w = self.words.write().unwrap();
-            
-            /* let wordidx = match self.discard_table.write().unwrap().pop() {
-                None => {
-                    let id = Some(self.size.load() as usize);
-                    self.size.fetch_add(1);
-                    words_w.push(Entry { kmer: kmer.to_vec(), count: AtomicCell::new(1), });
-                    id
-                },
-                Some(x) => {
-                    words_w[x] = Entry { kmer: kmer.to_vec(), count: AtomicCell::new(1), };
-                    Some(x)
-                },
-            };
-            drop(words_w); */
-
-            /* match self.words[id].compare_and_swap(None, kmer) {
-                None => (),
-                Some => // Collision
-                 { self.add(kmer);
-                   return();
-                 }
-            }; */
-
-            let wordidx = Some(self.size.fetch_add(1) as usize);
+            let wordidx = core::num::NonZeroU64::new(self.size.fetch_add(1) as u64);
             
             match self.wordidx[id].compare_and_swap(None, wordidx) {
                 None  => (),
                 Some(_) => // Collision
                 {
-                    // So nevermind, start over and add this entry to the discard table...
-                    // self.discard_table.write().unwrap().push(x);
                     self.add(kmer);
                     return;
                 }
             }; // Points to word
 
             self.entries.fetch_add(1);
-
-
-            // RC's are either +1 or -1 so we can't simply add one...
-
-            // k of 13 gives LOTS of singletons...
-            /* if self.size.load() >= self.pct75 {
-                println!("Pruning...which probably doesn't work anymore...");
-                // self.minimum_threshold += 1;
-                self.minimum_threshold.fetch_add(1);
-                
-                let mut singletons: Vec<_> = self.words.read().unwrap()
-                    .iter()
-                    .enumerate()
-                    .filter(|(_ , x)| x.count.load() < self.minimum_threshold.load())
-                    .map(|(y, _)| y)
-                    .collect();
-
-                println!("");
-                println!("We are at 75%!!!!");
-                println!("We are at 75%!!!! Current total: {} {}", self.words.read().unwrap().len(), singletons.len());
-                println!("Highest count is: {}", self.words.read().unwrap().iter().map(|x| x.count.load()).max().unwrap());
-                println!("Potentially informative: {}", self.words.read().unwrap().len() - singletons.len());
-                println!("");
-
-                singletons.sort_unstable();
-                singletons.reverse();
-                let removed = singletons.len();
-
-                for k in singletons {
-                    let v = &self.words.read().unwrap()[k];
-                    self.ignore_table.write().unwrap()[self.calc_hash(&v.kmer, &self.get_rc(&v.kmer))] = true;
-                    self.discard_table.write().unwrap().push(k);
-                }
-
-                self.entries.fetch_sub(removed);
-
-                let toomany: Vec<_> = self.words.read().unwrap()
-                    .iter()
-                    .enumerate()
-                    .filter(|(_ , x)| x.count.load() > self.maximum_threshold.load())
-                    .map(|(y, _)| y)
-                    .collect();
-
-                for k in toomany {
-                    let v = &self.words.read().unwrap()[k];
-                    self.ignore_table.write().unwrap()[self.calc_hash(&v.kmer, &self.get_rc(&v.kmer))] = true;
-                    self.discard_table.write().unwrap().push(k);
-                }
-
-                self.entries.fetch_sub(removed);
-
-                println!("");
-                println!("Done with the pruning...");
-                println!("{}", self.size.load());
-                println!("");
-            } */
-
         }
+        self.counts[self.wordidx[id].load().unwrap().get() as usize].fetch_add(1);
+    }
+
+}
+
+pub fn count_kmers(
+    num_threads: usize,
+    kmer_size: usize,
+    filename: &str) -> Arc<Dict> {
+
+    let now = Instant::now();
+    let dict_builder = match Builder::new()
+                        .name("Dict Builder".into())
+                        .spawn(|| Arc::new(Dict::new()))
+                    {
+                        Ok(x)  => x,
+                        Err(y) => panic!("{}", y)
+                    };
+
+    let jobs = Arc::new(AtomicCell::new(0 as usize));
+    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(1024 * 64));
+    let rawseq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(1024));
+    let done = Arc::new(RwLock::new(false));
+    let generator_done = Arc::new(RwLock::new(false));
+
+    let generator;
+
+    let mut children = Vec::new();
+
+    let filename = filename.to_string();
+
+    for _ in 0..4 {
+        let seq_queue = Arc::clone(&seq_queue);
+        let rawseq_queue = Arc::clone(&rawseq_queue);
+        let jobs = Arc::clone(&jobs);
+
+        let child = match Builder::new()
+                        .name("IOWorker".into())
+                        .stack_size(WORKERSTACKSIZE)
+                        .spawn(move || io_worker_thread(kmer_size, rawseq_queue, seq_queue, jobs)) {
+                            Ok(x)  => x,
+                            Err(y) => panic!("{}", y)
+                        };
         
-        self.counts[self.wordidx[id].load().unwrap()].fetch_add(1);
-/*
-        let mut added = false;
-        let backoff = Backoff::new();
-        while !added {
-            let words_r = self.words.try_lock();
-            match words_r {
-                Ok(words_r) => {
-                    words_r[self.wordidx[id].load().unwrap()].count.fetch_add(1);
-                    added = true;
-                },
-                _ => {}
+        children.push(child);
+    }
+
+    let dict = dict_builder.join().unwrap();
+
+    {
+        let generator_done = Arc::clone(&generator_done);
+        let seq_queue = Arc::clone(&seq_queue);
+        let rawseq_queue = Arc::clone(&rawseq_queue);
+        let jobs = Arc::clone(&jobs);
+        let dict = Arc::clone(&dict);
+        let mut buffer: Sequence = Vec::with_capacity(1024);
+
+        generator = thread::Builder::new()
+                            .name("Generator".to_string())
+                            .stack_size(STACKSIZE)
+                            .spawn(move||
+        {
+            let mut seqbuffer: Sequence = Vec::with_capacity(8 * 1024 * 1024); // 8 Mb to start, will likely increase...
+            let mut seqlen: usize = 0;
+
+            let file = match File::open(&filename) {
+                Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
+                Ok(file) => file,
+            };
+
+            let pb = ProgressBar::new(file.metadata().unwrap().len());
+
+            let file = BufReader::with_capacity(64 * 1024 * 1024, file);
+
+            pb.set_style(ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {bar:50.cyan/blue} {pos:>7}/{len:7} {eta_precise} eta\n{msg}")
+                .progress_chars("█▇▆▅▄▃▂▁  "));
+
+            let fasta: Box<dyn Read> = if filename.ends_with("gz") {
+                Box::new(flate2::read::GzDecoder::new(pb.wrap_read(file)))
+            } else {
+                Box::new(pb.wrap_read(file))
+            };
+
+            let mut reader = BufReader::with_capacity(128 * 1024 * 1024, fasta);
+
+            let backoff = Backoff::new();
+
+            while let Ok(bytes_read) = reader.read_until(b'\n', &mut buffer) {
+                if bytes_read == 0 {
+                    // File is empty, we are done!
+                    break;
+                }
+
+                match buffer[0] {
+                    // 62 is a > meaning we have a new sequence id.
+                    62 => {
+                        jobs.fetch_add(1 as usize);
+                        let wp = ThreadCommand::Work(seqbuffer[..seqlen].to_vec());
+                        seqbuffer.clear();
+                        seqlen = 0;
+
+                        let mut result = rawseq_queue.push(wp);
+                        while let Err(PushError(wp)) = result {
+                            result = rawseq_queue.push(wp);
+                        }
+
+                        pb.set_message(&format!("{}/1024 {}/65536 {} unique kmers", rawseq_queue.len(), seq_queue.len(), dict.entries.load()));
+                    },
+
+                    // Anything else is likely sequence we need...
+                    _  => {
+                        //seqbuffer.resize(seqlen + bytes_read - 1, 0);
+                        // seqbuffer[seqlen..seqlen + bytes_read - 1].copy_from_slice(&buffer[0..bytes_read - 1]);
+                        let slice_end = bytes_read.saturating_sub(1);
+                        seqbuffer.extend_from_slice(&buffer[0..slice_end]);
+                        seqlen = seqlen.saturating_add(slice_end);
+                        // println!("{:#?}", String::from_utf8(seqbuffer[0..seqlen].to_vec()).unwrap());
+                    }
+                }
+
+            buffer.clear();
             }
 
-            if added {
+            *generator_done.write().unwrap() = true;
+        }).unwrap();
+    }
+
+    for _ in 0..num_threads {
+        let dict = Arc::clone(&dict);
+        let seq_queue = Arc::clone(&seq_queue);
+        let jobs = Arc::clone(&jobs);
+
+        let child = match Builder::new()
+                        .name("Worker".into())
+                        .stack_size(WORKERSTACKSIZE)
+                        .spawn(move || kmer_counter_worker_thread(kmer_size, dict, seq_queue, jobs)) {
+                            Ok(x)  => x,
+                            Err(y) => panic!("{}", y)
+                        };
+        
+        children.push(child);
+    }
+
+    let backoff = Backoff::new();
+    while !*generator_done.read().unwrap() {
+        backoff.snooze();
+    }
+
+    generator.join().expect("Unable to join generator thread...");
+
+    // IO Generator is done, shut down the IO workers...
+    for _ in 0..4 {
+        match rawseq_queue.push(ThreadCommand::Terminate) {
+            Ok(_) => (),
+            Err(x) => panic!("Unable to send command... {:#?}", x)
+        }
+    }
+
+    println!("Waiting for seq_queue to be empty...Currently at: {}", seq_queue.len());
+
+    while !seq_queue.is_empty() {
+        backoff.snooze();
+    }
+
+    println!("Seq queue is empty, sending terminate command...");
+
+    while jobs.load() > 0 {
+        backoff.snooze();
+        // println!("{}", jobs.load());
+    }
+
+    for _ in 0..num_threads {
+        match seq_queue.push(ThreadCommand::Terminate) {
+            Ok(_) => (),
+            Err(x) => panic!("Unable to send command... {:#?}", x)
+        }
+    }
+
+    println!("Terminate commands sent, joining worker threads");
+
+    for child in children {
+        match child.join() {
+            Ok(_) => (),
+            Err(x) => panic!("Error joining worker thread... {:#?}", x)
+        }
+    }
+
+    println!("Worker threads joined, getting dictionary stats...");
+
+    *done.write().unwrap() = true;
+
+    dict
+
+}
+
+fn io_worker_thread(
+    kmer_size: usize,
+    rawseq_queue: Arc<ArrayQueue<ThreadCommand<Sequence>>>,
+    seq_queue: Arc<ArrayQueue<ThreadCommand<Sequence>>>,
+    jobs: Arc<AtomicCell<usize>>) {
+    
+    let backoff = Backoff::new();
+
+    loop {
+        if let Ok(command) = rawseq_queue.pop() {
+            // We got the work packet!
+
+            // We are finished, end the thread...
+            if let ThreadCommand::Terminate = command {
                 break;
             }
 
-            backoff.spin(); */
-           
+            let mut rawseq = command.unwrap();
+            jobs.fetch_sub(1);
 
-/*            match self.rcidx.read().unwrap()[id] {
-                None => {
-                    println!("{:#?}", self.rcidx.read().unwrap()[id]);
-                    println!("Words Len: {}", self.words.read().unwrap().len());
-                    println!("{:#?}", self.words.read().unwrap()[self.wordidx.read().unwrap()[id].unwrap()].read().unwrap());
-                    println!("{}", self.wordidx.read().unwrap()[id].unwrap());
-                    panic!("Is none: self.rcidx[id].load(): {}", id);
-                },
-                Some(_) => ()
-            }; */
+            capitalize_nucleotides(&mut rawseq);
+            let coords = super::utils::get_good_sequence_coords(&rawseq);
+            
+            for (start_coords, end_coords) in coords {
 
-/*            match self.words.read().unwrap()[self.rcidx.read().unwrap()[id].unwrap()].read() {
-                Err(y) => panic!("Error 2: {} {}", id, y),
-                Ok(_) => ()
-            }; */
+                if (end_coords - start_coords) >= kmer_size {
 
-            // println!("Word entry: {:#?}", self.words.read().unwrap()[self.rcidx[id].load().unwrap()]);
+                    jobs.fetch_add(1 as usize);
+                    let wp = ThreadCommand::Work(rawseq[start_coords..end_coords].to_vec());
 
-            // cnt = self.words.read().unwrap()[self.rcidx.read().unwrap()[id].unwrap()].read().unwrap().count.saturating_add(1);
-            // self.words.write().unwrap()[self.rcidx.read().unwrap()[id].unwrap()].write().unwrap().count = cnt;
-            // self.words.read().unwrap()[self.rcidx.read().unwrap()[id].unwrap()].read().unwrap().count.fetch_add(1);
-        //}
+                    let mut result = seq_queue.push(wp);
+                    while let Err(PushError(wp)) = result {
+                        backoff.snooze();
+                        result = seq_queue.push(wp);
+                    }
 
-        // Regular addition... (+ symbol)
-        // 80.90user 22.52system 1:11.13elapsed 145%CPU (0avgtext+0avgdata 12235840maxresident)k
-
-        // wrapping_add
-        // 75.55user 20.42system 1:04.16elapsed 149%CPU (0avgtext+0avgdata 12240500maxresident)k
-
-        // saturating_add
-        // 75.55user 20.42system 1:04.16elapsed 149%CPU (0avgtext+0avgdata 12240500maxresident)k
-
-        // self.wordidx[id].unwrap()
-    }
-
-/*    pub fn add_previous(&mut self, kmer: &[u8]) {
-        self.tokens += 2;
-        let id = self.get_id(&kmer);
-        if self.wordidx[id] == None {
-            self.words.push(Entry { kmer: kmer.to_vec(), count: 1, });
-            let wordidx = Some(self.size as usize);
-            self.size += 1;
-            self.wordidx[id] = wordidx; // Points to word
-
-            // Assuming if the word doesn't exist then it's RC doesn't exist...
-            let mut rc = kmer.to_vec();
-            super::complement_nucleotides(&mut rc);
-            rc.reverse();
-            let rcid = self.get_id(&rc);
-
-            self.rcidx[rcid] = wordidx;
-
-            if self.wordidx[rcid] == None {
-                self.words.push(Entry { kmer: rc, count: 1, });
-                let rcwordidx = Some(self.size as usize);
-                self.size += 1; 
-
-                self.wordidx[rcid] = rcwordidx;
-                self.rcidx[id] = rcwordidx; // Points to rc idx of word
-            }            
-            // RC's are either +1 or -1 so we can't simply add one...
-
-            if (self.size % 10000000) == 0 {
-                println!("{}", self.size);
+                }
+                
             }
 
         } else {
-            // println!("{}", String::from_utf8(kmer.to_vec()).unwrap());
-            self.words[self.wordidx[id].unwrap()].count += 1;
-            self.words[self.rcidx[id].unwrap()].count += 1;
+            backoff.snooze();
+            backoff.reset();
         }
-        // self.wordidx[id].unwrap()
-    } */
+    }
 
-    /*
-    pub fn add_to_id(&mut self, id: usize) {
-        self.words[id].count += 1;
-    } */
+
+}
+
+fn kmer_counter_worker_thread (
+    kmer_size: usize, 
+    dict: Arc<Dict>, 
+    seq_queue: Arc<ArrayQueue<ThreadCommand<Sequence>>>,
+    jobs: Arc<AtomicCell<usize>>) {
+
+    let backoff = Backoff::new();
+
+    loop {
+        /* while seq_queue.is_empty() {
+            backoff.snooze();
+        } */
+
+        // Even when not empty, not guaranteed to be the thread to grab the work first...
+        if let Ok(command) = seq_queue.pop() {
+            // We got the work packet!
+
+            // We are finished, end the thread...
+            if let ThreadCommand::Terminate = command {
+                break;
+            }          
+
+            let rawseq = command.unwrap();
+            jobs.fetch_sub(1);
+
+            for i in 0..kmer_size {
+                rawseq[i..].chunks_exact(kmer_size).for_each(|x| { 
+                    // if bytecount::count(&x, b'N') < 3 {
+                        dict.add(&x);
+                    // }
+                });
+            }
+
+        } else {
+            backoff.snooze();
+            backoff.reset();
+        }
+
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crossbeam::atomic::AtomicCell;
+    use once_cell::sync::OnceCell;
+    use thincollections::thin_vec::ThinVec;
+    use std::mem;
+
+    #[test]
+    fn is_NOT_lock_free_NonZeroU32() {
+        assert_eq!(AtomicCell::<Option<core::num::NonZeroU32>>::is_lock_free(), false);
+    }
+
+    #[test]
+    fn is_NOT_lock_free_u32() {
+        assert_eq!(AtomicCell::<u32>::is_lock_free(), false);
+    }
+
+    #[test]
+    fn is_lock_free_usize() {
+        assert_eq!(AtomicCell::<usize>::is_lock_free(), true);
+    }
+
+    #[test]
+    fn is_lock_free_u64() {
+        assert_eq!(AtomicCell::<u64>::is_lock_free(), true);
+    }
+
+    #[test]
+    fn is_lock_free_i64() {
+        assert_eq!(AtomicCell::<i64>::is_lock_free(), true);
+    }
+
+    #[test]
+    fn size_of() {
+        assert_eq!(mem::size_of::<OnceCell<ThinVec<u8>>>(), 16);
+    }
+
+    #[test]
+    fn is_lock_free_NonZeroU64() {
+        assert_eq!(AtomicCell::<Option<core::num::NonZeroU64>>::is_lock_free(), true);
+    }
+
+    
+
 
 }

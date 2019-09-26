@@ -6,4 +6,8 @@ members = [
 
 [profile.release]
 opt-level = 3
+# debug = true # Eventually remove this.... but good to valgrind
+
+[profile.dev]
+opt-level = 3
 debug = true # Eventually remove this.... but good to valgrind
