@@ -26,7 +26,6 @@ use std::time::{Instant};
 use serde::{Serialize, Deserialize};
 
 use twox_hash::XxHash;
-use fasthash::*;
 
 use std::convert::TryInto;
 
@@ -95,19 +94,8 @@ impl Dict {
 
     pub fn new() -> Dict {
 
-        // Multi-threaded initialization: 24 seconds
-        // Single-threaded: 63 seconds...
-
-        /* let mut wordidx = Vec::with_capacity(MAX_VOCAB);
-        wordidx.resize_with(MAX_VOCAB, || AtomicCell::new(None));
-        // wordidx = (0..MAX_VOCAB).map(|_| AtomicCell::new(None)).collect();
-        let mut counts = Vec::with_capacity(MAX_VOCAB);
-        // counts = (0..MAX_VOCAB).map(|_| AtomicCell::new(0)).collect();
-        counts.resize_with(MAX_VOCAB, || AtomicCell::new(0));
-        let mut words = Vec::with_capacity(MAX_VOCAB);
-        // words = (0..MAX_VOCAB).map(|_| OnceCell::new()).collect();
-        words.resize_with(MAX_VOCAB, OnceCell::new); */
-
+        // Overkill, but multi-threading gives it a slight speed boost
+        // Higher in dev...
 
         let wordidx_builder = match Builder::new()
                         .name("WordIdx Builder".into())
@@ -174,15 +162,6 @@ impl Dict {
 
         while self.wordidx[id].load() != None 
             && 
-            // self.words[id].load() != Some(kmer)
-            // &&
-            // self.words[id].load() != Some(rc)
-            // self.words.read().unwrap()[self.wordidx[id].load().unwrap()].kmer != kmer
-            // DashMap below
-            //*self.words.index(&id) != kmer
-            // &&
-            // *self.words.index(&id) != rc
-            // self.words.read().unwrap()[self.wordidx[id].load().unwrap()].kmer != rc
             cur_word != None 
             &&
             cur_word.unwrap() != &kmer
@@ -209,70 +188,9 @@ impl Dict {
 
     #[inline(always)]
     pub fn calc_hash(&self, kmer: &[u8], rc: &[u8]) -> usize {
-        // let mut hasher = twox_hash::XxHash64::with_seed(0);
-        // hasher.consume(&kmer);
-        // hasher.write(&kmer);
-        // let x = hasher.finish() as usize % MAX_VOCAB;
-
-        // let mut hasher = twox_hash::XxHash64::with_seed(0);
-        // hasher.write(&rc);
-        // let y = hasher.finish() as usize % MAX_VOCAB;
-
-        // kmer.iter().map(|x| hasher.write(&x));
-
-        // let rc = self.get_rc(&kmer);
-
-        // SeaHash seems to be faster for this datatype...
-
-        // let x = seahash::hash(&kmer) as usize % MAX_VOCAB;
-        // let y = seahash::hash(&rc) as usize % MAX_VOCAB;
-        
-        // Converting to bits seems slower
-        // let val = super::convert_seq_to_bits(&kmer);
-        // let  rc = super::bits_rc(val.clone());
-        // let x = val.as_slice()[0] as usize % MAX_VOCAB;
-        // let y = rc.as_slice()[0] as usize % MAX_VOCAB;
-
-        // Trying FNV hash
-        // Fastest so far...
-        /* let mut hasher = FnvHasher::with_key(0);
-        hasher.write(&kmer);
-        let x = hasher.finish() as usize % MAX_VOCAB;
-
-        let mut hasher = FnvHasher::with_key(0);
-        hasher.write(&rc);
-        let y = hasher.finish() as usize % MAX_VOCAB; */
-
-        // Trying Wy Hash
-        // let mut hasher = WyHash::with_seed(3);
-        // hasher.write(&kmer);
-        // let x = hasher.finish() as usize % MAX_VOCAB;
-
-        // let mut hasher = WyHash::with_seed(3);
-        // hasher.write(&rc);
-        // let y = hasher.finish() as usize % MAX_VOCAB;
-
-        // Very slow...
-        // let x: usize = self.transmute_hash(&kmer) % MAX_VOCAB;
-        // let y: usize = self.transmute_hash(&rc) % MAX_VOCAB;
-
-        // Super slow...
-        // let x = read_ne_u64(&kmer) as usize % MAX_VOCAB;
-        // let y = read_ne_u64(&rc) as usize % MAX_VOCAB;
 
         let x = wyhash(&kmer, 43_988_123) as usize % MAX_VOCAB;
         let y = wyhash(&rc, 43_988_123) as usize % MAX_VOCAB;
-
-        // Slightly faster than wyhash
-        // let x = fasthash::xxh3::hash64(&kmer) as usize % MAX_VOCAB;
-        // let y = fasthash::xxh3::hash64(&rc) as usize % MAX_VOCAB;
-
-        // let x = enumerate_sum(&kmer) as usize % MAX_VOCAB;
-        // let y = enumerate_sum(&rc) as usize % MAX_VOCAB;
-
-        // Equal to xxh3
-        // let x = fasthash::t1ha::hash64(&kmer) as usize % MAX_VOCAB;
-        // let y = fasthash::t1ha::hash64(&rc) as usize % MAX_VOCAB;
 
         std::cmp::min(x,y)
     }
@@ -296,7 +214,7 @@ impl Dict {
             
             match self.wordidx[id].compare_and_swap(None, wordidx) {
                 None  => (),
-                Some(_) => // Collision
+                Some(_) => // Collision... unlikely to happen, but it could...
                 {
                     self.add(kmer);
                     return;
@@ -315,7 +233,6 @@ pub fn count_kmers(
     kmer_size: usize,
     filename: &str) -> Arc<Dict> {
 
-    let now = Instant::now();
     let dict_builder = match Builder::new()
                         .name("Dict Builder".into())
                         .spawn(|| Arc::new(Dict::new()))
@@ -325,8 +242,8 @@ pub fn count_kmers(
                     };
 
     let jobs = Arc::new(AtomicCell::new(0 as usize));
-    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(1024 * 64));
-    let rawseq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(1024));
+    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(1024 * 128));
+    let rawseq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(2048));
     let done = Arc::new(RwLock::new(false));
     let generator_done = Arc::new(RwLock::new(false));
 
@@ -412,7 +329,7 @@ pub fn count_kmers(
                             result = rawseq_queue.push(wp);
                         }
 
-                        pb.set_message(&format!("{}/1024 {}/65536 {} unique kmers", rawseq_queue.len(), seq_queue.len(), dict.entries.load()));
+                        pb.set_message(&format!("{}/2048 {}/131072 {} unique kmers", rawseq_queue.len(), seq_queue.len(), dict.entries.load()));
                     },
 
                     // Anything else is likely sequence we need...
