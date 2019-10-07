@@ -27,6 +27,12 @@ use clap::App;
 
 use std::fs::File;
 use std::io::{BufReader, Read, BufRead};
+use liboracular::vocab::build_vocab_from_finaldict;
+
+use finalfrontier::{
+    SentenceIterator, SimpleVocab, SkipgramTrainer, SubwordVocab, Vocab, VocabBuilder,
+    WriteModelBinary, SGD, SubwordVocabConfig, NGramConfig
+};
 
 fn main() {
 
@@ -68,8 +74,11 @@ fn main() {
     println!("{}", (dict.tokens.load() as f32 / dict.size.load() as f32));
 
     let final_dict = dict.convert_to_final();
-    let mut out_fh = snap::Writer::new(File::create(format!("{}.bc", "vvulg")).unwrap());
-    bincode::serialize_into(&mut out_fh, &final_dict).expect("Unable to write to bincode file");
 
+    let app = SkipGramApp::new();
 
+    let vocab: SubwordVocab<_, _> = build_vocab_from_finaldict(final_dict);
+
+    // let mut out_fh = snap::Writer::new(File::create(format!("{}.bc", "vvulg")).unwrap());
+    // bincode::serialize_into(&mut out_fh, &final_dict).expect("Unable to write to bincode file");
 }

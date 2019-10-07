@@ -9,15 +9,12 @@ extern crate flate2;
 extern crate serde;
 extern crate bincode;
 extern crate twox_hash;
+extern crate finalfrontier;
+extern crate finalfusion;
+extern crate rand;
 
 mod utils;
 pub mod kmer_counting;
 mod threads;
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+pub mod vocab;
+pub mod embeddings;

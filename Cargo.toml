@@ -9,5 +9,5 @@ opt-level = 3
 # debug = true # Eventually remove this.... but good to valgrind
 
 [profile.dev]
-opt-level = 3
+opt-level = 3 # Memory allocation is too slow otherwise...
 debug = true # Eventually remove this.... but good to valgrind
