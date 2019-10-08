@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 bincode = "1.2.0"
-flate2 = "1.0.12"
+flate2 = { version = "1.0.12", features = ["zlib"] }
 itertools = "0.8"
 fnv = "1.0.6"
 serde = { version = "1.0.101", features = ["derive", "rc"] }

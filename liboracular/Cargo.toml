@@ -18,7 +18,7 @@ bytecount = "0.6.0"
 bitpacking = "0.8.1"
 rand = "0.6"
 rand_xorshift = "0.1"
-flate2 = "1.0.12"
+flate2 = { version = "1.0.12", features = ["zlib"] }
 indicatif = "0.12.0"
 serde = { version = "1.0.101", features = ["derive", "rc"] }
 bincode = "1.2.0"
