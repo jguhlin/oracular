@@ -21,13 +21,19 @@ use serde::Serialize;
 
 const PROGRESS_UPDATE_INTERVAL: u64 = 200;
 
-pub fn train<V>(vocab: V)
+pub fn train<V>(vocab: V, filename: &str)
 where
     V: Vocab<VocabType = String> + Into<VocabWrap> + Clone + Send + Sync + 'static,
     V::Config: Serialize,
     for<'a> &'a V::IdxType: IntoIterator<Item = u64>,
 {
-    let n_threads = 48;
+    let num_threads = 48;
+
+    let jobs = Arc::new(AtomicCell::new(0 as usize));
+    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(1024 * 128));
+    let rawseq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(2048));
+    let done = Arc::new(RwLock::new(false));
+    let generator_done = Arc::new(RwLock::new(false));
 
     let mut output_writer = BufWriter::new(
         File::create("embeddings").or_exit("Cannot open output file for writing.", 1),
@@ -55,9 +61,10 @@ where
     );
 
     let sgd = SGD::new(trainer.into());
+    let filename = filename.to_string();
 
-    let mut children = Vec::with_capacity(n_threads);
-    for thread in 0..n_threads {
+    let mut children = Vec::with_capacity(num_threads);
+    for thread in 0..num_threads {
         let sgd = sgd.clone();
 
         children.push(thread::spawn(move || {
@@ -65,7 +72,6 @@ where
                 sgd,
                 thread,
                 n_threads,
-                common_config.epochs,
                 common_config.lr,
             );
         }));
@@ -91,7 +97,6 @@ fn do_work<R, V>(
     mut sgd: SGD<SkipgramTrainer<R, V>>,
     thread: usize,
     n_threads: usize,
-    epochs: u32,
     start_lr: f32,
 ) where
     R: Clone + Rng,
