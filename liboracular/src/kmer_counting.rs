@@ -4,51 +4,24 @@ use wyhash::wyhash;
 use thincollections::thin_vec::ThinVec;
 use opinionated::fasta::{complement_nucleotides, capitalize_nucleotides};
 
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc};
 
-use std::thread;
 use std::thread::Builder;
 
-use std::fs::File;
-use std::io::prelude::*;
-use std::io::{BufReader, Read, BufRead};
 use std::hash::BuildHasherDefault;
 use std::collections::HashMap;
 
 use crossbeam::queue::{ArrayQueue, PushError};
 use crossbeam::utils::Backoff;
 
-use indicatif::ProgressBar;
-use indicatif::ProgressStyle;
-
-use std::time::{Instant};
-
 use serde::{Serialize, Deserialize};
 
 use twox_hash::XxHash;
 
-use std::convert::TryInto;
+use crate::threads::{sequence_generator, Sequence, ThreadCommand};
 
 const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
-
-// type Sequences = Vec<Sequence>;
-type Sequence = Vec<u8>;
-
-enum ThreadCommand<T> {
-    Work(T),
-    Terminate,
-}
-
-impl ThreadCommand<Sequence> {
-    // Consumes the ThreadCommand, which is just fine...
-    fn unwrap(self) -> Sequence {
-        match self {
-            ThreadCommand::Work(x)   => x,
-            ThreadCommand::Terminate => panic!("Unable to unwrap terminate command"),
-        }
-    }
-}
 
 pub const MAX_VOCAB: usize = 300_000_000;
 
@@ -241,114 +214,10 @@ pub fn count_kmers(
                         Err(y) => panic!("{}", y)
                     };
 
-    let jobs = Arc::new(AtomicCell::new(0 as usize));
-    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(1024 * 128));
-    let rawseq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(2048));
-    let done = Arc::new(RwLock::new(false));
-    let generator_done = Arc::new(RwLock::new(false));
-
-    let generator;
-
-    let mut children = Vec::new();
-
-    let filename = filename.to_string();
-
-    for _ in 0..4 {
-        let seq_queue = Arc::clone(&seq_queue);
-        let rawseq_queue = Arc::clone(&rawseq_queue);
-        let jobs = Arc::clone(&jobs);
-
-        let child = match Builder::new()
-                        .name("IOWorker".into())
-                        .stack_size(WORKERSTACKSIZE)
-                        .spawn(move || io_worker_thread(kmer_size, rawseq_queue, seq_queue, jobs)) {
-                            Ok(x)  => x,
-                            Err(y) => panic!("{}", y)
-                        };
-        
-        children.push(child);
-    }
+    let (seq_queue, jobs, generator_done, generator, mut children) 
+        = sequence_generator(kmer_size, &filename);
 
     let dict = dict_builder.join().unwrap();
-
-    {
-        let generator_done = Arc::clone(&generator_done);
-        let seq_queue = Arc::clone(&seq_queue);
-        let rawseq_queue = Arc::clone(&rawseq_queue);
-        let jobs = Arc::clone(&jobs);
-        let dict = Arc::clone(&dict);
-        let mut buffer: Sequence = Vec::with_capacity(1024);
-
-        generator = thread::Builder::new()
-                            .name("Generator".to_string())
-                            .stack_size(STACKSIZE)
-                            .spawn(move||
-        {
-            let mut seqbuffer: Sequence = Vec::with_capacity(8 * 1024 * 1024); // 8 Mb to start, will likely increase...
-            let mut seqlen: usize = 0;
-
-            let file = match File::open(&filename) {
-                Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
-                Ok(file) => file,
-            };
-
-            let pb = ProgressBar::new(file.metadata().unwrap().len());
-
-            let file = BufReader::with_capacity(64 * 1024 * 1024, file);
-
-            pb.set_style(ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] {bar:50.cyan/blue} {pos:>7}/{len:7} {eta_precise} eta\n{msg}")
-                .progress_chars("█▇▆▅▄▃▂▁  "));
-
-            let fasta: Box<dyn Read> = if filename.ends_with("gz") {
-                Box::new(flate2::read::GzDecoder::new(pb.wrap_read(file)))
-            } else {
-                Box::new(pb.wrap_read(file))
-            };
-
-            let mut reader = BufReader::with_capacity(128 * 1024 * 1024, fasta);
-
-            let backoff = Backoff::new();
-
-            while let Ok(bytes_read) = reader.read_until(b'\n', &mut buffer) {
-                if bytes_read == 0 {
-                    // File is empty, we are done!
-                    break;
-                }
-
-                match buffer[0] {
-                    // 62 is a > meaning we have a new sequence id.
-                    62 => {
-                        jobs.fetch_add(1 as usize);
-                        let wp = ThreadCommand::Work(seqbuffer[..seqlen].to_vec());
-                        seqbuffer.clear();
-                        seqlen = 0;
-
-                        let mut result = rawseq_queue.push(wp);
-                        while let Err(PushError(wp)) = result {
-                            result = rawseq_queue.push(wp);
-                        }
-
-                        pb.set_message(&format!("{}/2048 {}/131072 {} unique kmers", rawseq_queue.len(), seq_queue.len(), dict.entries.load()));
-                    },
-
-                    // Anything else is likely sequence we need...
-                    _  => {
-                        //seqbuffer.resize(seqlen + bytes_read - 1, 0);
-                        // seqbuffer[seqlen..seqlen + bytes_read - 1].copy_from_slice(&buffer[0..bytes_read - 1]);
-                        let slice_end = bytes_read.saturating_sub(1);
-                        seqbuffer.extend_from_slice(&buffer[0..slice_end]);
-                        seqlen = seqlen.saturating_add(slice_end);
-                        // println!("{:#?}", String::from_utf8(seqbuffer[0..seqlen].to_vec()).unwrap());
-                    }
-                }
-
-            buffer.clear();
-            }
-
-            *generator_done.write().unwrap() = true;
-        }).unwrap();
-    }
 
     for _ in 0..num_threads {
         let dict = Arc::clone(&dict);
@@ -372,16 +241,6 @@ pub fn count_kmers(
     }
 
     generator.join().expect("Unable to join generator thread...");
-
-    // IO Generator is done, shut down the IO workers...
-    for _ in 0..4 {
-        match rawseq_queue.push(ThreadCommand::Terminate) {
-            Ok(_) => (),
-            Err(x) => panic!("Unable to send command... {:#?}", x)
-        }
-    }
-
-    println!("Waiting for seq_queue to be empty...Currently at: {}", seq_queue.len());
 
     while !seq_queue.is_empty() {
         backoff.snooze();
@@ -412,58 +271,7 @@ pub fn count_kmers(
 
     println!("Worker threads joined, getting dictionary stats...");
 
-    *done.write().unwrap() = true;
-
     dict
-
-}
-
-fn io_worker_thread(
-    kmer_size: usize,
-    rawseq_queue: Arc<ArrayQueue<ThreadCommand<Sequence>>>,
-    seq_queue: Arc<ArrayQueue<ThreadCommand<Sequence>>>,
-    jobs: Arc<AtomicCell<usize>>) {
-    
-    let backoff = Backoff::new();
-
-    loop {
-        if let Ok(command) = rawseq_queue.pop() {
-            // We got the work packet!
-
-            // We are finished, end the thread...
-            if let ThreadCommand::Terminate = command {
-                break;
-            }
-
-            let mut rawseq = command.unwrap();
-            jobs.fetch_sub(1);
-
-            capitalize_nucleotides(&mut rawseq);
-            let coords = super::utils::get_good_sequence_coords(&rawseq);
-            
-            for (start_coords, end_coords) in coords {
-
-                if (end_coords - start_coords) >= kmer_size {
-
-                    jobs.fetch_add(1 as usize);
-                    let wp = ThreadCommand::Work(rawseq[start_coords..end_coords].to_vec());
-
-                    let mut result = seq_queue.push(wp);
-                    while let Err(PushError(wp)) = result {
-                        backoff.snooze();
-                        result = seq_queue.push(wp);
-                    }
-
-                }
-                
-            }
-
-        } else {
-            backoff.snooze();
-            backoff.reset();
-        }
-    }
-
 
 }
 
@@ -476,17 +284,11 @@ fn kmer_counter_worker_thread (
     let backoff = Backoff::new();
 
     loop {
-        /* while seq_queue.is_empty() {
-            backoff.snooze();
-        } */
-
-        // Even when not empty, not guaranteed to be the thread to grab the work first...
         if let Ok(command) = seq_queue.pop() {
-            // We got the work packet!
 
             // We are finished, end the thread...
             if let ThreadCommand::Terminate = command {
-                break;
+                return;
             }          
 
             let rawseq = command.unwrap();
@@ -504,7 +306,6 @@ fn kmer_counter_worker_thread (
             backoff.snooze();
             backoff.reset();
         }
-
     }
 }
 
@@ -516,12 +317,12 @@ mod test {
     use std::mem;
 
     #[test]
-    fn is_NOT_lock_free_NonZeroU32() {
+    fn is_not_lock_free_non_zero_u32() {
         assert_eq!(AtomicCell::<Option<core::num::NonZeroU32>>::is_lock_free(), false);
     }
 
     #[test]
-    fn is_NOT_lock_free_u32() {
+    fn is_not_lock_free_u32() {
         assert_eq!(AtomicCell::<u32>::is_lock_free(), false);
     }
 
@@ -546,7 +347,7 @@ mod test {
     }
 
     #[test]
-    fn is_lock_free_NonZeroU64() {
+    fn is_lock_free_non_zero_u64() {
         assert_eq!(AtomicCell::<Option<core::num::NonZeroU64>>::is_lock_free(), true);
     }
 

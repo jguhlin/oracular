@@ -25,14 +25,10 @@ static GLOBAL: MiMalloc = MiMalloc;
 extern crate clap;
 use clap::App;
 
-use std::fs::File;
-use std::io::{BufReader, Read, BufRead};
 use liboracular::vocab::build_vocab_from_finaldict;
+use liboracular::embeddings::train;
 
-use finalfrontier::{
-    SentenceIterator, SimpleVocab, SkipgramTrainer, SubwordVocab, Vocab, VocabBuilder,
-    WriteModelBinary, SGD, SubwordVocabConfig, NGramConfig
-};
+use finalfrontier::{SubwordVocab};
 
 fn main() {
 
@@ -75,9 +71,10 @@ fn main() {
 
     let final_dict = dict.convert_to_final();
 
-    let app = SkipGramApp::new();
+    // let app = SkipGramApp::new();
 
     let vocab: SubwordVocab<_, _> = build_vocab_from_finaldict(final_dict);
+    train(vocab, filename, kmer_size)
 
     // let mut out_fh = snap::Writer::new(File::create(format!("{}.bc", "vvulg")).unwrap());
     // bincode::serialize_into(&mut out_fh, &final_dict).expect("Unable to write to bincode file");
