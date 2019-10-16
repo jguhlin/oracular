@@ -1,8 +1,5 @@
 use crossbeam::atomic::AtomicCell;
-use once_cell::sync::OnceCell;
-use wyhash::wyhash;
-use thincollections::thin_vec::ThinVec;
-use opinionated::fasta::{complement_nucleotides, capitalize_nucleotides};
+use opinionated::fasta::{capitalize_nucleotides};
 
 use std::sync::{Arc, RwLock};
 
@@ -11,24 +8,13 @@ use std::thread::Builder;
 use std::thread::JoinHandle;
 
 use std::fs::File;
-use std::io::prelude::*;
 use std::io::{BufReader, Read, BufRead};
-use std::hash::BuildHasherDefault;
-use std::collections::HashMap;
 
 use crossbeam::queue::{ArrayQueue, PushError};
 use crossbeam::utils::Backoff;
 
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
-
-use std::time::{Instant};
-
-use serde::{Serialize, Deserialize};
-
-use twox_hash::XxHash;
-
-use std::convert::TryInto;
 
 const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
@@ -56,6 +42,7 @@ impl ThreadCommand<Sequence> {
 pub fn sequence_generator(
     kmer_size: usize,
     filename: &str,
+    msg: Arc<String>
 ) -> (Arc<ArrayQueue<ThreadCommand<Sequence>>>, Arc<AtomicCell<usize>>, Arc<RwLock<bool>>, JoinHandle<()>, Vec<JoinHandle<()>>)
 // seq_queue jobs generator_done generator children
 
@@ -90,7 +77,6 @@ pub fn sequence_generator(
 
     { // Explicit lifetime
         let generator_done = Arc::clone(&generator_done);
-        let seq_queue = Arc::clone(&seq_queue);
         let rawseq_queue = Arc::clone(&rawseq_queue);
         let jobs = Arc::clone(&jobs);
         let mut buffer: Sequence = Vec::with_capacity(1024);
@@ -113,7 +99,7 @@ pub fn sequence_generator(
             let file = BufReader::with_capacity(64 * 1024 * 1024, file);
 
             pb.set_style(ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] {bar:50.cyan/blue} {pos:>7}/{len:7} {eta_precise} eta\n{msg}")
+                .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>5}/{len:5} {eta_precise} {msg}")
                 .progress_chars("█▇▆▅▄▃▂▁  "));
 
             let fasta: Box<dyn Read> = if filename.ends_with("gz") {
@@ -127,6 +113,7 @@ pub fn sequence_generator(
             let backoff = Backoff::new();
 
             while let Ok(bytes_read) = reader.read_until(b'\n', &mut buffer) {
+                // pb.set_message("hello");
                 if bytes_read == 0 {
                     // File is empty, we are done!
                     // IO Generator is done, shut down the IO workers...
@@ -154,7 +141,8 @@ pub fn sequence_generator(
                             result = rawseq_queue.push(wp);
                         }
 
-                        pb.set_message(&format!("{}/2048 {}/131072", rawseq_queue.len(), seq_queue.len()));
+                        // pb.set_message(&format!("{}/2048 {}/131072", rawseq_queue.len(), seq_queue.len()));
+                        pb.set_message(&msg);
                     },
                     _  => {
                         let slice_end = bytes_read.saturating_sub(1);
@@ -179,7 +167,7 @@ fn io_worker_thread(
     rawseq_queue: Arc<ArrayQueue<ThreadCommand<Sequence>>>,
     seq_queue: Arc<ArrayQueue<ThreadCommand<Sequence>>>,
     jobs: Arc<AtomicCell<usize>>) {
-    
+
     let backoff = Backoff::new();
 
     loop {

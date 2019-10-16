@@ -27,8 +27,10 @@ use clap::App;
 
 use liboracular::vocab::build_vocab_from_finaldict;
 use liboracular::embeddings::train;
+use liboracular::kmervocab::{KmerVocabConfig, KmerVocab};
 
 use finalfrontier::{SubwordVocab};
+use finalfusion::prelude::VocabWrap;
 
 fn main() {
 
@@ -73,7 +75,7 @@ fn main() {
 
     // let app = SkipGramApp::new();
 
-    let vocab: SubwordVocab<_, _> = build_vocab_from_finaldict(final_dict);
+    let vocab: KmerVocab<_, _> = build_vocab_from_finaldict(final_dict).into();
     train(vocab, filename, kmer_size)
 
     // let mut out_fh = snap::Writer::new(File::create(format!("{}.bc", "vvulg")).unwrap());

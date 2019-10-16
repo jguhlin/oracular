@@ -1,0 +1,22 @@
+[package]
+name = "pyracular"
+version = "0.1.0"
+authors = ["Joseph Guhlin <joseph.guhlin@gmail.com>"]
+edition = "2018"
+
+[lib]
+name = "string_sum"
+crate-type = ["cdylib", "lib"]
+
+[dependencies.pyo3]
+version = "0.8.1"
+features = ["extension-module"]
+
+[dependencies]
+twox-hash = "1.5.0"
+# finalfusion = "0.10.1"
+# finalfusion = { git = "https://github.com/finalfusion/finalfusion-rust", rev="c64254a9e738c14e70560db5013ec169f463a057"}
+finalfrontier = { path = "../../finalfrontier/"}
+finalfusion = { path = "../../finalfusion-rust/" }
+
+

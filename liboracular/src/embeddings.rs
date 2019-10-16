@@ -11,16 +11,18 @@ use std::io::{BufWriter};
 use std::thread;
 use std::sync::{Arc};
 use crossbeam::atomic::AtomicCell;
+use std::time::Duration;
 
 use stdinout::OrExit;
 
-use crossbeam::queue::{ArrayQueue, PushError};
+use crossbeam::queue::{ArrayQueue};
 use crossbeam::utils::Backoff;
 
 use serde::Serialize;
 
 use crate::threads::{sequence_generator, Sequence, ThreadCommand};
-use opinionated::fasta::{complement_nucleotides, capitalize_nucleotides};
+use opinionated::fasta::{complement_nucleotides};
+// use finalfrontier::WriteModelBinary;
 
 pub fn train<V>(vocab: V, filename: &str, kmer_size: usize)
 where
@@ -28,23 +30,32 @@ where
     V::Config: Serialize,
     for<'a> &'a V::IdxType: IntoIterator<Item = u64>,
 {
-    let num_threads = 48;
+    println!("Creating embeddings...");
+    let num_threads = 64;
 
-    let mut output_writer = BufWriter::new(
-        File::create("embeddings").or_exit("Cannot open output file for writing.", 1),
+    let _output_writer = BufWriter::new(
+        File::create("embeddings.embed").or_exit("Cannot open output file for writing.", 1),
     );
 
-    let skipgram_config = SkipGramConfig {            
-            context_size: 8,
-            model: ModelType::SkipGram,
+    let skipgram_config = SkipGramConfig {
+            context_size: 10,
+            // model: ModelType::SkipGram,            // loss: 0.12665372
+            // model: ModelType::DirectionalSkipgram,// loss: 0.12277688
+            model: ModelType::StructuredSkipGram, // loss: 0.1216571
+
+            // Loss above is lr 0.08, epochs: 10, dims: 32, neg_samples 100
+            // For vvulg genome, context of 6
+
+            // StructuredSkipGram -- Context Size of 10: 0.16051194
+            //                       54:32.10elapsed 6014%CPU
         };
 
     let common_config = CommonConfig {
         loss: LossType::LogisticNegativeSampling,
         dims: 32,
         epochs: 5,
-        lr: 0.05,
-        negative_samples: 15,
+        lr: 0.08,
+        negative_samples: 100,
         zipf_exponent: 0.5,
     };
 
@@ -58,14 +69,19 @@ where
     let sgd = SGD::new(trainer.into());
     let filename = filename.to_string();
 
-    let (seq_queue, jobs, generator_done, generator, mut children) 
-        = sequence_generator(kmer_size, &filename);
+    let msg = Arc::new("".to_string());
 
-    let mut children = Vec::with_capacity(num_threads);
+    let (seq_queue, jobs, generator_done, generator, mut children) 
+        = sequence_generator(kmer_size, &filename, msg.clone());
+
+    println!("Starting children...");
+
+    // children = Vec::with_capacity(num_threads);
     for _ in 0..num_threads {
         let sgd = sgd.clone();
         let seq_queue = Arc::clone(&seq_queue);
         let jobs = Arc::clone(&jobs);
+        let msg = Arc::clone(&msg);
 
         children.push(thread::spawn(move || {
             embedding_worker(
@@ -75,10 +91,12 @@ where
                 seq_queue,
                 jobs,
                 common_config.epochs as usize,
+                msg,
             );
         }));
     }
 
+    println!("Waiting for generator to finish...");
     let backoff = Backoff::new();
     while !*generator_done.read().unwrap() {
         backoff.snooze();
@@ -86,14 +104,20 @@ where
 
     generator.join().expect("Unable to join generator thread...");
 
+    let update_interval = Duration::from_millis(10000);
+
     while !seq_queue.is_empty() {
-        backoff.snooze();
+        thread::sleep(update_interval);
+        println!("loss: {}", sgd.train_loss());
     }
 
-    println!("Seq queue is empty, sending terminate command...");
+    println!("Seq queue is empty, sending terminate command when job load is empty...");
 
     while jobs.load() > 0 {
-        backoff.snooze();
+        thread::sleep(update_interval);
+        println!("loss: {}", sgd.train_loss());
+
+        // backoff.snooze();
         // println!("{}", jobs.load());
     }
 
@@ -121,9 +145,13 @@ where
         Duration::from_millis(PROGRESS_UPDATE_INTERVAL),
     ); */
 
+    println!();
+    println!();
+    println!("Final loss: {}", sgd.train_loss());
+
     // Wait until all threads have finished.
 
-//    sgd.into_model()
+    sgd.into_model();
 //        .write_model_binary(&mut output_writer)
 //        .or_exit("Cannot write model", 1);
 }
@@ -135,6 +163,7 @@ fn embedding_worker<R, V>(
     seq_queue: Arc<ArrayQueue<ThreadCommand<Sequence>>>,
     jobs: Arc<AtomicCell<usize>>,
     epochs: usize,
+    mut msg: Arc<String>
 ) where
     R: Clone + Rng,
     V: Vocab<VocabType = String>,
@@ -190,6 +219,12 @@ fn embedding_worker<R, V>(
                     sentence.clear();
                 }
             }
+
+            match Arc::get_mut(&mut msg) {
+                Some(x) => *x = format!("loss: {} lr: {}", sgd.train_loss(), lr),
+                None    => ()
+            };
+
         } else {
             backoff.snooze();
             backoff.reset();

@@ -2,6 +2,7 @@
 members = [
     "./oracular",
     "./liboracular",
+    "./pyracular",
 ]
 
 [profile.release]

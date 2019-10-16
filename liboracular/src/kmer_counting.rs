@@ -2,7 +2,7 @@ use crossbeam::atomic::AtomicCell;
 use once_cell::sync::OnceCell;
 use wyhash::wyhash;
 use thincollections::thin_vec::ThinVec;
-use opinionated::fasta::{complement_nucleotides, capitalize_nucleotides};
+use opinionated::fasta::{complement_nucleotides};
 
 use std::sync::{Arc};
 
@@ -11,7 +11,7 @@ use std::thread::Builder;
 use std::hash::BuildHasherDefault;
 use std::collections::HashMap;
 
-use crossbeam::queue::{ArrayQueue, PushError};
+use crossbeam::queue::{ArrayQueue};
 use crossbeam::utils::Backoff;
 
 use serde::{Serialize, Deserialize};
@@ -20,7 +20,7 @@ use twox_hash::XxHash;
 
 use crate::threads::{sequence_generator, Sequence, ThreadCommand};
 
-const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
+// const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 
 pub const MAX_VOCAB: usize = 300_000_000;
@@ -215,7 +215,7 @@ pub fn count_kmers(
                     };
 
     let (seq_queue, jobs, generator_done, generator, mut children) 
-        = sequence_generator(kmer_size, &filename);
+        = sequence_generator(kmer_size, &filename, Arc::new("".to_string()));
 
     let dict = dict_builder.join().unwrap();
 
