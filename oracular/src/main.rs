@@ -75,8 +75,8 @@ fn main() {
 
     // let app = SkipGramApp::new();
 
-    let vocab: KmerVocab<_, _> = build_vocab_from_finaldict(final_dict).into();
-    train(vocab, filename, kmer_size)
+    let vocab = build_vocab_from_finaldict(final_dict);
+    let model = train(vocab, filename, kmer_size);
 
     // let mut out_fh = snap::Writer::new(File::create(format!("{}.bc", "vvulg")).unwrap());
     // bincode::serialize_into(&mut out_fh, &final_dict).expect("Unable to write to bincode file");

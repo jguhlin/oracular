@@ -22,23 +22,29 @@ use serde::Serialize;
 
 use crate::threads::{sequence_generator, Sequence, ThreadCommand};
 use opinionated::fasta::{complement_nucleotides};
-// use finalfrontier::WriteModelBinary;
+use finalfrontier::WriteModelBinary;
+// use finalfrontier::WriteModelText;
+use finalfrontier::app::TrainInfo;
+use finalfrontier::{TrainModel, Trainer};
 
-pub fn train<V>(vocab: V, filename: &str, kmer_size: usize)
+
+pub fn train<V>(vocab: V, filename: &str, kmer_size: usize) -> finalfrontier::TrainModel<finalfrontier::SkipgramTrainer<finalfrontier::util::ReseedOnCloneRng<rand_xorshift::XorShiftRng>, V>>
 where
     V: Vocab<VocabType = String> + Into<VocabWrap> + Clone + Send + Sync + 'static,
     V::Config: Serialize,
+    V: Vocab + Into<VocabWrap>,
     for<'a> &'a V::IdxType: IntoIterator<Item = u64>,
 {
     println!("Creating embeddings...");
-    let num_threads = 64;
+    let num_threads = 48;
 
-    let _output_writer = BufWriter::new(
-        File::create("embeddings.embed").or_exit("Cannot open output file for writing.", 1),
-    );
+    let train_info = TrainInfo::new(
+        filename.to_string(),
+        "embeddings.embed".to_string(), // OUTPUT filename, make variable TODO
+        num_threads as usize,);
 
     let skipgram_config = SkipGramConfig {
-            context_size: 10,
+            context_size: 6,
             // model: ModelType::SkipGram,            // loss: 0.12665372
             // model: ModelType::DirectionalSkipgram,// loss: 0.12277688
             model: ModelType::StructuredSkipGram, // loss: 0.1216571
@@ -53,9 +59,9 @@ where
     let common_config = CommonConfig {
         loss: LossType::LogisticNegativeSampling,
         dims: 32,
-        epochs: 5,
+        epochs: 1, // TODO: Testing..
         lr: 0.08,
-        negative_samples: 100,
+        negative_samples: 40,
         zipf_exponent: 0.5,
     };
 
@@ -151,9 +157,20 @@ where
 
     // Wait until all threads have finished.
 
-    sgd.into_model();
-//        .write_model_binary(&mut output_writer)
-//        .or_exit("Cannot write model", 1);
+    // sgd.into_model();
+        // .write_model_binary(&mut output_writer, train_info)
+        // .or_exit("Cannot write model", 1);
+
+    let model = sgd.into_model();
+
+    let output_writer = BufWriter::new(
+        File::create("embeddings.embed").or_exit("Cannot open output file for writing.", 1),
+    );
+
+    model.write_model_binary(&mut output_writer, train_info);
+
+    model
+
 }
 
 fn embedding_worker<R, V>(
