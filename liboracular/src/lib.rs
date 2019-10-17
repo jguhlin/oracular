@@ -7,8 +7,8 @@ extern crate bytecount;
 extern crate flate2;
 extern crate serde;
 extern crate twox_hash;
-extern crate finalfrontier;
-extern crate finalfusion;
+// extern crate finalfrontier;
+// pub extern crate finalfusion;
 extern crate rand;
 
 mod utils;

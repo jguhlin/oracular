@@ -207,3 +207,109 @@ fn create_discards<S>(
 
     discards
 }
+
+#[cfg(test)]
+mod test {
+
+    use finalfrontier::{
+        Vocab, SkipgramTrainer, SGD, ModelType, LossType, 
+        SkipGramConfig, CommonConfig, SubwordVocab, SubwordVocabConfig,
+        BucketConfig, VocabBuilder
+    };
+
+    use finalfrontier::TrainModel;
+
+    use std::hash::{Hash, Hasher};
+
+    // use finalfusion::subword::{FinalfusionHashIndexer, Indexer, NGramIndexer, HashIndexer, BucketIndexer, NGrams, SubwordIndices};
+    use finalfrontier::idx::WordWithSubwordsIdx;
+    use finalfusion::subword::{*};
+    use finalfusion::{*};
+
+    use rand_xorshift::XorShiftRng;
+    use rand::{FromEntropy, Rng};
+    use fnv::FnvHasher;
+
+    use finalfusion::prelude::*;
+/*
+    #[test]
+    fn external_subword_vocab_builder_save_binary() {
+        let vocab_config = SubwordVocabConfig {
+                discard_threshold: 1e-4, min_count: 2, 
+                max_n: 9, min_n: 9, indexer: BucketConfig { buckets_exp: 21 }, };
+        
+        let mut builder: VocabBuilder<_, String> = VocabBuilder::new(vocab_config);
+
+        builder.count("ACTG".to_string());
+        builder.count("CCCA".to_string());
+        builder.count("TACG".to_string());
+        builder.count("ACTG".to_string());
+        builder.count("ACGG".to_string());
+        builder.count("ACTG".to_string());
+        builder.count("ACGG".to_string());
+        builder.count("ACTG".to_string());
+        builder.count("GCAT".to_string());
+        builder.count("GCAT".to_string());
+        builder.count("CATT".to_string());
+        builder.count("CATT".to_string());
+
+        let vocab: SubwordVocab<_, FinalfusionHashIndexer> = builder.into();
+
+        let skipgram_config = SkipGramConfig {context_size: 5, model: ModelType::SkipGram, };
+
+        let common_config = CommonConfig {
+            loss: LossType::LogisticNegativeSampling, dims: 16, 
+            epochs: 1, lr: 0.05, negative_samples: 10, zipf_exponent: 0.5, };
+
+        let trainer = SkipgramTrainer::new(vocab, XorShiftRng::from_entropy(), common_config, skipgram_config,);
+
+        let sgd = SGD::new(trainer.into());
+
+    } */
+
+    use finalfusion::subword::FinalfusionHashIndexer;
+
+    const TEST_COMMON_CONFIG: CommonConfig = CommonConfig {
+        dims: 3,
+        epochs: 5,
+        loss: LossType::LogisticNegativeSampling,
+        lr: 0.05,
+        negative_samples: 5,
+        zipf_exponent: 0.5,
+    };
+
+    const TEST_SKIP_CONFIG: SkipGramConfig = SkipGramConfig {
+        context_size: 5,
+        model: ModelType::SkipGram,
+    };
+
+    const VOCAB_CONF: SubwordVocabConfig<BucketConfig> = SubwordVocabConfig {
+        discard_threshold: 1e-4,
+        min_count: 2,
+        max_n: 6,
+        min_n: 3,
+        indexer: BucketConfig { buckets_exp: 21 },
+    };
+
+    #[test]
+    pub fn model_embed_methods() {
+        let mut vocab_config = VOCAB_CONF.clone();
+        vocab_config.min_count = 1;
+
+        let common_config = TEST_COMMON_CONFIG.clone();
+        let skipgram_config = TEST_SKIP_CONFIG.clone();
+        // We just need some bogus vocabulary
+        let mut builder: VocabBuilder<_, String> = VocabBuilder::new(vocab_config);
+        builder.count("bla".to_string());
+        let vocab: SubwordVocab<_, FinalfusionHashIndexer> = builder.into();
+
+        let mut trainer = SkipgramTrainer::new(
+                vocab,
+                XorShiftRng::from_entropy(),
+                common_config,
+                skipgram_config,
+            );
+
+    }
+
+}

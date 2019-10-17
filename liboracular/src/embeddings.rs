@@ -171,7 +171,7 @@ where
 
     // println!("{}", y);
 
-    model.write_model_binary(&mut output_writer, train_info);
+    // model.write_model_binary(&mut output_writer, train_info);
 
     // model
 
