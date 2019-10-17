@@ -25,10 +25,9 @@ use opinionated::fasta::{complement_nucleotides};
 use finalfrontier::WriteModelBinary;
 // use finalfrontier::WriteModelText;
 use finalfrontier::app::TrainInfo;
-use finalfrontier::{TrainModel, Trainer};
 
 
-pub fn train<V>(vocab: V, filename: &str, kmer_size: usize) -> finalfrontier::TrainModel<finalfrontier::SkipgramTrainer<finalfrontier::util::ReseedOnCloneRng<rand_xorshift::XorShiftRng>, V>>
+pub fn train<V>(vocab: V, filename: &str, kmer_size: usize) -> ()
 where
     V: Vocab<VocabType = String> + Into<VocabWrap> + Clone + Send + Sync + 'static,
     V::Config: Serialize,
@@ -44,10 +43,10 @@ where
         num_threads as usize,);
 
     let skipgram_config = SkipGramConfig {
-            context_size: 6,
-            // model: ModelType::SkipGram,            // loss: 0.12665372
+            context_size: 2, // Should be 6
+            model: ModelType::SkipGram,            // loss: 0.12665372
             // model: ModelType::DirectionalSkipgram,// loss: 0.12277688
-            model: ModelType::StructuredSkipGram, // loss: 0.1216571
+            // model: ModelType::StructuredSkipGram, // loss: 0.1216571
 
             // Loss above is lr 0.08, epochs: 10, dims: 32, neg_samples 100
             // For vvulg genome, context of 6
@@ -60,8 +59,8 @@ where
         loss: LossType::LogisticNegativeSampling,
         dims: 32,
         epochs: 1, // TODO: Testing..
-        lr: 0.08,
-        negative_samples: 40,
+        lr: 0.05, // Should be 0.08
+        negative_samples: 10, // Should be 20 - 100
         zipf_exponent: 0.5,
     };
 
@@ -80,9 +79,8 @@ where
     let (seq_queue, jobs, generator_done, generator, mut children) 
         = sequence_generator(kmer_size, &filename, msg.clone());
 
-    println!("Starting children...");
+    println!("Starting embedding worker threads...");
 
-    // children = Vec::with_capacity(num_threads);
     for _ in 0..num_threads {
         let sgd = sgd.clone();
         let seq_queue = Arc::clone(&seq_queue);
@@ -102,7 +100,7 @@ where
         }));
     }
 
-    println!("Waiting for generator to finish...");
+    println!("Waiting for sequence generator to finish...");
     let backoff = Backoff::new();
     while !*generator_done.read().unwrap() {
         backoff.snooze();
@@ -117,14 +115,11 @@ where
         println!("loss: {}", sgd.train_loss());
     }
 
-    println!("Seq queue is empty, sending terminate command when job load is empty...");
+    println!("Seq queue is empty, sending terminate command to all children...");
 
     while jobs.load() > 0 {
         thread::sleep(update_interval);
         println!("loss: {}", sgd.train_loss());
-
-        // backoff.snooze();
-        // println!("{}", jobs.load());
     }
 
     for _ in 0..num_threads {
@@ -161,15 +156,24 @@ where
         // .write_model_binary(&mut output_writer, train_info)
         // .or_exit("Cannot write model", 1);
 
-    let model = sgd.into_model();
-
     let output_writer = BufWriter::new(
         File::create("embeddings.embed").or_exit("Cannot open output file for writing.", 1),
     );
 
+    println!("Tokens processed: {}", sgd.n_tokens_processed());
+
+    thread::sleep(update_interval);
+
+    let model = sgd.into_model();
+    
+    // let (x, y) = model.into_parts().unwrap();
+    // Weird error now: thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value: ErrorMessage { msg: "Cannot unwrap input matrix." }', src/libcore/result.rs:1165:
+
+    // println!("{}", y);
+
     model.write_model_binary(&mut output_writer, train_info);
 
-    model
+    // model
 
 }
 

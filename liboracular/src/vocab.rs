@@ -7,8 +7,10 @@ use finalfrontier::Word;
 use finalfusion::subword::{
     NGramIndexer, NGrams,
 };
+
 use std::collections::HashMap;
 use crate::kmervocab::{KmerVocabConfig, KmerVocab};
+use finalfrontier::WriteModelBinary;
 
 pub fn build_vocab_from_finaldict(dict: FinalDict) -> KmerVocab<NGramConfig, NGramIndexer>
 
