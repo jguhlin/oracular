@@ -17,6 +17,7 @@ use crossbeam::utils::Backoff;
 use serde::{Serialize, Deserialize};
 
 use twox_hash::XxHash;
+use lru::LruCache;
 
 use crate::threads::{sequence_generator, Sequence, ThreadCommand};
 
@@ -46,7 +47,7 @@ impl Dict {
 
     pub fn convert_to_final(&self) -> FinalDict {
 
-        let mut words: HashMap<Vec<u8>, u64, BuildHasherDefault<XxHash>> = Default::default(); //HashMap::with_capacity(self.size.load() as usize);
+        let mut words: HashMap<Vec<u8>, u64, BuildHasherDefault<XxHash>> = Default::default();
         words.reserve(self.size.load() as usize);
 
         for x in self.words
@@ -55,7 +56,10 @@ impl Dict {
                     .map(|x| x.to_vec()) {
             let id = self.get_id(&x);
             let count = self.counts[self.wordidx[id].load().expect("Error getting wordidx[id]").get() as usize].load();
-            words.insert(x, count);
+            let rc = self.get_rc(&x);
+
+            *words.entry(x).or_insert(0) += count;
+            *words.entry(rc.to_vec()).or_insert(0) += count;
         }
 
         FinalDict { words, 
@@ -131,7 +135,6 @@ impl Dict {
 
         let mut id = self.calc_hash(&kmer, &rc);
         let mut cur_word = self.words[id].get();
-        // let kvec = kmer.to_vec();
 
         while self.wordidx[id].load() != None 
             && 
@@ -156,7 +159,6 @@ impl Dict {
         complement_nucleotides(&mut rc);
         rc.reverse();
         rc
-
     }
 
     #[inline(always)]
@@ -180,7 +182,7 @@ impl Dict {
             if let Err(val) = self.words[id].set(word) {
                 // Another thread beat us to it, start over...
                 self.add(&val); 
-                return; 
+                return;
             }
 
             let wordidx = core::num::NonZeroU64::new(self.size.fetch_add(1) as u64);
@@ -297,7 +299,7 @@ fn kmer_counter_worker_thread (
             for i in 0..kmer_size {
                 rawseq[i..].chunks_exact(kmer_size).for_each(|x| { 
                     // if bytecount::count(&x, b'N') < 3 {
-                        dict.add(&x);
+                    dict.add(&x);
                     // }
                 });
             }
