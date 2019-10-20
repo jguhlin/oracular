@@ -1,3 +1,10 @@
+** For NT
+Kmer size of k=13, min_count = 10
+35442141/118077428 == 30% of kmers used...
+Min count of 50 =~ 10% of kmers used...
+Avg. occurences at k=13 1715.6592
+
+** Kmer Size Experiments
 Conclusion: k=13 for nt, k=11 for individual genome / reads
 
 Kmer size experiments...

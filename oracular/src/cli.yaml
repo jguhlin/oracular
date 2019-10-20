@@ -41,3 +41,8 @@ args:
         short: s
         help: Step size of the sliding window, default is to use the kmer size. Good to reduce for rare sequences
         takes_value: true
+    - threads:
+        short: t
+        help: number of threads
+        takes_value: true
+        default_value: "16"

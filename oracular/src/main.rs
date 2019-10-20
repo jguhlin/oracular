@@ -9,7 +9,9 @@ extern crate wyhash;
 extern crate thincollections;
 extern crate num_cpus;
 extern crate liboracular;
+extern crate serde;
 extern crate snap;
+extern crate bincode;
 
 extern crate mimalloc;
 use mimalloc::MiMalloc;
@@ -25,12 +27,11 @@ static GLOBAL: MiMalloc = MiMalloc;
 extern crate clap;
 use clap::App;
 
+use std::path::Path;
+use std::fs::File;
+
 use liboracular::vocab::build_vocab_from_finaldict;
 use liboracular::embeddings::train;
-use liboracular::kmervocab::{KmerVocabConfig, KmerVocab};
-
-use finalfrontier::{SubwordVocab};
-use finalfusion::prelude::VocabWrap;
 
 fn main() {
 
@@ -42,14 +43,15 @@ fn main() {
     // let maxn = value_t!(matches, "maxn", usize).unwrap_or(kmer_size.clone());
     // let step_size = value_t!(matches, "step", usize).unwrap_or(kmer_size.clone());
     // let w = value_t!(matches, "window", usize).unwrap_or(4);
+    let num_threads = value_t!(matches, "threads", usize).unwrap_or(16);
     
     println!("k={}", kmer_size);
 
-    // let test_file = "/mnt/data/nt/nt.gz";
-    let test_file = "/mnt/data/3wasps/anno-refinement-run/genomes/Vvulg.fna";
+    let test_file = "/mnt/data/nt/nt.gz";
+    // let test_file = "/mnt/data/3wasps/anno-refinement-run/genomes/Vvulg.fna";
     // let test_file = "Vvulg.fna.gz";
 
-    let num_threads = num_cpus::get();
+    // let num_threads = num_cpus::get();
     let filename = test_file.clone();
 
     /* let pb = ProgressBar::new(file.metadata().unwrap().len());
@@ -64,6 +66,10 @@ fn main() {
 
     // If file ends with .gz use flate2 to process it
 
+    let corpus_path = Path::new(test_file);
+    let filename_stem = corpus_path.file_stem().unwrap().to_str().unwrap();
+    let output_filename = format!("kmer_counts_{}_k{}.bc", filename_stem, kmer_size.to_string());
+
     println!("Counting kmers with {} threads", num_threads);
     let dict = liboracular::kmer_counting::count_kmers(num_threads, kmer_size, filename);
 
@@ -72,6 +78,10 @@ fn main() {
     println!("{}", (dict.tokens.load() as f32 / dict.size.load() as f32));
 
     let final_dict = dict.convert_to_final();
+
+    let mut kmercounts_fh = snap::Writer::new(File::create(output_filename.clone()).unwrap());
+    bincode::serialize_into(&mut kmercounts_fh, &final_dict).expect("Unable to write to bincode file");
+    println!("Saved kmer count results to {}", output_filename);
 
     // let app = SkipGramApp::new();
 

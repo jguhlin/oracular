@@ -12,3 +12,5 @@
 *.fai
 *.bc
 *.embed
+work/
+work/*

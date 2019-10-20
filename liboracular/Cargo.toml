@@ -15,6 +15,8 @@ opinionated = { path = "../../opinionated/opinionated/opinionated/"}
 finalfrontier = { path = "../../finalfrontier/"}
 finalfusion = { path = "../../finalfusion-rust/" }
 # finalfusion = { git = "https://github.com/finalfusion/finalfusion-rust", rev="c64254a9e738c14e70560db5013ec169f463a057"}
+# finalfusion = { git = "https://github.com/finalfusion/finalfusion-rust", rev="c64254a9e738c14e70560db5013ec169f463a057"}
+# finalfusion = { git = "https://github.com/finalfusion/finalfusion-rust", rev="c64254a9e738c14e70560db5013ec169f463a057"}
 # finalfusion = "0.10.1"
 # finalfusion = { git = "https://github.com/finalfusion/finalfusion-rust", rev="c64254a9e738c14e70560db5013ec169f463a057"}
 bytecount = "0.6.0"
@@ -29,4 +31,6 @@ serde = { version = "1.0.101", features = ["derive", "rc"] }
 fnv = "1"
 twox-hash = "1.5.0"
 stdinout = "0.4"
+static_assertions = "1.0.0"
 # fasthash = { path = "../../../software/rust-fasthash/fasthash/" }
+lru = "0.3.1"

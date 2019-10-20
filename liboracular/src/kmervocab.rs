@@ -222,23 +222,31 @@ mod test {
     use std::hash::{Hash, Hasher};
 
     // use finalfusion::subword::{FinalfusionHashIndexer, Indexer, NGramIndexer, HashIndexer, BucketIndexer, NGrams, SubwordIndices};
+    use finalfusion::subword::{FinalfusionHashIndexer, HashIndexer, BucketIndexer,};
+
     use finalfrontier::idx::WordWithSubwordsIdx;
     use finalfusion::subword::{*};
-    use finalfusion::{*};
 
     use rand_xorshift::XorShiftRng;
     use rand::{FromEntropy, Rng};
-    use fnv::FnvHasher;
 
-    use finalfusion::prelude::*;
-/*
+    use finalfusion::prelude::{SubwordVocab as FiFuSubwordVocab, VocabWrap};
+
+    #[test]
+    fn impls() {
+        assert_impl_all!(fnv::FnvHasher: Default, Hasher);
+        assert_impl_all!(finalfusion::subword::HashIndexer<fnv::FnvHasher>: finalfusion::subword::BucketIndexer);
+        assert_impl_all!(finalfusion::subword::HashIndexer<fnv::FnvHasher>: finalfusion::subword::Indexer);
+        assert_impl_all!(String: Hash, Eq, Into<String>);
+    }
+
     #[test]
     fn external_subword_vocab_builder_save_binary() {
-        let vocab_config = SubwordVocabConfig {
+        let vocab_config: SubwordVocabConfig<BucketConfig> = SubwordVocabConfig {
                 discard_threshold: 1e-4, min_count: 2, 
-                max_n: 9, min_n: 9, indexer: BucketConfig { buckets_exp: 21 }, };
+                max_n: 9, min_n: 9, indexer: BucketConfig { buckets_exp: 11 }, };
         
-        let mut builder: VocabBuilder<_, String> = VocabBuilder::new(vocab_config);
+        let mut builder: finalfrontier::VocabBuilder<_, String> = VocabBuilder::new(vocab_config);
 
         builder.count("ACTG".to_string());
         builder.count("CCCA".to_string());
@@ -253,9 +261,9 @@ mod test {
         builder.count("CATT".to_string());
         builder.count("CATT".to_string());
 
-        let vocab: SubwordVocab<_, FinalfusionHashIndexer> = builder.into();
-
-        let skipgram_config = SkipGramConfig {context_size: 5, model: ModelType::SkipGram, };
+        let vocab: finalfrontier::SubwordVocab<_, FinalfusionHashIndexer> = builder.into();
+        let skipgram_config = SkipGramConfig 
+            {context_size: 5, model: ModelType::SkipGram, };
 
         let common_config = CommonConfig {
             loss: LossType::LogisticNegativeSampling, dims: 16, 
@@ -265,9 +273,7 @@ mod test {
 
         let sgd = SGD::new(trainer.into());
 
-    } */
-
-    use finalfusion::subword::FinalfusionHashIndexer;
+    }
 
     const TEST_COMMON_CONFIG: CommonConfig = CommonConfig {
         dims: 3,
@@ -310,6 +316,6 @@ mod test {
                 skipgram_config,
             );
 
-    }
+    } 
 
 }

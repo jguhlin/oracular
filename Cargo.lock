@@ -7,6 +7,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d2e7343e7fc9de883d1b0341e0b13970f764c14101234857d2ddafa1cb1cac2"
 
 [[package]]
+name = "ahash"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b35dfc96a657c1842b4eb73180b65e37152d4b94d0eb5cb51708aee7826950b4"
+dependencies = [
+ "const-random",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -22,15 +31,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee49baf6cb617b853aa8d93bf420db2383fab46d314482ca2803b40d5fde979b"
 dependencies = [
  "winapi 0.3.8",
-]
-
-[[package]]
-name = "approx"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0e60b75072ecd4168020818c0107f2857bb6c4e64252d8d3983f6263b40a5c3"
-dependencies = [
- "num-traits",
 ]
 
 [[package]]
@@ -223,6 +223,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "const-random"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b641a8c9867e341f3295564203b1c250eb8ce6cb6126e007941f78c4d2ed7fe"
+dependencies = [
+ "const-random-macro",
+ "proc-macro-hack",
+]
+
+[[package]]
+name = "const-random-macro"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c750ec12b83377637110d5a57f5ae08e895b06c4b16e2bdbf1a94ef717428c59"
+dependencies = [
+ "proc-macro-hack",
+ "rand 0.7.2",
+]
+
+[[package]]
 name = "crc32fast"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -340,12 +360,12 @@ dependencies = [
  "clap",
  "conllx",
  "failure",
- "finalfusion 0.10.0 (git+https://github.com/finalfusion/finalfusion-rust?rev=c64254a9e738c14e70560db5013ec169f463a057)",
+ "finalfusion",
  "fnv",
  "git2",
  "indicatif 0.11.0",
  "memmap",
- "ndarray 0.12.1",
+ "ndarray",
  "ndarray-rand",
  "num_cpus",
  "rand 0.6.5",
@@ -360,34 +380,16 @@ dependencies = [
 [[package]]
 name = "finalfusion"
 version = "0.10.0"
-source = "git+https://github.com/finalfusion/finalfusion-rust?rev=c64254a9e738c14e70560db5013ec169f463a057#c64254a9e738c14e70560db5013ec169f463a057"
 dependencies = [
  "byteorder",
  "fnv",
  "itertools 0.8.0",
  "memmap",
- "ndarray 0.12.1",
+ "ndarray",
  "ordered-float",
  "rand 0.7.2",
  "rand_xorshift 0.2.0",
- "reductive 0.3.0",
- "serde",
- "toml",
-]
-
-[[package]]
-name = "finalfusion"
-version = "0.10.0"
-dependencies = [
- "byteorder",
- "fnv",
- "itertools 0.8.0",
- "memmap",
- "ndarray 0.13.0",
- "ordered-float",
- "rand 0.7.2",
- "rand_xorshift 0.2.0",
- "reductive 0.4.0",
+ "reductive",
  "serde",
  "toml",
 ]
@@ -462,6 +464,16 @@ dependencies = [
  "openssl-probe",
  "openssl-sys",
  "url",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6587d09be37fb98a11cb08b9000a3f592451c1b1b613ca69d949160e313a430a"
+dependencies = [
+ "ahash",
+ "autocfg",
 ]
 
 [[package]]
@@ -609,16 +621,18 @@ dependencies = [
  "bytecount",
  "crossbeam",
  "finalfrontier",
- "finalfusion 0.10.0",
+ "finalfusion",
  "flate2",
  "fnv",
  "indicatif 0.12.0",
+ "lru",
  "once_cell",
  "opinionated",
  "rand 0.6.5",
  "rand_core 0.4.2",
  "rand_xorshift 0.1.1",
  "serde",
+ "static_assertions",
  "stdinout",
  "thincollections",
  "twox-hash",
@@ -670,6 +684,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lru"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e542a8a0a1309ceed0614dbb910658c118f4ff40b0ed31a1bf77a869a5a1853"
+dependencies = [
+ "hashbrown",
+]
+
+[[package]]
 name = "matches"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -681,16 +704,7 @@ version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcad67dcec2d58ff56f6292582377e6921afdf3bfbd533e26fb8900ae575e002"
 dependencies = [
- "rawpointer 0.1.0",
-]
-
-[[package]]
-name = "matrixmultiply"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4f7ec66360130972f34830bfad9ef05c6610a43938a467bcc9ab9369ab3478f"
-dependencies = [
- "rawpointer 0.2.1",
+ "rawpointer",
 ]
 
 [[package]]
@@ -744,25 +758,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cf380a8af901ad627594013a3bbac903ae0a6f94e176e47e46b5bbc1877b928"
 dependencies = [
  "itertools 0.7.11",
- "matrixmultiply 0.1.15",
+ "matrixmultiply",
  "num-complex",
  "num-traits",
-]
-
-[[package]]
-name = "ndarray"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25b001fc2f5df269365fb77bd8396ce6b1f61c9848f7f088c25e57494bacc57b"
-dependencies = [
- "approx",
- "itertools 0.8.0",
- "matrixmultiply 0.2.3",
- "num-complex",
- "num-integer",
- "num-traits",
- "rawpointer 0.2.1",
- "rayon",
 ]
 
 [[package]]
@@ -771,7 +769,7 @@ version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9444c9e6c2f9d8190cef4734cd2359bc79e16285db578eea76e0ea3dcad7d68"
 dependencies = [
- "ndarray 0.12.1",
+ "ndarray",
  "rayon",
 ]
 
@@ -781,7 +779,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5a2b87ee9e6a97ea5447ba56903acc5afea3222b0939a2461b0e91e07e54250"
 dependencies = [
- "ndarray 0.12.1",
+ "ndarray",
  "rand 0.6.5",
 ]
 
@@ -905,7 +903,7 @@ dependencies = [
  "clap",
  "crossbeam",
  "finalfrontier",
- "finalfusion 0.10.0",
+ "finalfusion",
  "flate2",
  "fnv",
  "indicatif 0.12.0",
@@ -991,6 +989,17 @@ name = "ppv-lite86"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3cbf9f658cdb5000fcf6f362b8ea2ba154b9f146a61c7a20d647034c6b6561b"
+
+[[package]]
+name = "proc-macro-hack"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ecd45702f76d6d3c75a80564378ae228a85f0b59d2f3ed43c91b4a69eb2ebfc5"
+dependencies = [
+ "proc-macro2 1.0.5",
+ "quote 1.0.2",
+ "syn 1.0.5",
+]
 
 [[package]]
 name = "proc-macro2"
@@ -1202,12 +1211,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebac11a9d2e11f2af219b8b8d833b76b1ea0e054aa0e8d8e9e4cbde353bdf019"
 
 [[package]]
-name = "rawpointer"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60a357793950651c4ed0f3f52338f53b2f809f32d83a07f72909fa13e4c6c1e3"
-
-[[package]]
 name = "rayon"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1253,24 +1256,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ecade1947ea7060793df1d610231b0bfd85b57934e0360a492e2699a64335685"
 dependencies = [
  "log",
- "ndarray 0.12.1",
+ "ndarray",
  "ndarray-parallel",
- "num-traits",
- "ordered-float",
- "rand 0.7.2",
- "rand_core 0.5.1",
- "rand_xorshift 0.2.0",
- "rayon",
-]
-
-[[package]]
-name = "reductive"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cc7b6b2c28e384c88ae98a815663b1a90b7780445d24d2b9c2160303a61c48c"
-dependencies = [
- "log",
- "ndarray 0.13.0",
  "num-traits",
  "ordered-float",
  "rand 0.7.2",
@@ -1368,6 +1355,12 @@ dependencies = [
  "byteorder",
  "lazy_static",
 ]
+
+[[package]]
+name = "static_assertions"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fa13613355688665b68639b1c378a62dbedea78aff0fc59a4fa656cbbdec657"
 
 [[package]]
 name = "stdinout"

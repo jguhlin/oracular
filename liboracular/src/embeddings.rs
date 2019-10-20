@@ -43,10 +43,10 @@ where
         num_threads as usize,);
 
     let skipgram_config = SkipGramConfig {
-            context_size: 2, // Should be 6
-            model: ModelType::SkipGram,            // loss: 0.12665372
+            context_size: 5, // Should be 6 (trying out 5 though)
+            // model: ModelType::SkipGram,            // loss: 0.12665372
             // model: ModelType::DirectionalSkipgram,// loss: 0.12277688
-            // model: ModelType::StructuredSkipGram, // loss: 0.1216571
+            model: ModelType::StructuredSkipGram, // loss: 0.1216571
 
             // Loss above is lr 0.08, epochs: 10, dims: 32, neg_samples 100
             // For vvulg genome, context of 6
@@ -58,9 +58,9 @@ where
     let common_config = CommonConfig {
         loss: LossType::LogisticNegativeSampling,
         dims: 32,
-        epochs: 1, // TODO: Testing..
-        lr: 0.05, // Should be 0.08
-        negative_samples: 10, // Should be 20 - 100
+        epochs: 2, // TODO: Testing.. Should be 5 for small datasets, 2 for large
+        lr: 0.12, // Should be 0.07 for small datasets
+        negative_samples: 50, // Should be 20 - 100
         zipf_exponent: 0.5,
     };
 
@@ -156,7 +156,7 @@ where
         // .write_model_binary(&mut output_writer, train_info)
         // .or_exit("Cannot write model", 1);
 
-    let output_writer = BufWriter::new(
+    let mut output_writer = BufWriter::new(
         File::create("embeddings.embed").or_exit("Cannot open output file for writing.", 1),
     );
 
@@ -171,7 +171,7 @@ where
 
     // println!("{}", y);
 
-    // model.write_model_binary(&mut output_writer, train_info);
+    model.write_model_binary(&mut output_writer, train_info);
 
     // model
 

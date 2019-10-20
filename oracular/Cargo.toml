@@ -23,7 +23,6 @@ liboracular = { path = "../liboracular/" }
 # finalfrontier = { path = "../../finalfrontier/finalfrontier/", version = "0.6.0" }
 finalfrontier = { path = "../../finalfrontier/"}
 finalfusion = { path = "../../finalfusion-rust/" }
-
 num-traits = "0.2"
 wyhash = "0.3.0"
 num_cpus = "1.10.1"

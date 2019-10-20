@@ -10,6 +10,10 @@ extern crate twox_hash;
 // extern crate finalfrontier;
 // pub extern crate finalfusion;
 extern crate rand;
+extern crate lru;
+
+#[macro_use]
+extern crate static_assertions;
 
 mod utils;
 pub mod kmer_counting;

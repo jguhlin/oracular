@@ -18,28 +18,33 @@ pub fn build_vocab_from_finaldict(dict: FinalDict) -> KmerVocab<NGramConfig, NGr
 {
 
     let config = KmerVocabConfig {
-                discard_threshold: 1e-4,
-                min_count: 5,
+                discard_threshold: 1e-5,
+                min_count: 10, // Min count 2 or 3 for small datasets, 10 for nt
                 max_n: 9,
                 min_n: 9,
-                indexer: NGramConfig { min_ngram_count: 5 },
+                indexer: NGramConfig { min_ngram_count: 10 }, // 5 for small datasets, 50 for nt
     };
 
     let mut words: Vec<_> = Vec::with_capacity(dict.size as usize);
     let mut ngram_counts: HashMap<String, usize> = HashMap::new();
 
+    let mut i: usize = 0;
+
     for (word, count) in dict.words {
-        let word_; // As a string instead of [u8]
-        unsafe { 
-            word_ = std::str::from_utf8_unchecked(&word).to_string();
+        if count >= config.min_count as u64 {
+            i = i + 1;
+            let word_; // As a string instead of [u8]
+            unsafe { 
+                word_ = std::str::from_utf8_unchecked(&word).to_string();
+            }
+            for ngram in NGrams::new(&word_, config.min_n as usize, config.max_n as usize)
+                .map(|ngram| ngram.to_string())
+            {
+                let cnt = ngram_counts.entry(ngram).or_default();
+                *cnt += count as usize;
+            }
+            words.push(Word::new(word_, count as usize));
         }
-        for ngram in NGrams::new(&word_, config.min_n as usize, config.max_n as usize)
-            .map(|ngram| ngram.to_string())
-        {
-            let cnt = ngram_counts.entry(ngram).or_default();
-            *cnt += count as usize;
-        }
-        words.push(Word::new(word_, count as usize));
     }
 
 
@@ -56,6 +61,8 @@ pub fn build_vocab_from_finaldict(dict: FinalDict) -> KmerVocab<NGramConfig, NGr
         let ngram2_cnt = ngram_counts[ngram2];
         (ngram2_cnt, ngram2).cmp(&(ngram1_cnt, ngram1))
     });
+
+    println!("Final vocab size: {}", i);
 
     KmerVocab::new(
             config,
@@ -84,7 +91,6 @@ pub fn build_vocab_from_finaldict(dict: FinalDict) -> KmerVocab<NGramConfig, NGr
     } 
 
     builder.into() */
-
 
 
 }
