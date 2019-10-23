@@ -1,8 +1,20 @@
+** Speed Experiments
+at k=13, t1ha hash is the fastest, followed by wyhash
+
+at k=11, t1ha is the fastest, followed by wyhash and fnv (tied, effectively)
+
+Can use bitvec directly and get a u64 out of it (probably the best option) -- limits kmer sizes up to 21, though that's excessive anyway for our use..
+
 ** For NT
-Kmer size of k=13, min_count = 10
+Kmer size of k=13, min_count = 10 RC NOT FIXED
 35442141/118077428 == 30% of kmers used...
 Min count of 50 =~ 10% of kmers used...
 Avg. occurences at k=13 1715.6592
+
+At k=11 , min_count = 10 RC FIXED
+13086502/16898657 == 0.77441077122 == 77% of kmers have meaning
+Avg. occurences at k=11 11994.443
+
 
 ** Kmer Size Experiments
 Conclusion: k=13 for nt, k=11 for individual genome / reads

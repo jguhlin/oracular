@@ -10,7 +10,7 @@ extern crate twox_hash;
 // extern crate finalfrontier;
 // pub extern crate finalfusion;
 extern crate rand;
-extern crate lru;
+extern crate t1ha;
 
 #[macro_use]
 extern crate static_assertions;

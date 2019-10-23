@@ -18,14 +18,14 @@ pub fn build_vocab_from_finaldict(dict: FinalDict) -> KmerVocab<NGramConfig, NGr
 {
 
     let config = KmerVocabConfig {
-                discard_threshold: 1e-5,
-                min_count: 10, // Min count 2 or 3 for small datasets, 10 for nt
+                discard_threshold: 1e-4,
+                min_count: 5, // Min count 2 or 3 for small datasets, 10 for nt
                 max_n: 9,
                 min_n: 9,
-                indexer: NGramConfig { min_ngram_count: 10 }, // 5 for small datasets, 50 for nt
+                indexer: NGramConfig { min_ngram_count: 50 }, // 5 for small datasets, 50 for nt
     };
 
-    let mut words: Vec<_> = Vec::with_capacity(dict.size as usize);
+    let mut words: Vec<_> = Vec::with_capacity(dict.entries as usize);
     let mut ngram_counts: HashMap<String, usize> = HashMap::new();
 
     let mut i: usize = 0;
@@ -64,10 +64,12 @@ pub fn build_vocab_from_finaldict(dict: FinalDict) -> KmerVocab<NGramConfig, NGr
 
     println!("Final vocab size: {}", i);
 
+    println!("Vocab Use Ratio: {}", (i as f32 / dict.entries as f32));
+
     KmerVocab::new(
             config,
             words,
-            dict.size as usize,
+            dict.tokens as usize,
             NGramIndexer::new(ngrams))
 
 /*    let mut builder = VocabBuilder::new(config);

@@ -16,8 +16,13 @@ use crossbeam::utils::Backoff;
 
 use serde::{Serialize, Deserialize};
 
+use t1ha::{t1ha0};
+
 use twox_hash::XxHash;
-use lru::LruCache;
+
+// use wyhash::WyHash;
+use fnv::FnvHashMap;
+use fnv::FnvHasher;
 
 use crate::threads::{sequence_generator, Sequence, ThreadCommand};
 
@@ -37,18 +42,21 @@ pub struct Dict {
 
 #[derive(Serialize, Deserialize)]
 pub struct FinalDict {
-    pub words: HashMap<Vec<u8>, u64, BuildHasherDefault<XxHash>>,
+    // pub words: HashMap<Vec<u8>, u64, BuildHasherDefault<XxHash>>,
+    pub words: HashMap<Vec<u8>, u64, BuildHasherDefault<FnvHasher>>,
     pub entries: u64,
-    pub size: u64,
+    // pub size: u64,
     pub tokens: u64,
 }
 
 impl Dict {
 
     pub fn convert_to_final(&self) -> FinalDict {
-
-        let mut words: HashMap<Vec<u8>, u64, BuildHasherDefault<XxHash>> = Default::default();
+        
+        let mut words: HashMap<Vec<u8>, u64, _> = FnvHashMap::default();
         words.reserve(self.size.load() as usize);
+
+        let mut tokens = 0;
 
         for x in self.words
                     .iter()
@@ -60,12 +68,13 @@ impl Dict {
 
             *words.entry(x).or_insert(0) += count;
             *words.entry(rc.to_vec()).or_insert(0) += count;
+            tokens += count;
         }
 
-        FinalDict { words, 
-                    entries: self.entries.load(), 
-                    size: self.size.load(), 
-                    tokens: self.tokens.load() 
+        FinalDict { 
+                    entries: words.keys().len() as u64, 
+                    words, 
+                    tokens: tokens 
                 }
     }
 
@@ -164,8 +173,11 @@ impl Dict {
     #[inline(always)]
     pub fn calc_hash(&self, kmer: &[u8], rc: &[u8]) -> usize {
 
-        let x = wyhash(&kmer, 43_988_123) as usize % MAX_VOCAB;
-        let y = wyhash(&rc, 43_988_123) as usize % MAX_VOCAB;
+        // let x = wyhash(&kmer, 43_988_123) as usize % MAX_VOCAB;
+        // let y = wyhash(&rc, 43_988_123) as usize % MAX_VOCAB;
+
+        let x = t1ha0(&kmer, 42_988_123) as usize % MAX_VOCAB;
+        let y = t1ha0(&rc, 42_988_123) as usize % MAX_VOCAB;
 
         std::cmp::min(x,y)
     }
@@ -217,7 +229,7 @@ pub fn count_kmers(
                     };
 
     let (seq_queue, jobs, generator_done, generator, mut children) 
-        = sequence_generator(kmer_size, &filename, Arc::new("".to_string()));
+        = sequence_generator(kmer_size, &filename, Arc::new("".to_string()), 1_u64);
 
     let dict = dict_builder.join().unwrap();
 

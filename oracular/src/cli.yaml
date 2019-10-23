@@ -3,16 +3,16 @@ version: "0.1.0"
 author: Joseph Guhlin <joseph.guhlin@gmail.com>
 about: Does stuff.... maybe, we will see.
 args:
-    - fasta:
-        help: Sets the FASTA input file(s) to use (may be compressed)
+    - dims:
         required: false
-        short: f
+        short: d
+        default_value: "32"
+        help: Number of dimensions for the embedding
+    - input:
+        help: Sets the input file(s) to use (may be compressed). Must end in .fasta, .fastq, .fa, .fna, .fq
+        required: false
+        short: i
         multiple: true
-        takes_value: true
-    - fastq:
-        short: q
-        multiple: true
-        help: Sets the FASTQ input file(s) to use (may be compressed)
         takes_value: true
     - output:
         short: o
@@ -22,20 +22,22 @@ args:
     - window:
         short: w
         help: Window size (symmetric, so -w to +w from target)
-        default_value: "4"
-    - minn:
-        short: m
-        help: Minimum subword size, inclusive
-        default_value: "13"
+        default_value: "5"
         takes_value: true
-    - maxn:
+    - negatives:
         short: n
-        help: Maximum subword size, inclusive, defaults to kmer size
+        help: Number of negative samples per training TODO
+        default_value: "10"
         takes_value: true
     - kmer:
         short: k
         help: Kmer size
         default_value: "13"
+        takes_value: true
+    - epochs:
+        short: e
+        help: Number of epochs
+        default_value: "5"
         takes_value: true
     - step:
         short: s

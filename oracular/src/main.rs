@@ -29,6 +29,7 @@ use clap::App;
 
 use std::path::Path;
 use std::fs::File;
+use std::io::BufReader;
 
 use liboracular::vocab::build_vocab_from_finaldict;
 use liboracular::embeddings::train;
@@ -42,17 +43,21 @@ fn main() {
     // let minn = value_t!(matches, "minn", usize).unwrap_or(13);
     // let maxn = value_t!(matches, "maxn", usize).unwrap_or(kmer_size.clone());
     // let step_size = value_t!(matches, "step", usize).unwrap_or(kmer_size.clone());
-    // let w = value_t!(matches, "window", usize).unwrap_or(4);
+    let context_size = value_t!(matches, "window", usize).unwrap_or(5);
     let num_threads = value_t!(matches, "threads", usize).unwrap_or(16);
+    let dims = value_t!(matches, "dims", usize).unwrap_or(32);
+    let epochs = value_t!(matches, "epochs", usize).unwrap_or(5);
     
     println!("k={}", kmer_size);
 
-    let test_file = "/mnt/data/nt/nt.gz";
+    // let test_file = "/mnt/data/nt/nt.gz";
     // let test_file = "/mnt/data/3wasps/anno-refinement-run/genomes/Vvulg.fna";
     // let test_file = "Vvulg.fna.gz";
 
+    let filename = value_t!(matches, "input", String).expect("Invalid input identified");
+
     // let num_threads = num_cpus::get();
-    let filename = test_file.clone();
+    // let filename = test_file.clone();
 
     /* let pb = ProgressBar::new(file.metadata().unwrap().len());
     pb.set_style(ProgressStyle::default_bar()
@@ -66,27 +71,35 @@ fn main() {
 
     // If file ends with .gz use flate2 to process it
 
-    let corpus_path = Path::new(test_file);
+    let corpus_path = Path::new(&filename);
     let filename_stem = corpus_path.file_stem().unwrap().to_str().unwrap();
     let output_filename = format!("kmer_counts_{}_k{}.bc", filename_stem, kmer_size.to_string());
 
-    println!("Counting kmers with {} threads", num_threads);
-    let dict = liboracular::kmer_counting::count_kmers(num_threads, kmer_size, filename);
+    let final_dict;
 
-    println!("{}", dict.tokens.load());
-    println!("{}", dict.size.load());
-    println!("{}", (dict.tokens.load() as f32 / dict.size.load() as f32));
+    if Path::new(&output_filename).exists() {
+        println!("Existing kmer count file found -- opening...");
+        let kmercounts_fh = snap::Reader::new(BufReader::new(File::open(output_filename.clone()).unwrap()));
+        final_dict = bincode::deserialize_from(&mut BufReader::new(kmercounts_fh)).expect("Unable to read to bincode file");
+        println!("Finished reading file");
+    } else {
+        println!("Counting kmers with {} threads", num_threads);
+        let dict = liboracular::kmer_counting::count_kmers(num_threads, kmer_size, &filename);
+        final_dict = dict.convert_to_final();
+        let mut kmercounts_fh = snap::Writer::new(File::create(output_filename.clone()).unwrap());
+        bincode::serialize_into(&mut kmercounts_fh, &final_dict).expect("Unable to write to bincode file");
+        println!("Saved kmer count results to {}", output_filename);
+    }
 
-    let final_dict = dict.convert_to_final();
-
-    let mut kmercounts_fh = snap::Writer::new(File::create(output_filename.clone()).unwrap());
-    bincode::serialize_into(&mut kmercounts_fh, &final_dict).expect("Unable to write to bincode file");
-    println!("Saved kmer count results to {}", output_filename);
+    println!("Dictionary - Total Tokens: {}", final_dict.tokens);
+    println!("Dictionary - Total Kmers: {}", final_dict.entries);
+    println!("Dictionary - Avg. occurences of kmers: {}", (final_dict.tokens as f32 / final_dict.entries as f32));
+    println!();
 
     // let app = SkipGramApp::new();
 
     let vocab = build_vocab_from_finaldict(final_dict);
-    let model = train(vocab, filename, kmer_size);
+    let model = train(num_threads, dims, epochs, context_size, vocab, &filename, kmer_size);
 
     // let mut out_fh = snap::Writer::new(File::create(format!("{}.bc", "vvulg")).unwrap());
     // bincode::serialize_into(&mut out_fh, &final_dict).expect("Unable to write to bincode file");

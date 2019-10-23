@@ -26,8 +26,12 @@ use finalfrontier::WriteModelBinary;
 // use finalfrontier::WriteModelText;
 use finalfrontier::app::TrainInfo;
 
+use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
 
-pub fn train<V>(vocab: V, filename: &str, kmer_size: usize) -> ()
+use crossbeam::queue::{PushError};
+
+pub fn train<V>(num_threads: usize, dims: usize, epochs: usize, context_size: usize, vocab: V, filename: &str, kmer_size: usize) -> ()
 where
     V: Vocab<VocabType = String> + Into<VocabWrap> + Clone + Send + Sync + 'static,
     V::Config: Serialize,
@@ -35,7 +39,6 @@ where
     for<'a> &'a V::IdxType: IntoIterator<Item = u64>,
 {
     println!("Creating embeddings...");
-    let num_threads = 48;
 
     let train_info = TrainInfo::new(
         filename.to_string(),
@@ -43,7 +46,7 @@ where
         num_threads as usize,);
 
     let skipgram_config = SkipGramConfig {
-            context_size: 5, // Should be 6 (trying out 5 though)
+            context_size: context_size as u32, // Should be 6 (trying out 5 though)
             // model: ModelType::SkipGram,            // loss: 0.12665372
             // model: ModelType::DirectionalSkipgram,// loss: 0.12277688
             model: ModelType::StructuredSkipGram, // loss: 0.1216571
@@ -57,10 +60,10 @@ where
 
     let common_config = CommonConfig {
         loss: LossType::LogisticNegativeSampling,
-        dims: 32,
-        epochs: 2, // TODO: Testing.. Should be 5 for small datasets, 2 for large
-        lr: 0.12, // Should be 0.07 for small datasets
-        negative_samples: 50, // Should be 20 - 100
+        dims: dims as u32,
+        epochs: epochs as u32,
+        lr: 0.15, // Should be 0.07 for small datasets -- 0.12 for nt?
+        negative_samples: 20, // Should be 20 - 100
         zipf_exponent: 0.5,
     };
 
@@ -77,7 +80,7 @@ where
     let msg = Arc::new("".to_string());
 
     let (seq_queue, jobs, generator_done, generator, mut children) 
-        = sequence_generator(kmer_size, &filename, msg.clone());
+        = sequence_generator(kmer_size, &filename, msg.clone(), common_config.epochs as u64);
 
     println!("Starting embedding worker threads...");
 
@@ -108,25 +111,53 @@ where
 
     generator.join().expect("Unable to join generator thread...");
 
-    let update_interval = Duration::from_millis(10000);
+    let update_interval = Duration::from_millis(500);
+
+    backoff.snooze();
+
+    let n_tokens = sgd.model().input_vocab().n_types();
+    let pb = ProgressBar::new(n_tokens as u64 * common_config.epochs as u64);
+    pb.set_style(ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {bar:50.yellow} {eta_precise} {msg}")
+                .progress_chars("█▇▆▅▄▃▂▁  "));
+    
+    // pb.enable_steady_tick(750);
 
     while !seq_queue.is_empty() {
         thread::sleep(update_interval);
-        println!("loss: {}", sgd.train_loss());
-    }
+        pb.set_position(sgd.n_tokens_processed() as u64);
+        let lr = (1.0 - (sgd.n_tokens_processed() as f32 / (common_config.epochs as usize * n_tokens) as f32)) * common_config.lr;
 
-    println!("Seq queue is empty, sending terminate command to all children...");
+        // pb.set_position(pb_len.saturating_sub(seq_queue.len() as u64));
+        pb.set_message(&format!("loss/lr: {} {}", sgd.train_loss(), lr));
+    }
 
     while jobs.load() > 0 {
         thread::sleep(update_interval);
-        println!("loss: {}", sgd.train_loss());
+        pb.set_position(sgd.n_tokens_processed() as u64);
+        let lr = (1.0 - (sgd.n_tokens_processed() as f32 / (common_config.epochs as usize * n_tokens) as f32)) * common_config.lr;
+
+        // pb.set_position(pb_len.saturating_sub(seq_queue.len() as u64));
+        pb.set_message(&format!("loss/lr: {} {}", sgd.train_loss(), lr));
     }
 
     for _ in 0..num_threads {
-        match seq_queue.push(ThreadCommand::Terminate) {
-            Ok(_) => (),
-            Err(x) => panic!("Unable to send command... {:#?}", x)
+	let mut i = 0;
+        let mut result = seq_queue.push(ThreadCommand::Terminate);
+        while let Err(PushError(wp)) = result {
+		i = i + 1;
+        	result = seq_queue.push(wp);
+		thread::sleep(update_interval);
+		if i > 1_000_000 {
+            println!("Too many, giving up on issuing Terminate commands");
+			break;
+		}
         }
+
+//        match seq_queue.push(ThreadCommand::Terminate) {
+//            Ok(_) => (),
+//            Err(x) => panic!("Unable to send command... {:#?}", x)
+//        }
     }
 
     println!("Terminate commands sent, joining worker threads");
@@ -195,7 +226,11 @@ fn embedding_worker<R, V>(
     let mut kmer_steps: Vec<usize> = Vec::new();
 
     kmer_steps.push(0);
-    kmer_steps.push(1);
+    let mut rng = rand::thread_rng();
+    kmer_steps.push(rng.gen_range(1, kmer_size));
+    kmer_steps.push(rng.gen_range(1, kmer_size));
+    kmer_steps.push(rng.gen_range(1, kmer_size));
+    
     let half_kmer = (kmer_size as f64 / 2.0).floor() as usize;
     kmer_steps.push(half_kmer);
     
@@ -214,31 +249,29 @@ fn embedding_worker<R, V>(
 
             let n_tokens = sgd.model().input_vocab().n_types();
 
+            // TODO: Change lr curve function...
             let lr = (1.0 - (sgd.n_tokens_processed() as f32 / (epochs as usize * n_tokens) as f32)) * start_lr;
 
             let mut sentence: Vec<String> = Vec::new();
 
-            for epoch in 0..epochs {
-                
-                for i in kmer_steps.iter() {
-                    rawseq[*i+epoch..].chunks_exact(kmer_size).for_each(|x| { 
-                        unsafe { sentence.push(String::from_utf8_unchecked(x.to_vec())); }
-                    });
-                    sgd.update_sentence(&sentence, lr);
-                    sentence.clear();
-                }
+            for i in kmer_steps.iter() {
+                rawseq[*i..].chunks_exact(kmer_size).for_each(|x| { 
+                    unsafe { sentence.push(String::from_utf8_unchecked(x.to_vec())); }
+                });
+                sgd.update_sentence(&sentence, lr);
+                sentence.clear();
+            }
 
-                let mut rc = rawseq.clone();
-                complement_nucleotides(&mut rc);
-                rc.reverse();
-                
-                for i in kmer_steps.iter() {
-                    rawseq[*i..].chunks_exact(kmer_size).for_each(|x| { 
-                        unsafe { sentence.push(String::from_utf8_unchecked(x.to_vec())); }
-                    });
-                    sgd.update_sentence(&sentence, lr);
-                    sentence.clear();
-                }
+            let mut rc = rawseq.clone();
+            complement_nucleotides(&mut rc);
+            rc.reverse();
+            
+            for i in kmer_steps.iter() {
+                rawseq[*i..].chunks_exact(kmer_size).for_each(|x| { 
+                    unsafe { sentence.push(String::from_utf8_unchecked(x.to_vec())); }
+                });
+                sgd.update_sentence(&sentence, lr);
+                sentence.clear();
             }
 
             match Arc::get_mut(&mut msg) {

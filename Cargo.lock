@@ -7,15 +7,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d2e7343e7fc9de883d1b0341e0b13970f764c14101234857d2ddafa1cb1cac2"
 
 [[package]]
-name = "ahash"
-version = "0.2.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b35dfc96a657c1842b4eb73180b65e37152d4b94d0eb5cb51708aee7826950b4"
-dependencies = [
- "const-random",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -220,26 +211,6 @@ dependencies = [
  "termios",
  "unicode-width",
  "winapi 0.3.8",
-]
-
-[[package]]
-name = "const-random"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b641a8c9867e341f3295564203b1c250eb8ce6cb6126e007941f78c4d2ed7fe"
-dependencies = [
- "const-random-macro",
- "proc-macro-hack",
-]
-
-[[package]]
-name = "const-random-macro"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c750ec12b83377637110d5a57f5ae08e895b06c4b16e2bdbf1a94ef717428c59"
-dependencies = [
- "proc-macro-hack",
- "rand 0.7.2",
 ]
 
 [[package]]
@@ -467,16 +438,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hashbrown"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6587d09be37fb98a11cb08b9000a3f592451c1b1b613ca69d949160e313a430a"
-dependencies = [
- "ahash",
- "autocfg",
-]
-
-[[package]]
 name = "idna"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -625,7 +586,6 @@ dependencies = [
  "flate2",
  "fnv",
  "indicatif 0.12.0",
- "lru",
  "once_cell",
  "opinionated",
  "rand 0.6.5",
@@ -634,6 +594,7 @@ dependencies = [
  "serde",
  "static_assertions",
  "stdinout",
+ "t1ha",
  "thincollections",
  "twox-hash",
  "wyhash",
@@ -681,15 +642,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14b6052be84e6b71ab17edffc2eeabf5c2c3ae1fdb464aae35ac50c67a44e1f7"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "lru"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e542a8a0a1309ceed0614dbb910658c118f4ff40b0ed31a1bf77a869a5a1853"
-dependencies = [
- "hashbrown",
 ]
 
 [[package]]
@@ -989,17 +941,6 @@ name = "ppv-lite86"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3cbf9f658cdb5000fcf6f362b8ea2ba154b9f146a61c7a20d647034c6b6561b"
-
-[[package]]
-name = "proc-macro-hack"
-version = "0.5.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecd45702f76d6d3c75a80564378ae228a85f0b59d2f3ed43c91b4a69eb2ebfc5"
-dependencies = [
- "proc-macro2 1.0.5",
- "quote 1.0.2",
- "syn 1.0.5",
-]
 
 [[package]]
 name = "proc-macro2"
@@ -1406,6 +1347,18 @@ dependencies = [
  "quote 0.6.13",
  "syn 0.15.44",
  "unicode-xid 0.1.0",
+]
+
+[[package]]
+name = "t1ha"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa44aa51ae1a544e2c35a38831ba54ae40591f21384816f531b84f3e984b9ccc"
+dependencies = [
+ "cfg-if",
+ "lazy_static",
+ "num-traits",
+ "rustc_version",
 ]
 
 [[package]]

@@ -42,7 +42,8 @@ impl ThreadCommand<Sequence> {
 pub fn sequence_generator(
     kmer_size: usize,
     filename: &str,
-    msg: Arc<String>
+    msg: Arc<String>,
+    epochs: u64
 ) -> (Arc<ArrayQueue<ThreadCommand<Sequence>>>, Arc<AtomicCell<usize>>, Arc<RwLock<bool>>, JoinHandle<()>, Vec<JoinHandle<()>>)
 // seq_queue jobs generator_done generator children
 
@@ -86,76 +87,84 @@ pub fn sequence_generator(
                             .stack_size(STACKSIZE)
                             .spawn(move||
         {
-            let mut seqbuffer: Sequence = Vec::with_capacity(8 * 1024 * 1024); // 8 Mb to start, will likely increase...
-            let mut seqlen: usize = 0;
+            for epoch in 0..epochs {
+                let mut seqbuffer: Sequence = Vec::with_capacity(8 * 1024 * 1024); // 8 Mb to start, will likely increase...
+                let mut seqlen: usize = 0;
 
-            let file = match File::open(&filename) {
-                Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
-                Ok(file) => file,
-            };
+                let file = match File::open(&filename) {
+                    Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
+                    Ok(file) => file,
+                };
 
-            let pb = ProgressBar::new(file.metadata().unwrap().len());
+                let pb = ProgressBar::new(file.metadata().unwrap().len());
 
-            let file = BufReader::with_capacity(64 * 1024 * 1024, file);
+                let file = BufReader::with_capacity(64 * 1024 * 1024, file);
 
-            pb.set_style(ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>5}/{len:5} {eta_precise} {msg}")
-                .progress_chars("█▇▆▅▄▃▂▁  "));
+                pb.set_style(ProgressStyle::default_bar()
+                    .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>5}/{len:5} {eta_precise} {msg}")
+                    .progress_chars("█▇▆▅▄▃▂▁  "));
 
-            let fasta: Box<dyn Read> = if filename.ends_with("gz") {
-                Box::new(flate2::read::GzDecoder::new(pb.wrap_read(file)))
-            } else {
-                Box::new(pb.wrap_read(file))
-            };
+                let fasta: Box<dyn Read> = if filename.ends_with("gz") {
+                    Box::new(flate2::read::GzDecoder::new(pb.wrap_read(file)))
+                } else {
+                    Box::new(pb.wrap_read(file))
+                };
 
-            let mut reader = BufReader::with_capacity(128 * 1024 * 1024, fasta);
+                let mut reader = BufReader::with_capacity(128 * 1024 * 1024, fasta);
 
-            let backoff = Backoff::new();
+                let backoff = Backoff::new();
 
-            while let Ok(bytes_read) = reader.read_until(b'\n', &mut buffer) {
+                while let Ok(bytes_read) = reader.read_until(b'\n', &mut buffer) {
                 // pb.set_message("hello");
-                if bytes_read == 0 {
-                    // File is empty, we are done!
-                    // IO Generator is done, shut down the IO workers...
-                    backoff.spin();
-                    backoff.spin(); // Very slight delay then issue terminate commands...
-                    for _ in 0..4 {
-                        match rawseq_queue.push(ThreadCommand::Terminate) {
-                            Ok(_) => (),
-                            Err(x) => panic!("Unable to send command... {:#?}", x)
+                    if bytes_read == 0 {
+                        // File is empty, we are done!
+                        // IO Generator is done, shut down the IO workers...
+                        backoff.spin();
+                        backoff.spin(); // Very slight delay then issue terminate commands...
+
+    //                        match rawseq_queue.push(ThreadCommand::Terminate) {
+    //                            Ok(_) => (),
+    //                            Err(x) => panic!("Unable to send command... {:#?}", x)
+    //                        }
+                        break;
+                    }
+
+                    match buffer[0] {
+                        // 62 is a > meaning we have a new sequence id.
+                        62 => {
+                            jobs.fetch_add(1 as usize);
+                            let wp = ThreadCommand::Work(seqbuffer[..seqlen].to_vec());
+                            seqbuffer.clear();
+                            seqlen = 0;
+
+                            let mut result = rawseq_queue.push(wp);
+                            while let Err(PushError(wp)) = result {
+                                result = rawseq_queue.push(wp);
+                            }
+
+                            // pb.set_message(&format!("{}/2048 {}/131072", rawseq_queue.len(), seq_queue.len()));
+                            pb.set_message(&msg);
+                        },
+                        _  => {
+                            let slice_end = bytes_read.saturating_sub(1);
+                            seqbuffer.extend_from_slice(&buffer[0..slice_end]);
+                            seqlen = seqlen.saturating_add(slice_end);
                         }
                     }
-                    break;
+
+                buffer.clear();
                 }
 
-                match buffer[0] {
-                    // 62 is a > meaning we have a new sequence id.
-                    62 => {
-                        jobs.fetch_add(1 as usize);
-                        let wp = ThreadCommand::Work(seqbuffer[..seqlen].to_vec());
-                        seqbuffer.clear();
-                        seqlen = 0;
-
-                        let mut result = rawseq_queue.push(wp);
-                        while let Err(PushError(wp)) = result {
-                            result = rawseq_queue.push(wp);
-                        }
-
-                        // pb.set_message(&format!("{}/2048 {}/131072", rawseq_queue.len(), seq_queue.len()));
-                        pb.set_message(&msg);
-                    },
-                    _  => {
-                        let slice_end = bytes_read.saturating_sub(1);
-                        seqbuffer.extend_from_slice(&buffer[0..slice_end]);
-                        seqlen = seqlen.saturating_add(slice_end);
-                    }
-                }
-
-            buffer.clear();
             }
-
             *generator_done.write().unwrap() = true;
-        }).unwrap();
+            for _ in 0..4 {
+                let mut result = rawseq_queue.push(ThreadCommand::Terminate);
+                while let Err(PushError(wp)) = result {
+                    result = rawseq_queue.push(wp);
+                }
+            }}
+            
+            ).unwrap();
     }
 
 
