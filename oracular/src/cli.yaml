@@ -1,50 +1,74 @@
 name: oracular
 version: "0.1.0"
 author: Joseph Guhlin <joseph.guhlin@gmail.com>
-about: Does stuff.... maybe, we will see.
-args:
-    - dims:
-        required: false
-        short: d
-        default_value: "32"
-        help: Number of dimensions for the embedding
-    - input:
-        help: Sets the input file(s) to use (may be compressed). Must end in .fasta, .fastq, .fa, .fna, .fq
-        required: false
-        short: i
-        multiple: true
-        takes_value: true
-    - output:
-        short: o
-        help: Output prefix (default 'out')
-        multiple: false
-        takes_value: true
-    - window:
-        short: w
-        help: Window size (symmetric, so -w to +w from target)
-        default_value: "5"
-        takes_value: true
-    - negatives:
-        short: n
-        help: Number of negative samples per training TODO
-        default_value: "10"
-        takes_value: true
-    - kmer:
-        short: k
-        help: Kmer size
-        default_value: "13"
-        takes_value: true
-    - epochs:
-        short: e
-        help: Number of epochs
-        default_value: "5"
-        takes_value: true
-    - step:
-        short: s
-        help: Step size of the sliding window, default is to use the kmer size. Good to reduce for rare sequences
-        takes_value: true
-    - threads:
-        short: t
-        help: number of threads
-        takes_value: true
-        default_value: "16"
+about: Nucleotide kmer embeddings
+subcommands:
+    - query:
+        about: Query kmer embeddings
+        version: "0.0.1"
+        args:
+            - input:
+                help: Input embedding file (should end in .embed)
+                required: true
+                takes_value: true
+                short: i
+            - vocab:
+                help: Input embedding file (should end in .bc)
+                required: true
+                takes_value: true
+                short: v
+            - kmer:
+                short: k
+                help: Kmer size TODO store this with metadata in model
+                default_value: "11"
+                takes_value: true
+    - generate-embeddings:
+        about: Generate the kmer nucleotide embeddings
+        version: "0.0.1"
+        author: Joseph Guhlin <joseph.guhlin@gmail.com>
+        args:    
+            - dims:
+                required: false
+                short: d
+                default_value: "32"
+                help: Number of dimensions for the embedding
+            - input:
+                help: Sets the input file(s) to use (may be compressed). Must end in .fasta, .fastq, .fa, .fna, .fq
+                required: false
+                short: i
+                multiple: true
+                takes_value: true
+            - output:
+                short: o
+                help: Output prefix (default 'out')
+                multiple: false
+                takes_value: true
+            - window:
+                short: w
+                help: Window size (symmetric, so -w to +w from target)
+                default_value: "5"
+                takes_value: true
+            - negatives:
+                short: n
+                help: Number of negative samples per training TODO
+                default_value: "10"
+                takes_value: true
+            - kmer:
+                short: k
+                help: Kmer size
+                default_value: "13"
+                takes_value: true
+            - epochs:
+                short: e
+                help: Number of epochs
+                default_value: "5"
+                takes_value: true
+            - step:
+                short: s
+                help: Step size of the sliding window, default is to use the kmer size. Good to reduce for rare sequences
+                takes_value: true
+            - threads:
+                short: t
+                help: number of threads
+                takes_value: true
+                default_value: "16"

@@ -5,7 +5,7 @@ use finalfrontier::{
 use finalfusion::prelude::VocabWrap;
 
 use rand_xorshift::XorShiftRng;
-use rand::{FromEntropy, Rng};
+use rand::{SeedableRng, Rng};
 use std::fs::File;
 use std::io::{BufWriter};
 use std::thread;
@@ -47,9 +47,9 @@ where
 
     let skipgram_config = SkipGramConfig {
             context_size: context_size as u32, // Should be 6 (trying out 5 though)
-            // model: ModelType::SkipGram,            // loss: 0.12665372
+            model: ModelType::SkipGram,            // loss: 0.12665372
             // model: ModelType::DirectionalSkipgram,// loss: 0.12277688
-            model: ModelType::StructuredSkipGram, // loss: 0.1216571
+            // model: ModelType::StructuredSkipGram, // loss: 0.1216571
 
             // Loss above is lr 0.08, epochs: 10, dims: 32, neg_samples 100
             // For vvulg genome, context of 6
@@ -62,9 +62,9 @@ where
         loss: LossType::LogisticNegativeSampling,
         dims: dims as u32,
         epochs: epochs as u32,
-        lr: 0.15, // Should be 0.07 for small datasets -- 0.12 for nt?
-        negative_samples: 20, // Should be 20 - 100
-        zipf_exponent: 0.5,
+        lr: 0.05, // Should be 0.07 for small datasets -- 0.12 for nt?
+        negative_samples: 25, // Should be 20 - 100
+        zipf_exponent: 0.05,
     };
 
     let trainer = SkipgramTrainer::new(
@@ -80,7 +80,7 @@ where
     let msg = Arc::new("".to_string());
 
     let (seq_queue, jobs, generator_done, generator, mut children) 
-        = sequence_generator(kmer_size, &filename, msg.clone(), common_config.epochs as u64);
+        = sequence_generator(kmer_size, &filename, Arc::clone(&msg), common_config.epochs as u64);
 
     println!("Starting embedding worker threads...");
 

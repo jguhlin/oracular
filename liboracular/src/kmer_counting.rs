@@ -1,6 +1,5 @@
 use crossbeam::atomic::AtomicCell;
 use once_cell::sync::OnceCell;
-use wyhash::wyhash;
 use thincollections::thin_vec::ThinVec;
 use opinionated::fasta::{complement_nucleotides};
 
@@ -17,8 +16,6 @@ use crossbeam::utils::Backoff;
 use serde::{Serialize, Deserialize};
 
 use t1ha::{t1ha0};
-
-use twox_hash::XxHash;
 
 // use wyhash::WyHash;
 use fnv::FnvHashMap;
@@ -38,22 +35,24 @@ pub struct Dict {
     pub tokens:  AtomicCell<u64>,
     pub size:    AtomicCell<u64>,
     pub entries: AtomicCell<u64>,
+    pub k: u64,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct FinalDict {
     // pub words: HashMap<Vec<u8>, u64, BuildHasherDefault<XxHash>>,
-    pub words: HashMap<Vec<u8>, u64, BuildHasherDefault<FnvHasher>>,
+    pub words: HashMap<String, u64, BuildHasherDefault<FnvHasher>>,
     pub entries: u64,
     // pub size: u64,
     pub tokens: u64,
+    pub k: u64,
 }
 
 impl Dict {
 
     pub fn convert_to_final(&self) -> FinalDict {
         
-        let mut words: HashMap<Vec<u8>, u64, _> = FnvHashMap::default();
+        let mut words: HashMap<String, u64, _> = FnvHashMap::default();
         words.reserve(self.size.load() as usize);
 
         let mut tokens = 0;
@@ -66,19 +65,23 @@ impl Dict {
             let count = self.counts[self.wordidx[id].load().expect("Error getting wordidx[id]").get() as usize].load();
             let rc = self.get_rc(&x);
 
-            *words.entry(x).or_insert(0) += count;
-            *words.entry(rc.to_vec()).or_insert(0) += count;
+            let xstr = unsafe { String::from_utf8_unchecked(x) };
+            let rcstr = unsafe { String::from_utf8_unchecked(rc.to_vec()) };
+
+            *words.entry(xstr).or_insert(0) += count;
+            *words.entry(rcstr).or_insert(0) += count;
             tokens += count;
         }
 
         FinalDict { 
                     entries: words.keys().len() as u64, 
                     words, 
-                    tokens: tokens 
+                    tokens: tokens,
+                    k: self.k,
                 }
     }
 
-    pub fn new() -> Dict {
+    pub fn new(k: usize) -> Dict {
 
         // Overkill, but multi-threading gives it a slight speed boost
         // Higher in dev...
@@ -135,6 +138,7 @@ impl Dict {
             tokens: AtomicCell::new(0),
             size: AtomicCell::new(1),
             entries: AtomicCell::new(0),
+            k: k as u64
         }
     }
 
@@ -220,9 +224,10 @@ pub fn count_kmers(
     kmer_size: usize,
     filename: &str) -> Arc<Dict> {
 
+    let k = kmer_size.clone();
     let dict_builder = match Builder::new()
                         .name("Dict Builder".into())
-                        .spawn(|| Arc::new(Dict::new()))
+                        .spawn(move || Arc::new(Dict::new(k)))
                     {
                         Ok(x)  => x,
                         Err(y) => panic!("{}", y)

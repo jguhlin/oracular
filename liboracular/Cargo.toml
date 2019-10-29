@@ -7,6 +7,13 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# These deps shared with finalfrontier/finalfusion, keep in sync
+fnv = "1"
+serde = { version = "1", features = ["derive"] }
+rand = "0.7"
+rand_core = "0.5"
+rand_xorshift = "0.2"
+
 crossbeam = "0.7.2"
 thincollections = "0.5.3"
 wyhash = "0.3.0"
@@ -15,14 +22,13 @@ opinionated = { path = "../../opinionated/opinionated/opinionated/"}
 finalfrontier = { path = "../../finalfrontier/"}
 finalfusion = { path = "../../finalfusion-rust/" }
 bytecount = "0.6.0"
-rand = "0.6"
-rand_core = "0.4"
-rand_xorshift = "0.1"
 flate2 = { version = "1.0.12", features = ["zlib"] }
 indicatif = "0.12.0"
-serde = { version = "1.0.101", features = ["derive", "rc"] }
-fnv = "1.0.6"
 twox-hash = "1.5.0"
 stdinout = "0.4"
 static_assertions = "1.0.0"
 t1ha = "0.1"
+ndarray = "0.13"
+snap = "0.2.5"
+bincode = "1.2.0"
+

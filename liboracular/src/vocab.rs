@@ -5,14 +5,13 @@ use finalfrontier::{
 use crate::kmer_counting::FinalDict;
 use finalfrontier::Word;
 use finalfusion::subword::{
-    NGramIndexer, NGrams,
+    ExplicitIndexer, NGrams,
 };
 
 use std::collections::HashMap;
 use crate::kmervocab::{KmerVocabConfig, KmerVocab};
-use finalfrontier::WriteModelBinary;
 
-pub fn build_vocab_from_finaldict(dict: FinalDict) -> KmerVocab<NGramConfig, NGramIndexer>
+pub fn build_vocab_from_finaldict(dict: FinalDict) -> KmerVocab<NGramConfig, ExplicitIndexer>
 
 // where V: Vocab<VocabType = String> + From<VocabBuilder<SubwordVocabConfig<NGramConfig>, String>>,
 {
@@ -22,7 +21,7 @@ pub fn build_vocab_from_finaldict(dict: FinalDict) -> KmerVocab<NGramConfig, NGr
                 min_count: 5, // Min count 2 or 3 for small datasets, 10 for nt
                 max_n: 9,
                 min_n: 9,
-                indexer: NGramConfig { min_ngram_count: 50 }, // 5 for small datasets, 50 for nt
+                indexer: NGramConfig { min_ngram_count: 5 }, // 5 for small datasets, 50 for nt
     };
 
     let mut words: Vec<_> = Vec::with_capacity(dict.entries as usize);
@@ -33,17 +32,17 @@ pub fn build_vocab_from_finaldict(dict: FinalDict) -> KmerVocab<NGramConfig, NGr
     for (word, count) in dict.words {
         if count >= config.min_count as u64 {
             i = i + 1;
-            let word_; // As a string instead of [u8]
+/*            let word_; // As a string instead of [u8]
             unsafe { 
                 word_ = std::str::from_utf8_unchecked(&word).to_string();
-            }
-            for ngram in NGrams::new(&word_, config.min_n as usize, config.max_n as usize)
+            } */
+            for ngram in NGrams::new(&word, config.min_n as usize, config.max_n as usize)
                 .map(|ngram| ngram.to_string())
             {
                 let cnt = ngram_counts.entry(ngram).or_default();
                 *cnt += count as usize;
             }
-            words.push(Word::new(word_, count as usize));
+            words.push(Word::new(word, count as usize));
         }
     }
 
@@ -70,7 +69,7 @@ pub fn build_vocab_from_finaldict(dict: FinalDict) -> KmerVocab<NGramConfig, NGr
             config,
             words,
             dict.tokens as usize,
-            NGramIndexer::new(ngrams))
+            ExplicitIndexer::new(ngrams))
 
 /*    let mut builder = VocabBuilder::new(config);
 

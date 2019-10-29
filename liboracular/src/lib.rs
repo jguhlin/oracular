@@ -11,8 +11,11 @@ extern crate twox_hash;
 // pub extern crate finalfusion;
 extern crate rand;
 extern crate t1ha;
+extern crate ndarray;
+extern crate snap;
+extern crate bincode;
 
-#[macro_use]
+// #[macro_use]
 extern crate static_assertions;
 
 mod utils;
@@ -21,3 +24,4 @@ mod threads;
 pub mod vocab;
 pub mod embeddings;
 pub mod kmervocab;
+pub mod model;

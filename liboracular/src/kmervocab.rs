@@ -11,29 +11,19 @@ use std::borrow::Borrow;
 use finalfrontier::idx::{WordWithSubwordsIdx};
 use finalfrontier::idx::WordIdx;
 
+use finalfusion::subword::{
+    ExplicitIndexer,
+};
+
 use finalfrontier::{NGramConfig};
 
 use finalfusion::subword::{
-    Indexer, NGramIndexer, SubwordIndices
+    Indexer, SubwordIndices
 };
 
-use finalfusion::chunks::vocab::{VocabWrap, FinalfusionNGramVocab};
+use finalfusion::vocab::{VocabWrap, ExplicitSubwordVocab};
 
 pub type Kmer = CountedType<String>;
-
-/*
-impl Kmer {
-    pub fn new(label: String, count: usize) -> Self {
-        Kmer { label, count }
-    }
-    pub fn count(&self) -> usize {
-        self.count
-    }
-    pub fn label(&self) -> &String {
-        &self.label
-    }
-} */
-
 
 /// Hyperparameters for Subword vocabs.
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -58,16 +48,16 @@ pub struct KmerVocab<C, I> {
     n_tokens: usize,
 }
 
-impl From<KmerVocab<NGramConfig, NGramIndexer>> for VocabWrap {
-    fn from(v: KmerVocab<NGramConfig, NGramIndexer>) -> Self {
-        let x = FinalfusionNGramVocab {
+impl From<KmerVocab<NGramConfig, ExplicitIndexer>> for VocabWrap {
+    fn from(v: KmerVocab<NGramConfig, ExplicitIndexer>) -> Self {
+        let x = ExplicitSubwordVocab {
             indexer: v.indexer,
             indices: v.index,
             words: v.words.into_iter().map(|x| x.label().to_string()).collect::<Vec<String>>(),
             min_n: 9,
-            max_n: 9
+            max_n: 9,
         };
-        VocabWrap::FinalfusionNGramVocab(x)
+        VocabWrap::ExplicitSubwordVocab(x)
     }
 }
 
