@@ -54,8 +54,8 @@ impl From<KmerVocab<NGramConfig, ExplicitIndexer>> for VocabWrap {
             indexer: v.indexer,
             indices: v.index,
             words: v.words.into_iter().map(|x| x.label().to_string()).collect::<Vec<String>>(),
-            min_n: 9,
-            max_n: 9,
+            min_n: 15,
+            max_n: 19,
         };
         VocabWrap::ExplicitSubwordVocab(x)
     }

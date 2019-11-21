@@ -19,8 +19,8 @@ pub fn build_vocab_from_finaldict(dict: FinalDict) -> KmerVocab<NGramConfig, Exp
     let config = KmerVocabConfig {
                 discard_threshold: 1e-4,
                 min_count: 5, // Min count 2 or 3 for small datasets, 10 for nt
-                max_n: 9,
-                min_n: 9,
+                max_n: 15,
+                min_n: 19,
                 indexer: NGramConfig { min_ngram_count: 5 }, // 5 for small datasets, 50 for nt
     };
 

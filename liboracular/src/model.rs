@@ -28,7 +28,7 @@ pub struct Model {
 impl Model {
 
     pub fn new(model_filename: String, vocab_filename: String, k: usize) -> Model {
-        let kmercounts_fh = snap::Reader::new(BufReader::new(File::open(vocab_filename.clone()).unwrap()));
+        let kmercounts_fh = snap::Reader::new(BufReader::with_capacity(1024 * 1024 * 1, File::open(vocab_filename.clone()).unwrap()));
         let mut reader = BufReader::new(File::open(model_filename).unwrap());
 
         Model {
@@ -56,7 +56,7 @@ impl Model {
     #[inline]
     pub fn get_count1(&self, kmer: &str) -> usize {
         match self.vocab.words.get(kmer) {
-            Some(x) => x.clone() as usize,
+            Some(x) => x.clone() as usize + 2_usize,
             None    => 2
         }
     }
@@ -112,9 +112,9 @@ impl Model {
             }
         // }
 
-        println!("{:#?}", embeddings);
+        println!("Embeddings: {:#?}", embeddings);
 
-        println!("{:#?}", counts);
+        println!("Counts: {:#?}", counts);
 
         // NO: Values come out too evenly, magnitude is too large...
         // counts = counts.iter().map(|x| 1_f64 - (x/self.vocab.tokens as f64)).collect();
@@ -159,9 +159,9 @@ impl Model {
         // counts = counts.iter().map(|x| (x - max).abs()).collect();
         // counts = counts.iter().map(|x| 1_f64/(x/max)).collect();
 
-        println!("{:#?}", counts);
+        println!("Counts: {:#?}", counts);
         let weights = softmax(counts);
-        println!("{:#?}", weights);
+        println!("Weights: {:#?}", weights);
 
         let mut embedding: Embedding = Array::zeros(embeddings[0].len());
 

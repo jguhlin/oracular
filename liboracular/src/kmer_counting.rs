@@ -24,9 +24,9 @@ use fnv::FnvHasher;
 use crate::threads::{sequence_generator, Sequence, ThreadCommand};
 
 // const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
-const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
+const WORKERSTACKSIZE: usize = 128 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 
-pub const MAX_VOCAB: usize = 300_000_000;
+pub const MAX_VOCAB: usize = 3_000_000_000;
 
 pub struct Dict {
     pub wordidx: Vec<AtomicCell<Option<core::num::NonZeroU64>>>,
