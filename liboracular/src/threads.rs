@@ -49,8 +49,8 @@ pub fn sequence_generator(
 
 {
     let jobs = Arc::new(AtomicCell::new(0 as usize));
-    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(1024 * 128));
-    let rawseq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(2048));
+    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(256));
+    let rawseq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(256));
     let generator_done = Arc::new(RwLock::new(false));
 
     let generator;

@@ -17,16 +17,17 @@ use serde::{Serialize, Deserialize};
 
 use t1ha::{t1ha0};
 
-// use wyhash::WyHash;
+use wyhash::WyHash;
+use wyhash::wyhash;
 use fnv::FnvHashMap;
 use fnv::FnvHasher;
 
 use crate::threads::{sequence_generator, Sequence, ThreadCommand};
 
 // const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
-const WORKERSTACKSIZE: usize = 128 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
+const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 
-pub const MAX_VOCAB: usize = 3_000_000_000;
+pub const MAX_VOCAB: usize = 2_000_000_000;
 
 pub struct Dict {
     pub wordidx: Vec<AtomicCell<Option<core::num::NonZeroU64>>>,
@@ -130,6 +131,7 @@ impl Dict {
         let counts = counts_builder.join().unwrap();
         let words = words_builder.join().unwrap(); 
 
+	println!("\n\n\nDict finished...\n\n\n");
 
         Dict {
             wordidx,
@@ -148,6 +150,7 @@ impl Dict {
 
         let mut id = self.calc_hash(&kmer, &rc);
         let mut cur_word = self.words[id].get();
+        let mut retry = 0;
 
         while self.wordidx[id].load() != None 
             && 
@@ -157,8 +160,13 @@ impl Dict {
             &&
             cur_word.unwrap() != &rc
         {
-            id = (id + 1) % MAX_VOCAB;
+            id = (id + 6) % MAX_VOCAB;
+            retry = retry + 1;
+            if retry > 100 {
+              println!("Error: More than 100 tries... Tokens: {} Entries: {}", self.tokens.load(), self.entries.load());
+            }
             cur_word = self.words[id].get();
+            
         }
 
         id as usize
@@ -313,13 +321,14 @@ fn kmer_counter_worker_thread (
             let rawseq = command.unwrap();
             jobs.fetch_sub(1);
 
-            for i in 0..kmer_size {
+//            for i in 0..kmer_size {
+		let i = 0;
                 rawseq[i..].chunks_exact(kmer_size).for_each(|x| { 
                     // if bytecount::count(&x, b'N') < 3 {
                     dict.add(&x);
                     // }
                 });
-            }
+//            }
 
         } else {
             backoff.snooze();
