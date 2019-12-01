@@ -24,7 +24,7 @@ use crate::threads::{sequence_generator, Sequence, ThreadCommand};
 use opinionated::fasta::{complement_nucleotides};
 use finalfrontier::WriteModelBinary;
 // use finalfrontier::WriteModelText;
-use finalfrontier::app::TrainInfo;
+use finalfrontier::io::TrainInfo;
 
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;

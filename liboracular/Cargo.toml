@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 # These deps shared with finalfrontier/finalfusion, keep in sync
 fnv = "1"
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1.0.103", features = ["derive"] }
 rand = "0.7"
 rand_core = "0.5"
 rand_xorshift = "0.2"
@@ -23,12 +23,13 @@ finalfrontier = { path = "../../finalfrontier/"}
 finalfusion = { path = "../../finalfusion-rust/" }
 bytecount = "0.6.0"
 flate2 = { version = "1.0.12", features = ["zlib"] }
-indicatif = "0.12.0"
+indicatif = "0.13.0"
 twox-hash = "1.5.0"
 stdinout = "0.4"
 static_assertions = "1.0.0"
 t1ha = "0.1"
 ndarray = "0.13"
+ndarray-rand = "0.11"
 snap = "0.2.5"
 bincode = "1.2.0"
 
