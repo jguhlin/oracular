@@ -11,7 +11,7 @@ use finalfusion::subword::{
 use std::collections::HashMap;
 use crate::kmervocab::{KmerVocabConfig, KmerVocab};
 
-pub fn build_vocab_from_finaldict(dict: FinalDict, mincount: usize, max_n: usize, min_n: usize) -> KmerVocab<NGramConfig, ExplicitIndexer>
+pub fn build_vocab_from_finaldict(dict: FinalDict, mincount: usize, min_n: usize, max_n: usize) -> KmerVocab<NGramConfig, ExplicitIndexer>
 
 // where V: Vocab<VocabType = String> + From<VocabBuilder<SubwordVocabConfig<NGramConfig>, String>>,
 {
