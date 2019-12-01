@@ -12,3 +12,6 @@ Partial sequences from NCBI Assembly entries.
 ## Alignment Distance Benchmark
 + Escherichia coli O157:H7 str. Sakai
 + Contains random mutations and random sequences to perform alignments for
+
+## Training Data
++ Obtained from https://www.ncbi.nlm.nih.gov/nuccore/U00096.3?report=fasta
