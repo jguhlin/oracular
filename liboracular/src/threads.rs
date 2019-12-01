@@ -117,15 +117,21 @@ pub fn sequence_generator(
                 while let Ok(bytes_read) = reader.read_until(b'\n', &mut buffer) {
                 // pb.set_message("hello");
                     if bytes_read == 0 {
-                        // File is empty, we are done!
-                        // IO Generator is done, shut down the IO workers...
+                        // Submit the last sequence (or in the case of some genomes, the entire sequence)
+                        jobs.fetch_add(1 as usize);
+                        let wp = ThreadCommand::Work(seqbuffer[..seqlen].to_vec());
+                        seqbuffer.clear();
+
+                        let mut result = rawseq_queue.push(wp);
+                        while let Err(PushError(wp)) = result {
+                            result = rawseq_queue.push(wp);
+                        }
+
+                        backoff.spin();
+                        backoff.spin();
                         backoff.spin();
                         backoff.spin(); // Very slight delay then issue terminate commands...
 
-    //                        match rawseq_queue.push(ThreadCommand::Terminate) {
-    //                            Ok(_) => (),
-    //                            Err(x) => panic!("Unable to send command... {:#?}", x)
-    //                        }
                         break;
                     }
 
@@ -142,8 +148,7 @@ pub fn sequence_generator(
                                 result = rawseq_queue.push(wp);
                             }
 
-                            // pb.set_message(&format!("{}/2048 {}/131072", rawseq_queue.len(), seq_queue.len()));
-                            pb.set_message(&msg);
+                            // pb.set_message(&msg);
                         },
                         _  => {
                             let slice_end = bytes_read.saturating_sub(1);
