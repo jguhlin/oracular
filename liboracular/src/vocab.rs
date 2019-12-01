@@ -11,16 +11,16 @@ use finalfusion::subword::{
 use std::collections::HashMap;
 use crate::kmervocab::{KmerVocabConfig, KmerVocab};
 
-pub fn build_vocab_from_finaldict(dict: FinalDict) -> KmerVocab<NGramConfig, ExplicitIndexer>
+pub fn build_vocab_from_finaldict(dict: FinalDict, mincount: usize, max_n: usize, min_n: usize) -> KmerVocab<NGramConfig, ExplicitIndexer>
 
 // where V: Vocab<VocabType = String> + From<VocabBuilder<SubwordVocabConfig<NGramConfig>, String>>,
 {
 
     let config = KmerVocabConfig {
                 discard_threshold: 1e-4,
-                min_count: 5, // Min count 2 or 3 for small datasets, 10 for nt
-                max_n: 15,
-                min_n: 19,
+                min_count: mincount as u32, // Min count 2 or 3 for small datasets, 10 for nt
+                max_n: max_n as u32,
+                min_n: min_n as u32,
                 indexer: NGramConfig { min_ngram_count: 5 }, // 5 for small datasets, 50 for nt
     };
 

@@ -117,7 +117,7 @@ fn query_embeddings(matches: &clap::ArgMatches<'_>) {
 
 
 fn generate_embeddings(matches: &clap::ArgMatches<'_>) {
-    let kmer_size = value_t!(matches, "kmer", usize).unwrap_or(11);
+    let kmer_size = value_t!(matches, "kmer", usize).unwrap_or(13);
     // let minn = value_t!(matches, "minn", usize).unwrap_or(13);
     // let maxn = value_t!(matches, "maxn", usize).unwrap_or(kmer_size.clone());
     // let step_size = value_t!(matches, "step", usize).unwrap_or(kmer_size.clone());
@@ -125,6 +125,9 @@ fn generate_embeddings(matches: &clap::ArgMatches<'_>) {
     let num_threads = value_t!(matches, "threads", usize).unwrap_or(16);
     let dims = value_t!(matches, "dims", usize).unwrap_or(32);
     let epochs = value_t!(matches, "epochs", usize).unwrap_or(5);
+    let mincount = value_t!(matches, "mincount", usize).unwrap_or(5);
+    let min_n = value_t!(matches, "min_n", usize).unwrap_or(9);
+    let max_n = value_t!(matches, "max_n", usize).unwrap_or(11);
     
     println!("k={}", kmer_size);
 
@@ -176,7 +179,7 @@ fn generate_embeddings(matches: &clap::ArgMatches<'_>) {
 
     // let app = SkipGramApp::new();
 
-    let vocab = build_vocab_from_finaldict(final_dict);
+    let vocab = build_vocab_from_finaldict(final_dict, mincount, min_n, max_n);
     let model = train(num_threads, dims, epochs, context_size, vocab, &filename, kmer_size);
 
     // let mut out_fh = snap::Writer::new(File::create(format!("{}.bc", "vvulg")).unwrap());

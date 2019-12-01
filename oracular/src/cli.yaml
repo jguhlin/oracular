@@ -72,3 +72,16 @@ subcommands:
                 help: number of threads
                 takes_value: true
                 default_value: "16"
+            - mincount:
+                short: m
+                help: Minimum occurences of kmer to include in dictionary
+                takes_value: true
+                default_value: "5"
+            - min_n:
+                long: min_n
+                takes_value: true
+                default_value: "9"
+            - max_n:
+                long: max_n
+                takes_value: true
+                default_value: "11"

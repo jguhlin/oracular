@@ -131,8 +131,6 @@ impl Dict {
         let counts = counts_builder.join().unwrap();
         let words = words_builder.join().unwrap(); 
 
-	println!("\n\n\nDict finished...\n\n\n");
-
         Dict {
             wordidx,
             words,
