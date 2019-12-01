@@ -259,6 +259,9 @@ pub fn count_kmers(
     }
 
     let backoff = Backoff::new();
+    backoff.snooze();
+    backoff.snooze();
+    backoff.snooze();
     while !*generator_done.read().unwrap() {
         backoff.snooze();
     }
