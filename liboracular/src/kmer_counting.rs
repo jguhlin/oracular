@@ -17,8 +17,6 @@ use serde::{Serialize, Deserialize};
 
 use t1ha::{t1ha0};
 
-use wyhash::WyHash;
-use wyhash::wyhash;
 use fnv::FnvHashMap;
 use fnv::FnvHasher;
 
