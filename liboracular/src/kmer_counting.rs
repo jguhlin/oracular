@@ -333,7 +333,8 @@ fn kmer_counter_worker_thread (
             jobs.fetch_sub(1);
 
             // TODO: Disable for nt... probably...
-            for i in 0..kmer_size {
+            // for i in 0..kmer_size {
+                let i = 0;
                 let chunks = rawseq[i..].chunks_exact(kmer_size * 4);
 
                 // TODO: Handle remainder (could still be > kmer_size)
@@ -346,7 +347,7 @@ fn kmer_counter_worker_thread (
                     dict.add(hashes.2);
                     dict.add(hashes.3);
                 }
-            }
+            // }
         } else {
             backoff.snooze();
             backoff.reset();
