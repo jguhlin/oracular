@@ -52,6 +52,7 @@ pub struct FinalDict {
 
 impl Dict {
 
+    // TODO: Update to work with simd version
     pub fn convert_to_final(&self) -> FinalDict {
         
         let mut words: HashMap<String, u64, _> = FnvHashMap::default();
@@ -340,6 +341,7 @@ fn kmer_counter_worker_thread (
                 // TODO: Handle remainder (could still be > kmer_size)
 
                 for chunk in chunks {
+                    // TODO: Probably don't need to iterate this.... just do direct slices...
                     let kmers = chunk.chunks_exact(kmer_size).collect::<Vec<&[u8]>>();
                     let hashes = hash4(kmers[0], kmers[1], kmers[2], kmers[3]);
                     dict.add(hashes.0);
