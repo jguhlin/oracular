@@ -72,8 +72,20 @@ pub fn calc_rc(k: usize, khash: u64) -> u64 {
     rc >> (64 - (k * 3))
 }
 
+#[inline(always)]
+pub fn hash4(k1: &[u8], k2: &[u8], k3: &[u8], k4: &[u8]) -> (u64, u64, u64, u64) {
+    let hashes = _hash4(k1, k2, k3, k4);
+    let rcs = _rc4(k1.len(), hashes.0, hashes.1, hashes.2, hashes.3);
+    
+    (min(hashes.0, rcs.0),
+     min(hashes.1, rcs.1),
+     min(hashes.2, rcs.2),
+     min(hashes.3, rcs.3))
+}
+
 // TODO: Take advantage of this...
 // AVX can calc 4 at a time
+#[inline(always)]
 fn _hash4(k1: &[u8], k2: &[u8], k3: &[u8], k4: &[u8]) -> (u64, u64, u64, u64) {
     unsafe {
         let mut hashes = _mm256_setzero_si256();
@@ -98,6 +110,7 @@ fn _hash4(k1: &[u8], k2: &[u8], k3: &[u8], k4: &[u8]) -> (u64, u64, u64, u64) {
     }
 }
 
+#[inline(always)]
 fn _rc4(k: usize, k1: u64, k2: u64, k3: u64, k4: u64) -> (u64, u64, u64, u64) {
     let (ik1, ik2, ik3, ik4, x);
 

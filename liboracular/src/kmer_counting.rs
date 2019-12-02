@@ -21,7 +21,7 @@ use fnv::FnvHashMap;
 use fnv::FnvHasher;
 
 use crate::threads::{sequence_generator, Sequence, ThreadCommand};
-use crate::kmer_hasher::{kmerhash, kmerhash_smallest, calc_rc};
+use crate::kmer_hasher::{kmerhash, kmerhash_smallest, calc_rc, hash4};
 
 // const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
@@ -32,7 +32,7 @@ pub const HALF_VOCAB: usize = 1_000_000_000;
 // TODO: Switch words to u64, to make use of faster "hash" and faster RC computation
 pub struct Dict {
     pub wordidx: Vec<AtomicCell<Option<core::num::NonZeroU64>>>,
-    pub words:   Vec<OnceCell<ThinVec<u8>>>,
+    pub words:   Vec<OnceCell<u64>>,
     pub counts:  Vec<AtomicCell<u64>>,
     pub tokens:  AtomicCell<u64>,
     pub size:    AtomicCell<u64>,
@@ -61,14 +61,16 @@ impl Dict {
 
         for x in self.words
                     .iter()
-                    .filter_map(|x| x.get())
-                    .map(|x| x.to_vec()) {
-            let id = self.get_id(&x);
+                    .filter_map(|x| x.get()) {
+            let id = *x as usize;
             let count = self.counts[self.wordidx[id].load().expect("Error getting wordidx[id]").get() as usize].load();
-            let rc = self.get_rc(&x);
 
-            let xstr = unsafe { String::from_utf8_unchecked(x) };
-            let rcstr = unsafe { String::from_utf8_unchecked(rc.to_vec()) };
+            // let xstr = unsafe { String::from_utf8_unchecked(x) };
+            // let rcstr = unsafe { String::from_utf8_unchecked(rc.to_vec()) };
+
+            // TODO: Back-conversion of kmers
+            let xstr = "NN".to_string();
+            let rcstr = "NN".to_string();
 
             *words.entry(xstr).or_insert(0) += count;
             *words.entry(rcstr).or_insert(0) += count;
@@ -144,11 +146,12 @@ impl Dict {
     }
 
     #[inline]
-    fn get_id(&self, kmer: &[u8]) -> usize {
-        let rc = self.get_rc(&kmer);
+    fn get_id(&self, kmer: u64) -> usize {
+        // let rc = self.get_rc(&kmer);
 
-        let hash = kmerhash_smallest(&kmer) as usize;
+        // let hash = kmerhash_smallest(&kmer) as usize;
         //let mut id = self.calc_hash(&kmer); // , &rc
+        let hash = kmer as usize;
         let mut id = hash % HALF_VOCAB;
         let mut cur_word = self.words[id].get();
         let mut retry: usize = 0;
@@ -158,15 +161,15 @@ impl Dict {
             cur_word != None 
             &&
             cur_word.unwrap() != &kmer
-            &&
-            cur_word.unwrap() != &rc
+            // &&
+            // cur_word.unwrap() != &rc
         {
             retry = retry.saturating_add(1);
             id = (hash.wrapping_add(retry)) % MAX_VOCAB;
             if retry > 100_000 {
               assert!(self.entries.load() < MAX_VOCAB as u64, "More entries than MAX_VOCAB!");
               println!("Error: More than 100,000 tries... Tokens: {} Entries: {}", self.tokens.load(), self.entries.load());
-              println!("Retry: {} Kmer is: {} ID is: {}", retry, String::from_utf8(kmer.to_vec()).unwrap(), id);
+              // println!("Retry: {} Kmer is: {} ID is: {}", retry, String::from_utf8(kmer.to_vec()).unwrap(), id);
             }
             cur_word = self.words[id].get();
         }
@@ -197,18 +200,20 @@ impl Dict {
         kmerhash_smallest(kmer) as usize % MAX_VOCAB
     }
 
-    pub fn add(&self, kmer: &[u8]) {
+    pub fn add(&self, kmer: u64) {
         self.tokens.fetch_add(1);
 
         let id = self.get_id(kmer);
+        // let id = kmer as usize;
 
         if self.wordidx[id].load() == None {
 
-            let mut word = ThinVec::with_capacity(kmer.len());
-            word.extend_from_slice(&kmer);
+            let word = kmer;
+            // let mut word = ThinVec::with_capacity(kmer.len());
+            // word.extend_from_slice(&kmer);
             if let Err(val) = self.words[id].set(word) {
                 // Another thread beat us to it, start over...
-                self.add(&val); 
+                self.add(val); 
                 return;
             }
 
@@ -327,15 +332,21 @@ fn kmer_counter_worker_thread (
             let rawseq = command.unwrap();
             jobs.fetch_sub(1);
 
-//            for i in 0..kmer_size {
-		let i = 0;
-                rawseq[i..].chunks_exact(kmer_size).for_each(|x| { 
-                    // if bytecount::count(&x, b'N') < 3 {
-                    dict.add(&x);
-                    // }
-                });
-//            }
+            // TODO: Disable for nt... probably...
+            for i in 0..kmer_size {
+                let chunks = rawseq[i..].chunks_exact(kmer_size * 4);
 
+                // TODO: Handle remainder (could still be > kmer_size)
+
+                for chunk in chunks {
+                    let kmers = chunk.chunks_exact(kmer_size).collect::<Vec<&[u8]>>();
+                    let hashes = hash4(kmers[0], kmers[1], kmers[2], kmers[3]);
+                    dict.add(hashes.0);
+                    dict.add(hashes.1);
+                    dict.add(hashes.2);
+                    dict.add(hashes.3);
+                }
+            }
         } else {
             backoff.snooze();
             backoff.reset();
