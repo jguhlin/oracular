@@ -1,4 +1,9 @@
 use std::cmp::min;
+use std::{u64, i64, mem};
+
+// TODO: Make sure this is optional on certain platforms
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64::*;
 
 lazy_static! {
     static ref CONVERSION: [u64; 256] = {
@@ -15,6 +20,23 @@ lazy_static! {
 
         conversion
     };
+
+    static ref CONVERSION_I: [i64; 256] = {
+
+        let mut conversion: [i64; 256] = [1; 256];
+        conversion[65]  = 7;
+        conversion[97]  = 7;
+        conversion[84]  = 0;
+        conversion[116] = 0;
+        conversion[67]  = 5;
+        conversion[99]  = 5;
+        conversion[71]  = 2;
+        conversion[103] = 2;
+
+        conversion
+    };
+
+    static ref SHIFT: __m128i = unsafe { _mm_set1_epi64x(3) };
 }
 
 // A is 7
@@ -51,7 +73,28 @@ pub fn calc_rc(k: usize, khash: u64) -> u64 {
 }
 
 
-// TODO: Implement fast RC function
+// TODO: Take advantage of this...
+// AVX can calc 4 at a time
+fn _hash4(k1: &[u8], k2: &[u8], k3: &[u8], k4: &[u8]) -> (u64, u64, u64, u64) {
+    unsafe {
+        let mut hashes = _mm256_setzero_si256();
 
-// TODO: Batch sets of kmers and hash at the same time. Should be able to get a slight performance increase
-// from rotate left / left shift SIMD bit operators and vector additions...
+        let mut add = _mm256_set_epi64x(CONVERSION_I[usize::from(k1[0])],
+                                        CONVERSION_I[usize::from(k2[0])],
+                                        CONVERSION_I[usize::from(k3[0])],
+                                        CONVERSION_I[usize::from(k4[0])]);
+        
+        hashes = _mm256_add_epi64(hashes, add);
+
+        for i in 1..k1.len() {
+            hashes = _mm256_sll_epi64(hashes, *SHIFT);
+            add = _mm256_set_epi64x(CONVERSION_I[usize::from(k1[i])],
+                                    CONVERSION_I[usize::from(k2[i])],
+                                    CONVERSION_I[usize::from(k3[i])],
+                                    CONVERSION_I[usize::from(k4[i])]);
+            hashes = _mm256_add_epi64(hashes, add);
+        }
+
+        mem::transmute(hashes)
+    }
+}
