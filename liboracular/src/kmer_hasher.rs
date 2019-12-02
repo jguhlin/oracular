@@ -68,10 +68,9 @@ pub fn kmerhash_smallest(kmer: &[u8]) -> u64 {
 pub fn calc_rc(k: usize, khash: u64) -> u64 {
     // khash is a kmer already processed with kmerhash
     // k is the k in kmer (thus the seq length)
-    let mut rc = !khash.reverse_bits();
+    let rc = !khash.reverse_bits();
     rc >> (64 - (k * 3))
 }
-
 
 // TODO: Take advantage of this...
 // AVX can calc 4 at a time
@@ -97,4 +96,21 @@ fn _hash4(k1: &[u8], k2: &[u8], k3: &[u8], k4: &[u8]) -> (u64, u64, u64, u64) {
 
         mem::transmute(hashes)
     }
+}
+
+fn _rc4(k: usize, k1: u64, k2: u64, k3: u64, k4: u64) -> (u64, u64, u64, u64) {
+    let (ik1, ik2, ik3, ik4, x);
+
+    unsafe {
+        ik1 = _bswap64(mem::transmute(k1));
+        ik2 = _bswap64(mem::transmute(k2));
+        ik3 = _bswap64(mem::transmute(k3));
+        ik4 = _bswap64(mem::transmute(k4));
+        x = _mm256_set_epi64x(ik1, ik2, ik3, ik4);
+
+        let shift = _mm_set1_epi64x(mem::transmute(64 - (k * 3)));
+        mem::transmute(_mm256_sll_epi64(x, shift))
+    }
+    
+//    (0, 0, 0, 0)
 }
