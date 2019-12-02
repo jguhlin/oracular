@@ -15,6 +15,9 @@ extern crate ndarray;
 extern crate snap;
 extern crate bincode;
 
+#[macro_use]
+extern crate lazy_static;
+
 // #[macro_use]
 extern crate static_assertions;
 
@@ -25,3 +28,4 @@ pub mod vocab;
 pub mod embeddings;
 pub mod kmervocab;
 pub mod model;
+pub mod kmer_hasher;

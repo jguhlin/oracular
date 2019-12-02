@@ -21,12 +21,15 @@ use fnv::FnvHashMap;
 use fnv::FnvHasher;
 
 use crate::threads::{sequence_generator, Sequence, ThreadCommand};
+use crate::kmer_hasher::{kmerhash, kmerhash_smallest, calc_rc};
 
 // const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 
-pub const MAX_VOCAB: usize = 2_000_000_000;
+pub const MAX_VOCAB:  usize = 2_000_000_000;
+pub const HALF_VOCAB: usize = 1_000_000_000;
 
+// TODO: Switch words to u64, to make use of faster "hash" and faster RC computation
 pub struct Dict {
     pub wordidx: Vec<AtomicCell<Option<core::num::NonZeroU64>>>,
     pub words:   Vec<OnceCell<ThinVec<u8>>>,
@@ -144,9 +147,11 @@ impl Dict {
     fn get_id(&self, kmer: &[u8]) -> usize {
         let rc = self.get_rc(&kmer);
 
-        let mut id = self.calc_hash(&kmer, &rc);
+        let hash = kmerhash_smallest(&kmer) as usize;
+        //let mut id = self.calc_hash(&kmer); // , &rc
+        let mut id = hash % HALF_VOCAB;
         let mut cur_word = self.words[id].get();
-        let mut retry = 0;
+        let mut retry: usize = 0;
 
         while self.wordidx[id].load() != None 
             && 
@@ -156,13 +161,14 @@ impl Dict {
             &&
             cur_word.unwrap() != &rc
         {
-            id = (id + 6) % MAX_VOCAB;
-            retry = retry + 1;
-            if retry > 100 {
-              println!("Error: More than 100 tries... Tokens: {} Entries: {}", self.tokens.load(), self.entries.load());
+            retry = retry.saturating_add(1);
+            id = (hash.wrapping_add(retry)) % MAX_VOCAB;
+            if retry > 100_000 {
+              assert!(self.entries.load() < MAX_VOCAB as u64, "More entries than MAX_VOCAB!");
+              println!("Error: More than 100,000 tries... Tokens: {} Entries: {}", self.tokens.load(), self.entries.load());
+              println!("Retry: {} Kmer is: {} ID is: {}", retry, String::from_utf8(kmer.to_vec()).unwrap(), id);
             }
             cur_word = self.words[id].get();
-            
         }
 
         id as usize
@@ -179,15 +185,16 @@ impl Dict {
     }
 
     #[inline(always)]
-    pub fn calc_hash(&self, kmer: &[u8], rc: &[u8]) -> usize {
+    pub fn calc_hash(&self, kmer: &[u8]) -> usize { // , rc: &[u8]
 
         // let x = wyhash(&kmer, 43_988_123) as usize % MAX_VOCAB;
         // let y = wyhash(&rc, 43_988_123) as usize % MAX_VOCAB;
 
-        let x = t1ha0(&kmer, 42_988_123) as usize % MAX_VOCAB;
-        let y = t1ha0(&rc, 42_988_123) as usize % MAX_VOCAB;
+        //let x = t1ha0(&kmer, 42_988_123) as usize % MAX_VOCAB;
+        //let y = t1ha0(&rc, 42_988_123) as usize % MAX_VOCAB;
 
-        std::cmp::min(x,y)
+        //std::cmp::min(x,y)
+        kmerhash_smallest(kmer) as usize % MAX_VOCAB
     }
 
     pub fn add(&self, kmer: &[u8]) {
