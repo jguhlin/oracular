@@ -39,12 +39,12 @@ lazy_static! {
     static ref SHIFT: __m128i = unsafe { _mm_set1_epi64x(3) };
 }
 
-// A is 7
-// T is 0
-// C is 5
-// G is 2
-// N is thus: 1
-// N is also: 4... I mean 3
+// A is 7 is 111
+// T is 0 is 000
+// C is 5 is 101
+// G is 2 is 010
+// N is thus: 1 = 001 
+// N is also: 3 = 110
 
 #[inline(always)]
 pub fn kmerhash(kmer: &[u8]) -> u64 {
@@ -126,4 +126,23 @@ fn _rc4(k: usize, k1: u64, k2: u64, k3: u64, k4: u64) -> (u64, u64, u64, u64) {
     }
     
 //    (0, 0, 0, 0)
+}
+
+#[cfg(test)]
+mod test {
+
+    use crate::kmer_hasher::{*};
+
+    #[test]
+    fn four_at_a_time() {
+        let k = (b"ACTCACGATCACGATACAAAN", 
+                 b"TCAGTCACTAGCATACAACTC",
+                 b"ACGATCACGATACAAANNNNN",
+                 b"TGACTANCATCANTACTTGGT");
+        let hashes = _hash4(k.0, k.1, k.2, k.3);
+        assert_eq!(425844089580060816, hashes.0);
+        assert_eq!(8843027523915715145, hashes.1);
+        assert_eq!(851389849605701445, hashes.2);
+        assert_eq!(8804444413962215417, hashes.3);
+    }
 }

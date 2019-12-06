@@ -218,18 +218,9 @@ mod test {
     use finalfusion::subword::{*};
 
     use rand_xorshift::XorShiftRng;
-    use rand::{FromEntropy, Rng};
 
-    use finalfusion::prelude::{SubwordVocab as FiFuSubwordVocab, VocabWrap};
 
-    #[test]
-    fn impls() {
-        assert_impl_all!(fnv::FnvHasher: Default, Hasher);
-        assert_impl_all!(finalfusion::subword::HashIndexer<fnv::FnvHasher>: finalfusion::subword::BucketIndexer);
-        assert_impl_all!(finalfusion::subword::HashIndexer<fnv::FnvHasher>: finalfusion::subword::Indexer);
-        assert_impl_all!(String: Hash, Eq, Into<String>);
-    }
-
+    /*
     #[test]
     fn external_subword_vocab_builder_save_binary() {
         let vocab_config: SubwordVocabConfig<BucketConfig> = SubwordVocabConfig {
@@ -287,6 +278,7 @@ mod test {
         indexer: BucketConfig { buckets_exp: 21 },
     };
 
+
     #[test]
     pub fn model_embed_methods() {
         let mut vocab_config = VOCAB_CONF.clone();
@@ -306,6 +298,6 @@ mod test {
                 skipgram_config,
             );
 
-    } 
+    }  */
 
 }
