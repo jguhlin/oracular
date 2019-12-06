@@ -157,7 +157,7 @@ impl Dict {
         //let mut id = self.calc_hash(&kmer); // , &rc
         let hash = kmer as usize;
         // let mut id = hash % HALF_VOCAB;
-        let mut id = hash & HALF_MASK;
+        let mut id = (hash ^ HALF_MASK) & HALF_MASK;
         let mut cur_word = self.words[id].get();
         let mut retry: usize = 0;
 
@@ -171,10 +171,10 @@ impl Dict {
         {
             retry = retry.saturating_add(1);
             // id = (hash.wrapping_add(retry)) % MAX_VOCAB;
-            id = (hash.wrapping_add(retry)) & MAX_MASK;
-            if retry > 1_000_000 {
+            id = (hash.wrapping_add(retry) ^ MAX_MASK) & MAX_MASK;
+            if retry > 5_000_000 {
               assert!(self.entries.load() < MAX_VOCAB as u64, "More entries than MAX_VOCAB!");
-              println!("Error: More than 100,000 tries... Tokens: {} Entries: {}", self.tokens.load(), self.entries.load());
+              // println!("Error: More than 100,000 tries... Tokens: {} Entries: {}", self.tokens.load(), self.entries.load());
               // println!("Retry: {} Kmer is: {} ID is: {}", retry, String::from_utf8(kmer.to_vec()).unwrap(), id);
             }
             cur_word = self.words[id].get();
