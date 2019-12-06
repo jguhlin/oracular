@@ -24,12 +24,13 @@ use crate::threads::{sequence_generator, Sequence, ThreadCommand};
 use crate::kmer_hasher::{kmerhash, kmerhash_smallest, calc_rc, hash4};
 
 // const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
-const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
+const WORKERSTACKSIZE: usize = 16 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 
-pub const MAX_VOCAB:  usize = 1 << 31;
-pub const HALF_VOCAB: usize = 1 << 30;
-pub const MAX_MASK:   usize = (1 << 31) - 1;
-pub const HALF_MASK:  usize = (1 << 30) - 1;
+pub const BUCKET_SIZE: usize = 31;
+pub const MAX_VOCAB:   usize = 1 << BUCKET_SIZE;
+pub const HALF_VOCAB:  usize = 1 << (BUCKET_SIZE - 1);
+pub const MAX_MASK:    usize = MAX_VOCAB - 1;
+pub const HALF_MASK:   usize = HALF_VOCAB - 1;
 
 // TODO: Switch words to u64, to make use of faster "hash" and faster RC computation
 pub struct Dict {
@@ -171,7 +172,7 @@ impl Dict {
             retry = retry.saturating_add(1);
             // id = (hash.wrapping_add(retry)) % MAX_VOCAB;
             id = (hash.wrapping_add(retry)) & MAX_MASK;
-            if retry > 100_000 {
+            if retry > 1_000_000 {
               assert!(self.entries.load() < MAX_VOCAB as u64, "More entries than MAX_VOCAB!");
               println!("Error: More than 100,000 tries... Tokens: {} Entries: {}", self.tokens.load(), self.entries.load());
               // println!("Retry: {} Kmer is: {} ID is: {}", retry, String::from_utf8(kmer.to_vec()).unwrap(), id);
