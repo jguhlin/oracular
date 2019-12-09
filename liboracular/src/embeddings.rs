@@ -228,11 +228,10 @@ fn embedding_worker<R, V>(
     kmer_steps.push(0);
     let mut rng = rand::thread_rng();
     kmer_steps.push(rng.gen_range(1, kmer_size));
-    kmer_steps.push(rng.gen_range(1, kmer_size));
-    kmer_steps.push(rng.gen_range(1, kmer_size));
-    
     let half_kmer = (kmer_size as f64 / 2.0).floor() as usize;
+
     kmer_steps.push(half_kmer);
+    kmer_steps.push(kmer_size - 1);
     
     loop {
         if let Ok(command) = seq_queue.pop() {

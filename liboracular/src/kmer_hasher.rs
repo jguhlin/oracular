@@ -5,7 +5,21 @@ use std::{u64, i64, mem};
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
+const FIND3: u64 = 7;
+
 lazy_static! {
+
+    static ref CONVERSION_TOCHAR: [char; 256] = {
+
+        let mut conversion: [char; 256] = ['N'; 256];
+        conversion[7]  = 'A';
+        conversion[0]  = 'T';
+        conversion[5]  = 'C';
+        conversion[2]  = 'G';
+
+        conversion
+    };
+
     static ref CONVERSION: [u64; 256] = {
 
         let mut conversion: [u64; 256] = [1; 256];
@@ -77,24 +91,22 @@ pub fn calc_rc(k: usize, khash: u64) -> u64 {
 #[inline(always)]
 pub fn hash4(k1: &[u8], k2: &[u8], k3: &[u8], k4: &[u8]) -> (u64, u64, u64, u64) {
     let hashes = _hash4(k1, k2, k3, k4);
-    let rcs = _rc4(k1.len(), hashes.0, hashes.1, hashes.2, hashes.3);
-    
-    (min(hashes.0, rcs.0),
-     min(hashes.1, rcs.1),
-     min(hashes.2, rcs.2),
-     min(hashes.3, rcs.3))
+
+    (min(hashes.0, calc_rc(k1.len(), hashes.0)),
+     min(hashes.1, calc_rc(k2.len(), hashes.1)),
+     min(hashes.2, calc_rc(k3.len(), hashes.2)),
+     min(hashes.3, calc_rc(k4.len(), hashes.3)))
 }
 
 #[inline(always)]
 fn replace3with1(mut x: u64) -> u64 {
-    let find3: u64 = 7;
     let is3: u64 = 3;
     let replace3: u64 = 2;
     let mut distance: u64;
     let mut query: u64;
     for i in 0..=20 {
         distance = i * 3;
-        query = find3 << distance;
+        query = FIND3 << distance;
         if (x & query) == (is3 << distance) {
             x = x ^ (replace3 << distance);
         }
@@ -132,6 +144,9 @@ fn _hash4(k1: &[u8], k2: &[u8], k3: &[u8], k4: &[u8]) -> (u64, u64, u64, u64) {
     (results.3, results.2, results.1, results.0)
 }
 
+
+// Doesn't seem to speed it up, not gives correct result...
+// Leaving here to fix in the future (maybe)
 #[inline(always)]
 fn _rc4(k: usize, k1: u64, k2: u64, k3: u64, k4: u64) -> (u64, u64, u64, u64) {
     let (ik1, ik2, ik3, ik4, x);
@@ -148,9 +163,24 @@ fn _rc4(k: usize, k1: u64, k2: u64, k3: u64, k4: u64) -> (u64, u64, u64, u64) {
         xs = mem::transmute(_mm256_sll_epi64(x, shift));
     }
 
-    (replace3with1(xs.0), replace3with1(xs.1), replace3with1(xs.2), replace3with1(xs.3))
+    (replace3with1(xs.3), replace3with1(xs.2), replace3with1(xs.1), replace3with1(xs.0))
     
 //    (0, 0, 0, 0)
+}
+
+#[inline(always)]
+fn _get_pos(pos: usize, hash: u64) -> char {
+    let distance = pos * 3;
+    return CONVERSION_TOCHAR[((hash & (FIND3 << distance)) >> distance) as usize]
+}
+
+#[inline(always)]
+pub fn convert_to_kmer(k: usize, hash: u64) -> String {
+    let mut kmer: String = String::with_capacity(21);
+    for i in (0..21).rev() {
+        kmer.push(_get_pos(i, hash));
+    }
+    return kmer[(21 - k)..].to_string()
 }
 
 #[cfg(test)]
@@ -240,6 +270,38 @@ mod test {
         let results4rc = _rc4(21, results4.0, results4.1, results4.2, results4.3);
 
         // assert_eq!(results4rc.0, kmerhash(k.0));
+    }
 
+    #[test]
+    fn hash4_test() {
+        // Hash4 fn should return smallest hash
+        let k = (b"ACTCACGATCACGATACAAAN", 
+                 b"TCAGTCACTAGCATACAACTC",
+                 b"ACGATCACGATACAAANNNNN",
+                 b"TGACTANCATCANTACTTGGT");
+
+        let krc = (b"NTTTGTATCGTGATCGTGAGT",
+                   b"GAGTTGTATGCTAGTGACTGA",
+                   b"NNNNNTTTGTATCGTGATCGT",
+                   b"ACCAAGTANTGATGNTAGTCA");
+
+        let hashes   = hash4(k.0, k.1, k.2, k.3);
+        let hashesrc = hash4(krc.0, krc.1, krc.2, krc.3);
+
+        let hashes_direct   = _hash4(k.0, k.1, k.2, k.3);
+        let hashesrc_direct = _hash4(krc.0, krc.1, krc.2, krc.3);
+
+        println!("{}\n{}", kmerhash(k.0), calc_rc(21, kmerhash(k.0)));
+        println!("{}", hashes.0);
+
+        assert_eq!(hashes.0, hashesrc.0, "Hashes 0 do not match");
+        assert_eq!(hashes.1, hashesrc.1, "Hashes 1 do not match");
+        assert_eq!(hashes.2, hashesrc.2, "Hashes 2 do not match");
+        assert_eq!(hashes.3, hashesrc.3, "Hashes 3 do not match");
+
+        assert_eq!(hashes.0, min(hashes_direct.0, hashesrc_direct.0), "Hashes 0 do not match");
+        assert_eq!(hashes.1, min(hashes_direct.1, hashesrc_direct.1), "Hashes 1 do not match");
+        assert_eq!(hashes.2, min(hashes_direct.2, hashesrc_direct.2), "Hashes 2 do not match");
+        assert_eq!(hashes.3, min(hashes_direct.3, hashesrc_direct.3), "Hashes 3 do not match");
     }
 }

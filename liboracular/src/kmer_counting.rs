@@ -20,17 +20,20 @@ use t1ha::{t1ha0};
 use fnv::FnvHashMap;
 use fnv::FnvHasher;
 
+use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
+
 use crate::threads::{sequence_generator, Sequence, ThreadCommand};
-use crate::kmer_hasher::{kmerhash, kmerhash_smallest, calc_rc, hash4};
+use crate::kmer_hasher::{kmerhash, kmerhash_smallest, calc_rc, hash4, convert_to_kmer};
 
 // const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 const WORKERSTACKSIZE: usize = 16 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 
-pub const BUCKET_SIZE: usize = 31;
-pub const MAX_VOCAB:   usize = 1 << BUCKET_SIZE;
+/* pub const BUCKET_SIZE: usize = 31;
+pub const MAX_VOCAB:   usize = 1 << BUCKET_SIZE; // 2 147 483 648
 pub const HALF_VOCAB:  usize = 1 << (BUCKET_SIZE - 1);
 pub const MAX_MASK:    usize = MAX_VOCAB - 1;
-pub const HALF_MASK:   usize = HALF_VOCAB - 1;
+pub const HALF_MASK:   usize = HALF_VOCAB - 1; */
 
 // TODO: Switch words to u64, to make use of faster "hash" and faster RC computation
 pub struct Dict {
@@ -41,6 +44,11 @@ pub struct Dict {
     pub size:    AtomicCell<u64>,
     pub entries: AtomicCell<u64>,
     pub k: u64,
+    pub bucket_size: usize,
+    pub max_vocab: usize,
+    pub half_vocab: usize,
+    pub max_mask: usize,
+    pub half_mask: usize
 }
 
 #[derive(Serialize, Deserialize)]
@@ -55,7 +63,7 @@ pub struct FinalDict {
 
 impl Dict {
 
-    // TODO: Update to work with simd version
+    // TODO: Mostly works with SIMD version...
     pub fn convert_to_final(&self) -> FinalDict {
         
         let mut words: HashMap<String, u64, _> = FnvHashMap::default();
@@ -66,15 +74,14 @@ impl Dict {
         for x in self.words
                     .iter()
                     .filter_map(|x| x.get()) {
-            let id = *x as usize;
+            let id = self.get_id(*x);
             let count = self.counts[self.wordidx[id].load().expect("Error getting wordidx[id]").get() as usize].load();
 
             // let xstr = unsafe { String::from_utf8_unchecked(x) };
             // let rcstr = unsafe { String::from_utf8_unchecked(rc.to_vec()) };
 
-            // TODO: Back-conversion of kmers
-            let xstr = "NN".to_string();
-            let rcstr = "NN".to_string();
+            let xstr = convert_to_kmer(self.k as usize, *x);
+            let rcstr = convert_to_kmer(self.k as usize, calc_rc(self.k as usize, *x));
 
             *words.entry(xstr).or_insert(0) += count;
             *words.entry(rcstr).or_insert(0) += count;
@@ -89,49 +96,69 @@ impl Dict {
                 }
     }
 
-    pub fn new(k: usize) -> Dict {
+    pub fn new(k: usize, bucket_size: usize) -> Dict {
+
+        assert!(bucket_size < 64, "Maximum bucket size must be <64");
+
+        let max_vocab = 1 << bucket_size;
+        let half_vocab = 1 << (bucket_size - 1);
+        let max_mask = max_vocab - 1;
+        let half_mask = half_vocab - 1;
+
+        let (wordidx_builder, counts_builder, words_builder);
 
         // Overkill, but multi-threading gives it a slight speed boost
         // Higher in dev...
 
-        let wordidx_builder = match Builder::new()
+        {
+            let max_vocab = max_vocab.clone();
+            wordidx_builder = match Builder::new()
                         .name("WordIdx Builder".into())
-                        .spawn(|| 
+                        .spawn(move || 
                         {
-                            let mut wordidx = Vec::with_capacity(MAX_VOCAB);
-                            wordidx.resize_with(MAX_VOCAB, || AtomicCell::new(None));
+                            let mut wordidx = Vec::with_capacity(max_vocab);
+                            wordidx.resize_with(max_vocab, || AtomicCell::new(None));
                             wordidx
                         })
                     {
                         Ok(x)  => x,
                         Err(y) => panic!("{}", y)
                     };
+        }
 
-        let counts_builder = match Builder::new()
+        {
+            let max_vocab = max_vocab.clone();
+            counts_builder = match Builder::new()
                         .name("Counts Builder".into())
-                        .spawn(|| 
+                        .spawn(move || 
                         {
-                            let mut counts = Vec::with_capacity(MAX_VOCAB);
-                            counts.resize_with(MAX_VOCAB, || AtomicCell::new(0));
+                            let mut counts = Vec::with_capacity(max_vocab);
+                            counts.resize_with(max_vocab, || AtomicCell::new(0));
                             counts
                         })
                     {
                         Ok(x)  => x,
                         Err(y) => panic!("{}", y)
                     };
+        }
 
-        let words_builder = match Builder::new()
+        {
+            let max_vocab = max_vocab.clone();
+    
+            words_builder = match Builder::new()
                         .name("Words Builder".into())
-                        .spawn(|| 
+                        .spawn(move || 
                         {
-                            let mut words = Vec::with_capacity(MAX_VOCAB);
-                            words.resize_with(MAX_VOCAB, OnceCell::new);
+                            let mut words = Vec::with_capacity(max_vocab);
+                            words.resize_with(max_vocab, OnceCell::new);
                             words
                         })
                     {
                         Ok(x)  => x,
                         Err(y) => panic!("{}", y)
                     };
+
+        }
 
 
         let wordidx = wordidx_builder.join().unwrap();
@@ -145,8 +172,20 @@ impl Dict {
             tokens: AtomicCell::new(0),
             size: AtomicCell::new(1),
             entries: AtomicCell::new(0),
-            k: k as u64
+            k: k as u64,
+            bucket_size,
+            max_vocab,
+            half_mask,
+            half_vocab,
+            max_mask
         }
+
+/* pub const BUCKET_SIZE: usize = 31;
+pub const MAX_VOCAB:   usize = 1 << BUCKET_SIZE; // 2 147 483 648
+pub const HALF_VOCAB:  usize = 1 << (BUCKET_SIZE - 1);
+pub const MAX_MASK:    usize = MAX_VOCAB - 1;
+pub const HALF_MASK:   usize = HALF_VOCAB - 1; */
+
     }
 
     #[inline]
@@ -157,7 +196,7 @@ impl Dict {
         //let mut id = self.calc_hash(&kmer); // , &rc
         let hash = kmer as usize;
         // let mut id = hash % HALF_VOCAB;
-        let mut id = (hash ^ HALF_MASK) & HALF_MASK;
+        let mut id = (hash ^ self.half_mask) & self.half_mask;
         let mut cur_word = self.words[id].get();
         let mut retry: usize = 0;
 
@@ -171,9 +210,9 @@ impl Dict {
         {
             retry = retry.saturating_add(1);
             // id = (hash.wrapping_add(retry)) % MAX_VOCAB;
-            id = (hash.wrapping_add(retry) ^ MAX_MASK) & MAX_MASK;
+            id = (hash.wrapping_add(retry) ^ self.max_mask) & self.max_mask;
             if retry > 5_000_000 {
-              assert!(self.entries.load() < MAX_VOCAB as u64, "More entries than MAX_VOCAB!");
+              assert!(self.entries.load() < self.max_vocab as u64, "More entries than MAX_VOCAB!");
               // println!("Error: More than 100,000 tries... Tokens: {} Entries: {}", self.tokens.load(), self.entries.load());
               // println!("Retry: {} Kmer is: {} ID is: {}", retry, String::from_utf8(kmer.to_vec()).unwrap(), id);
             }
@@ -203,7 +242,7 @@ impl Dict {
         //let y = t1ha0(&rc, 42_988_123) as usize % MAX_VOCAB;
 
         //std::cmp::min(x,y)
-        kmerhash_smallest(kmer) as usize % MAX_VOCAB
+        kmerhash_smallest(kmer) as usize % self.max_vocab
     }
 
     pub fn add(&self, kmer: u64) {
@@ -249,7 +288,7 @@ pub fn count_kmers(
     let k = kmer_size.clone();
     let dict_builder = match Builder::new()
                         .name("Dict Builder".into())
-                        .spawn(move || Arc::new(Dict::new(k)))
+                        .spawn(move || Arc::new(Dict::new(k, 28))) // TODO: Make argument-- 31 for nt, 28 for Vvulg
                     {
                         Ok(x)  => x,
                         Err(y) => panic!("{}", y)
@@ -280,22 +319,57 @@ pub fn count_kmers(
     backoff.snooze();
     backoff.snooze();
     backoff.snooze();
+
+    let pb = ProgressBar::new_spinner();
+    pb.enable_steady_tick(120);
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            // For more spinners check out the cli-spinners project:
+            // https://github.com/sindresorhus/cli-spinners/blob/master/spinners.json
+            .tick_strings(&[
+                "▹▹▹▹▹",
+                "▸▹▹▹▹",
+                "▹▸▹▹▹",
+                "▹▹▸▹▹",
+                "▹▹▹▸▹",
+                "▹▹▹▹▸",
+                "▪▪▪▪▪",
+            ])
+            .template("{spinner:.blue} {msg}"),
+    );
+
     while !*generator_done.read().unwrap() {
         backoff.snooze();
     }
 
+    pb.set_message("Joining generator");
     generator.join().expect("Unable to join generator thread...");
+    pb.set_message("Generator joined");
 
     while !seq_queue.is_empty() {
+        pb.set_message(&format!("{} {} {} Waiting for Seq Queue to be empty", dict.size.load(), dict.tokens.load(), jobs.load()));
+        backoff.snooze();
+        backoff.snooze();
+        backoff.snooze();
+        backoff.snooze();
+        backoff.snooze();
         backoff.snooze();
     }
-
-    println!("Seq queue is empty, sending terminate command...");
 
     while jobs.load() > 0 {
         backoff.snooze();
+        pb.set_message(&format!("{} {} {} Finishing Final Jobs", dict.size.load(), dict.tokens.load(), jobs.load()));
+        backoff.snooze();
+        backoff.snooze();
+        backoff.snooze();
+        backoff.snooze();
+        backoff.snooze();
+        backoff.snooze();
+
         // println!("{}", jobs.load());
     }
+
+    pb.finish();
 
     for _ in 0..num_threads {
         match seq_queue.push(ThreadCommand::Terminate) {
@@ -329,7 +403,6 @@ fn kmer_counter_worker_thread (
 
     loop {
         if let Ok(command) = seq_queue.pop() {
-
             // We are finished, end the thread...
             if let ThreadCommand::Terminate = command {
                 return;
@@ -339,22 +412,29 @@ fn kmer_counter_worker_thread (
             jobs.fetch_sub(1);
 
             // TODO: Disable for nt... probably...
-            // for i in 0..kmer_size {
-                let i = 0;
-                let chunks = rawseq[i..].chunks_exact(kmer_size * 4);
+            //for i in 0..kmer_size {
+            for i in 0..kmer_size {
+                // let i = 0;
+                rawseq[i..]
+                    .chunks_exact(kmer_size)
+                    .for_each(|chunk| dict.add(kmerhash_smallest(chunk)));
 
                 // TODO: Handle remainder (could still be > kmer_size)
 
-                for chunk in chunks {
+                /* for chunk in chunks {
                     // TODO: Probably don't need to iterate this.... just do direct slices...
                     let kmers = chunk.chunks_exact(kmer_size).collect::<Vec<&[u8]>>();
-                    let hashes = hash4(kmers[0], kmers[1], kmers[2], kmers[3]);
-                    dict.add(hashes.0);
-                    dict.add(hashes.1);
-                    dict.add(hashes.2);
-                    dict.add(hashes.3);
-                }
-            // }
+                    dict.add(kmerhash_smallest(kmers[0]));
+                    dict.add(kmerhash_smallest(kmers[1]));
+                    dict.add(kmerhash_smallest(kmers[2]));
+                    dict.add(kmerhash_smallest(kmers[3]));
+                    // let hashes = hash4(kmers[0], kmers[1], kmers[2], kmers[3]);
+                    // dict.add(hashes.0);
+                    // dict.add(hashes.1);
+                    // dict.add(hashes.2);
+                    // dict.add(hashes.3);
+                } */
+            }
         } else {
             backoff.snooze();
             backoff.reset();
@@ -368,6 +448,9 @@ mod test {
     use once_cell::sync::OnceCell;
     use thincollections::thin_vec::ThinVec;
     use std::mem;
+
+    use crate::kmer_counting::{*};
+    use crate::kmer_hasher::{hash4};
 
     #[test]
     fn is_not_lock_free_non_zero_u32() {
@@ -403,6 +486,50 @@ mod test {
     fn is_lock_free_non_zero_u64() {
         assert_eq!(AtomicCell::<Option<core::num::NonZeroU64>>::is_lock_free(), true);
     }
+
+    #[test]
+    fn dictionary_generator() {
+        let k = 21;
+        let dict_builder = match Builder::new()
+                        .name("Dict Builder".into())
+                        .spawn(move || Arc::new(Dict::new(k, 8)))
+                    {
+                        Ok(x)  => x,
+                        Err(y) => panic!("{}", y)
+                    };
+        let dict = dict_builder.join().unwrap();
+
+        let k = (b"ACTCACGATCACGATACAAAN", 
+                 b"TCAGTCACTAGCATACAACTC",
+                 b"ACGATCACGATACAAANNNNN",
+                 b"TGACTANCATCANTACTTGGT");
+
+        let krc = (b"NTTTGTATCGTGATCGTGAGT",
+                 b"GAGTTGTATGCTAGTGACTGA",
+                 b"NNNNNTTTGTATCGTGATCGT",
+                 b"ACCAAGTANTGATGNTAGTCA");
+
+        let hashes   = hash4(k.0, k.1, k.2, k.3);
+        let hashesrc = hash4(krc.0, krc.1, krc.2, krc.3);
+
+        dict.add(hashes.0);
+        assert_eq!(dict.tokens.load(), 1, "Wrong number of tokens after first add");
+        dict.add(hashes.0);
+        dict.add(hashes.0);
+        dict.add(hashes.0);
+        dict.add(hashes.0);
+        dict.add(hashes.0);
+        assert_eq!(dict.tokens.load(), 6, "Wrong number of tokens after first add");
+        assert_eq!(dict.entries.load(), 1, "Invalid number of entries");
+        dict.add(hashesrc.0);
+        assert_eq!(dict.tokens.load(), 7, "Wrong number of tokens after first add");
+        assert_eq!(dict.entries.load(), 1, "Invalid number of entries");
+
+        dict.add(hashes.1);
+        assert_eq!(dict.tokens.load(), 8, "Wrong number of tokens after first add");
+        assert_eq!(dict.entries.load(), 2, "Invalid number of entries");
+    }
+
 
     
 

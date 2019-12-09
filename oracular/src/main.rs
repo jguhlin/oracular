@@ -13,11 +13,10 @@ extern crate serde;
 extern crate snap;
 extern crate bincode;
 
-
-extern crate mimalloc;
+/* extern crate mimalloc;
 use mimalloc::MiMalloc;
 #[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
+static GLOBAL: MiMalloc = MiMalloc; */
 
 // Oracular is (very distantly) a synonym of opinionated...
 // That's where the name comes from.

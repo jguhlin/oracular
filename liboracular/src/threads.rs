@@ -49,8 +49,8 @@ pub fn sequence_generator(
 
 {
     let jobs = Arc::new(AtomicCell::new(0 as usize));
-    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(256));
-    let rawseq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(256));
+    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(64));
+    let rawseq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(1024));
     let generator_done = Arc::new(RwLock::new(false));
 
     let generator;
@@ -87,7 +87,7 @@ pub fn sequence_generator(
                             .stack_size(STACKSIZE)
                             .spawn(move||
         {
-            for epoch in 0..epochs {
+            for _ in 0..epochs {
                 let mut seqbuffer: Sequence = Vec::with_capacity(8 * 1024 * 1024); // 8 Mb to start, will likely increase...
                 let mut seqlen: usize = 0;
 
