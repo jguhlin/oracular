@@ -263,7 +263,7 @@ pub const HALF_MASK:   usize = HALF_VOCAB - 1; */
             }
 
             let wordidx = core::num::NonZeroU64::new(self.size.fetch_add(1) as u64);
-            
+
             match self.wordidx[id].compare_and_swap(None, wordidx) {
                 None  => (),
                 Some(_) => // Collision... unlikely to happen, but it could...
@@ -288,7 +288,7 @@ pub fn count_kmers(
     let k = kmer_size.clone();
     let dict_builder = match Builder::new()
                         .name("Dict Builder".into())
-                        .spawn(move || Arc::new(Dict::new(k, 28))) // TODO: Make argument-- 31 for nt, 28 for Vvulg
+                        .spawn(move || Arc::new(Dict::new(k, 29))) // TODO: Make argument-- 31 for nt, 28 for Vvulg
                     {
                         Ok(x)  => x,
                         Err(y) => panic!("{}", y)
@@ -415,25 +415,25 @@ fn kmer_counter_worker_thread (
             //for i in 0..kmer_size {
             for i in 0..kmer_size {
                 // let i = 0;
-                rawseq[i..]
-                    .chunks_exact(kmer_size)
-                    .for_each(|chunk| dict.add(kmerhash_smallest(chunk)));
+                // rawseq[i..]
+                    // .chunks_exact(kmer_size)
+                    // .for_each(|chunk| dict.add(kmerhash_smallest(chunk)));
 
                 // TODO: Handle remainder (could still be > kmer_size)
 
-                /* for chunk in chunks {
+                for chunk in rawseq[i..].chunks_exact(4 * kmer_size) {
                     // TODO: Probably don't need to iterate this.... just do direct slices...
                     let kmers = chunk.chunks_exact(kmer_size).collect::<Vec<&[u8]>>();
-                    dict.add(kmerhash_smallest(kmers[0]));
-                    dict.add(kmerhash_smallest(kmers[1]));
-                    dict.add(kmerhash_smallest(kmers[2]));
-                    dict.add(kmerhash_smallest(kmers[3]));
-                    // let hashes = hash4(kmers[0], kmers[1], kmers[2], kmers[3]);
-                    // dict.add(hashes.0);
-                    // dict.add(hashes.1);
-                    // dict.add(hashes.2);
-                    // dict.add(hashes.3);
-                } */
+                    // dict.add(kmerhash_smallest(kmers[0]));
+                    // dict.add(kmerhash_smallest(kmers[1]));
+                    // dict.add(kmerhash_smallest(kmers[2]));
+                    // dict.add(kmerhash_smallest(kmers[3]));
+                    let hashes = hash4(kmers[0], kmers[1], kmers[2], kmers[3]);
+                    dict.add(hashes.0);
+                    dict.add(hashes.1);
+                    dict.add(hashes.2);
+                    dict.add(hashes.3);
+                }
             }
         } else {
             backoff.snooze();
