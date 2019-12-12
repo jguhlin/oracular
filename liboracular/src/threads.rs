@@ -17,7 +17,7 @@ use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 
 const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
-const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
+const WORKERSTACKSIZE: usize = 16 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 
 pub type Sequence = Vec<u8>;
 
@@ -49,7 +49,7 @@ pub fn sequence_generator(
 
 {
     let jobs = Arc::new(AtomicCell::new(0 as usize));
-    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(64));
+    let seq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(256));
     let rawseq_queue = Arc::new(ArrayQueue::<ThreadCommand<Sequence>>::new(1024));
     let generator_done = Arc::new(RwLock::new(false));
 
@@ -60,7 +60,7 @@ pub fn sequence_generator(
     let filename = filename.to_string();
 
     // IO-bound, so 4 threads never seems to hurt anything (but seems to help)
-    for _ in 0..4 {
+    for _ in 0..2 {
         let seq_queue = Arc::clone(&seq_queue);
         let rawseq_queue = Arc::clone(&rawseq_queue);
         let jobs = Arc::clone(&jobs);
@@ -162,7 +162,7 @@ pub fn sequence_generator(
 
             }
             *generator_done.write().unwrap() = true;
-            for _ in 0..4 {
+            for _ in 0..2 {
                 let mut result = rawseq_queue.push(ThreadCommand::Terminate);
                 while let Err(PushError(wp)) = result {
                     result = rawseq_queue.push(wp);
@@ -201,15 +201,17 @@ fn io_worker_thread(
             
             for (start_coords, end_coords) in coords {
 
-                if (end_coords - start_coords) >= kmer_size {
+                if (end_coords - start_coords) >= (kmer_size * 10) {
 
-                    jobs.fetch_add(1 as usize);
-                    let wp = ThreadCommand::Work(rawseq[start_coords..end_coords].to_vec());
+                    for i in 0..kmer_size {
+                        jobs.fetch_add(1 as usize);
+                        let wp = ThreadCommand::Work(rawseq[start_coords+i..end_coords].to_vec());
 
-                    let mut result = seq_queue.push(wp);
-                    while let Err(PushError(wp)) = result {
-                        backoff.snooze();
-                        result = seq_queue.push(wp);
+                        let mut result = seq_queue.push(wp);
+                        while let Err(PushError(wp)) = result {
+                            backoff.snooze();
+                            result = seq_queue.push(wp);
+                        }
                     }
 
                 }

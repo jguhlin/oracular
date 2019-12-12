@@ -5,6 +5,8 @@ use opinionated::fasta::{complement_nucleotides};
 
 use std::sync::{Arc};
 
+use std::mem;
+
 use std::thread::Builder;
 
 use std::hash::BuildHasherDefault;
@@ -194,7 +196,11 @@ pub const HALF_MASK:   usize = HALF_VOCAB - 1; */
 
         // let hash = kmerhash_smallest(&kmer) as usize;
         //let mut id = self.calc_hash(&kmer); // , &rc
-        let hash = kmer as usize;
+        let kmer_as_u8: [u8; 8] = unsafe { mem::transmute(kmer) };
+
+        // This helps distribute the hashes even better, speeding it up!
+        let hash = t1ha0(&kmer_as_u8, self.max_vocab as u64) as usize;
+        //let x = t1ha0(&kmer, 42_988_123) as usize % MAX_VOCAB;
         // let mut id = hash % HALF_VOCAB;
         let mut id = (hash ^ self.half_mask) & self.half_mask;
         let mut cur_word = self.words[id].get();
@@ -413,15 +419,15 @@ fn kmer_counter_worker_thread (
 
             // TODO: Disable for nt... probably...
             //for i in 0..kmer_size {
-            for i in 0..kmer_size {
+            // for i in 0..kmer_size {
                 // let i = 0;
-                // rawseq[i..]
-                    // .chunks_exact(kmer_size)
-                    // .for_each(|chunk| dict.add(kmerhash_smallest(chunk)));
+                rawseq
+                    .chunks_exact(kmer_size)
+                    .for_each(|chunk| dict.add(kmerhash_smallest(chunk)));
 
                 // TODO: Handle remainder (could still be > kmer_size)
 
-                for chunk in rawseq[i..].chunks_exact(4 * kmer_size) {
+                /* for chunk in rawseq.chunks_exact(4 * kmer_size) {
                     // TODO: Probably don't need to iterate this.... just do direct slices...
                     let kmers = chunk.chunks_exact(kmer_size).collect::<Vec<&[u8]>>();
                     // dict.add(kmerhash_smallest(kmers[0]));
@@ -433,8 +439,8 @@ fn kmer_counter_worker_thread (
                     dict.add(hashes.1);
                     dict.add(hashes.2);
                     dict.add(hashes.3);
-                }
-            }
+                } */
+            // }
         } else {
             backoff.snooze();
             backoff.reset();
