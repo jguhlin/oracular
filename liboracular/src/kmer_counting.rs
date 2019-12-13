@@ -65,7 +65,7 @@ pub struct FinalDict {
 
 impl Dict {
 
-    // TODO: Mostly works with SIMD version...
+    // TODO: Make multi-threaded, this is the slow part now...
     pub fn convert_to_final(&self) -> FinalDict {
         
         let mut words: HashMap<String, u64, _> = FnvHashMap::default();
@@ -73,11 +73,26 @@ impl Dict {
 
         let mut tokens = 0;
 
-        for x in self.words
+        /* for x in self.words
                     .iter()
-                    .filter_map(|x| x.get()) {
-            let id = self.get_id(*x);
-            let count = self.counts[self.wordidx[id].load().expect("Error getting wordidx[id]").get() as usize].load();
+                    .filter_map(|x| x.get()) { */
+            // let id = self.get_id(*x);
+        for (id, countid) in self.wordidx
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, countid_)| countid_.load() != None)
+                    .filter(|(_, countid_)| countid_.load().unwrap().get() != 0)
+                    .map(|(id, countid_)| (id, countid_.load().unwrap().get() as usize))
+                    {
+                    //.filter_map(|x| x.load()) {
+                    //.map(|x| x.get() as usize) {
+
+            let x = match self.words[id].get() {
+                Some(x) => x,
+                None    => continue //panic!("Not found: {} {}", id, self.counts[id].load())
+            };
+            // let count = self.counts[self.wordidx[id].load().expect("Error getting wordidx[id]").get() as usize].load();
+            let count = self.counts[countid].load();
 
             // let xstr = unsafe { String::from_utf8_unchecked(x) };
             // let rcstr = unsafe { String::from_utf8_unchecked(rc.to_vec()) };
@@ -87,7 +102,7 @@ impl Dict {
 
             *words.entry(xstr).or_insert(0) += count;
             *words.entry(rcstr).or_insert(0) += count;
-            tokens += count;
+            tokens += count + count;
         }
 
         FinalDict { 
@@ -200,7 +215,7 @@ pub const HALF_MASK:   usize = HALF_VOCAB - 1; */
 
         // This helps distribute the hashes even better, speeding it up!
         let hash = t1ha0(&kmer_as_u8, self.max_vocab as u64) as usize;
-        //let x = t1ha0(&kmer, 42_988_123) as usize % MAX_VOCAB;
+
         // let mut id = hash % HALF_VOCAB;
         let mut id = (hash ^ self.half_mask) & self.half_mask;
         let mut cur_word = self.words[id].get();
@@ -251,6 +266,14 @@ pub const HALF_MASK:   usize = HALF_VOCAB - 1; */
         kmerhash_smallest(kmer) as usize % self.max_vocab
     }
 
+    /*
+     *  wordidx[id] = idsize
+     *    words[id] = kmer
+     * 
+     *  counts[idsize]
+     * 
+     */
+
     pub fn add(&self, kmer: u64) {
         self.tokens.fetch_add(1);
 
@@ -258,12 +281,12 @@ pub const HALF_MASK:   usize = HALF_VOCAB - 1; */
         // let id = kmer as usize;
 
         if self.wordidx[id].load() == None {
-
             let word = kmer;
             // let mut word = ThinVec::with_capacity(kmer.len());
             // word.extend_from_slice(&kmer);
             if let Err(val) = self.words[id].set(word) {
                 // Another thread beat us to it, start over...
+                self.tokens.fetch_sub(1);
                 self.add(val); 
                 return;
             }
@@ -274,6 +297,7 @@ pub const HALF_MASK:   usize = HALF_VOCAB - 1; */
                 None  => (),
                 Some(_) => // Collision... unlikely to happen, but it could...
                 {
+                    self.tokens.fetch_sub(1);
                     self.add(kmer);
                     return;
                 }
@@ -375,26 +399,26 @@ pub fn count_kmers(
         // println!("{}", jobs.load());
     }
 
-    pb.finish();
-
     for _ in 0..num_threads {
+        pb.set_message(&format!("{} {} {} Finishing Final Jobs", dict.size.load(), dict.tokens.load(), jobs.load()));
         match seq_queue.push(ThreadCommand::Terminate) {
             Ok(_) => (),
             Err(x) => panic!("Unable to send command... {:#?}", x)
         }
     }
 
-    println!("Terminate commands sent, joining worker threads");
+    pb.set_message(&format!("{} {} {} Finishing Final Jobs", dict.size.load(), dict.tokens.load(), jobs.load()));
 
     for child in children {
+        pb.set_message(&format!("{} {} {} Finishing Final Jobs", dict.size.load(), dict.tokens.load(), jobs.load()));
         match child.join() {
             Ok(_) => (),
             Err(x) => panic!("Error joining worker thread... {:#?}", x)
         }
     }
 
-    println!("Worker threads joined, getting dictionary stats...");
-
+    pb.set_message(&format!("Finished counting kmers"));
+    pb.finish();
     dict
 
 }
@@ -421,12 +445,17 @@ fn kmer_counter_worker_thread (
             //for i in 0..kmer_size {
             // for i in 0..kmer_size {
                 // let i = 0;
+
+                // 861.82user 167.09system 6:27.64elapsed 265%CPU (0avgtext+0avgdata 54289764maxresident)k
+                // k=21, Vvulg.fna, t=16
                 rawseq
                     .chunks_exact(kmer_size)
                     .for_each(|chunk| dict.add(kmerhash_smallest(chunk)));
 
                 // TODO: Handle remainder (could still be > kmer_size)
 
+                // 822.36user 180.69system 7:04.79elapsed 236%CPU (0avgtext+0avgdata 54289232maxresident)k
+                // k=21, Vvulg.fna, t=16
                 /* for chunk in rawseq.chunks_exact(4 * kmer_size) {
                     // TODO: Probably don't need to iterate this.... just do direct slices...
                     let kmers = chunk.chunks_exact(kmer_size).collect::<Vec<&[u8]>>();

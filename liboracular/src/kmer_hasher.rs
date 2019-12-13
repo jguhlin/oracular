@@ -176,11 +176,18 @@ fn _get_pos(pos: usize, hash: u64) -> char {
 
 #[inline(always)]
 pub fn convert_to_kmer(k: usize, hash: u64) -> String {
-    let mut kmer: String = String::with_capacity(21);
+    let mut kmer: String = String::with_capacity(k);
+    for i in (0..k).rev() {
+        kmer.push(_get_pos(i, hash));
+    }
+    // return kmer[(21 - k)..].to_string()
+    kmer
+    
+    /* let mut kmer: String = String::with_capacity(21);
     for i in (0..21).rev() {
         kmer.push(_get_pos(i, hash));
     }
-    return kmer[(21 - k)..].to_string()
+    return kmer[(21 - k)..].to_string() */
 }
 
 #[cfg(test)]
