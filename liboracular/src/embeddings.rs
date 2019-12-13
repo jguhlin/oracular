@@ -253,13 +253,11 @@ fn embedding_worker<R, V>(
 
             let mut sentence: Vec<String> = Vec::new();
 
-            for i in kmer_steps.iter() {
-                rawseq[*i..].chunks_exact(kmer_size).for_each(|x| { 
-                    unsafe { sentence.push(String::from_utf8_unchecked(x.to_vec())); }
-                });
-                sgd.update_sentence(&sentence, lr);
-                sentence.clear();
-            }
+            rawseq.chunks_exact(kmer_size).for_each(|x| { 
+                unsafe { sentence.push(String::from_utf8_unchecked(x.to_vec())); }
+            });
+            sgd.update_sentence(&sentence, lr);
+            sentence.clear();
 
             let mut rc = rawseq.clone();
             complement_nucleotides(&mut rc);
