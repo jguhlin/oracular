@@ -46,7 +46,6 @@ pub fn build_vocab_from_finaldict(dict: FinalDict, mincount: usize, min_n: usize
         }
     }
 
-
     words.sort_unstable_by(|w1, w2| w2.cmp(&w1));
 
     let mut ngrams = ngram_counts

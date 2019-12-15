@@ -33,7 +33,7 @@ impl Model {
 
         Model {
             vocab: bincode::deserialize_from(&mut BufReader::new(kmercounts_fh)).expect("Unable to read to bincode file"),
-            embeddings: Embeddings::read_embeddings(&mut reader).unwrap(),
+            embeddings: Embeddings::mmap_embeddings(&mut reader).unwrap(),
             k: k as usize
         }
     }
@@ -74,6 +74,7 @@ impl Model {
            match self.embeddings.embedding_with_norm(&kmer) {
             Some(x) => x.embedding.into_owned(),
             None    => panic!("Unable to get embeddings for {}", kmer)
+            // Probably have to use the ngrams module to get indices, and then average...
         }
     }
 
