@@ -26,6 +26,15 @@ pub enum ThreadCommand<T> {
     Terminate,
 }
 
+pub struct SequenceTargetContexts {
+    pub id: String,
+    pub target: Vec<u8>,
+    pub contexts: Vec<Vec<u8>>
+}
+
+pub type SequenceBatch = Vec<SequenceTargetContexts>;
+
+
 impl ThreadCommand<Sequence> {
     // Consumes the ThreadCommand, which is just fine...
     pub fn unwrap(self) -> Sequence {
@@ -35,6 +44,17 @@ impl ThreadCommand<Sequence> {
         }
     }
 }
+
+impl ThreadCommand<SequenceTargetContexts> {
+    // Consumes the ThreadCommand, which is just fine...
+    pub fn unwrap(self) -> SequenceTargetContexts {
+        match self {
+            ThreadCommand::Work(x)   => x,
+            ThreadCommand::Terminate => panic!("Unable to unwrap terminate command"),
+        }
+    }
+}
+
 
 // Takes a file and submits Sequence type to buffers...
 // Fills up the seq_buffer that it returns

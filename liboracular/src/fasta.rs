@@ -1,4 +1,4 @@
-use crate::threads::{sequence_generator, Sequence, ThreadCommand};
+use crate::threads::{sequence_generator, Sequence, ThreadCommand, SequenceTargetContexts, SequenceBatch};
 
 use crossbeam::queue::{ArrayQueue, PushError};
 use std::sync::{Arc, RwLock};
@@ -6,15 +6,10 @@ use crossbeam::atomic::AtomicCell;
 use opinionated::fasta::{complement_nucleotides};
 use crossbeam::utils::Backoff;
 
+use rand::thread_rng;
+use rand::seq::SliceRandom;
+
 use std::thread::Builder;
-
-pub struct SequenceTargetContexts {
-    pub id: String,
-    pub target: Vec<u8>,
-    pub contexts: Vec<Vec<u8>>
-}
-
-pub type SequenceBatch = Vec<SequenceTargetContexts>;
 
 const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 
@@ -35,6 +30,7 @@ const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > B
 /// So this function fills up a buffer with *buffer_size* sets of *batch_size* SequenceTargetContexts, waiting for
 /// python or another function to pull from it.
 /// 
+/// THIS FOLLOWING IS A LIE
 /// Shuffling is done on windows of *shuffle_buffer* size (Recommend: 200k or more)
 /// The FASTA file should probably itself be pre-shuffled to help things out... (TEST THIS TODO)
 /// 
@@ -49,8 +45,7 @@ pub fn parse_ntfasta_target_contexts(
 
         -> Arc<ArrayQueue<ThreadCommand<SequenceBatch>>> {
     
-
-    let unshuffled_queue   = Arc::new(ArrayQueue::<ThreadCommand<SequenceTargetContexts>>::new(buffer_size));
+    let unshuffled_queue   = Arc::new(ArrayQueue::<ThreadCommand<SequenceTargetContexts>>::new(shuffle_buffer));
     let batch_queue        = Arc::new(ArrayQueue::<ThreadCommand<SequenceBatch>>::new(buffer_size));
 
     let (seq_queue, jobs, generator_done, generator, mut children) 
@@ -74,12 +69,97 @@ pub fn parse_ntfasta_target_contexts(
         children.push(child);
     }
 
-    // Thread to handle shuffling and submitting batches...
+    // Thread to handle some minor shuffling and putting them into batches...
+
+    {
+        let batch_queue = Arc::clone(&batch_queue);
+        let jobs = Arc::clone(&jobs);
+
+        let child = match Builder::new()
+            .name("ShuffleAndBatch".into())
+            .stack_size(WORKERSTACKSIZE)
+            .spawn(move || shuffle_and_batch(batch_size, unshuffled_queue, batch_queue, jobs)) {
+                Ok(x) => x,
+                Err(y) => panic!("Unable to create shuffle and batch thread {}", y)
+            };
+
+        children.push(child);
+    }
 
     // Need to return things (generator_done, generator, jobs, children) so that other threads/processes can handle them...
 
-    batch_queue
+    // The real one 
+    // (batch_queue, generator_done, jobs)
+    batch_queue // Hold us over...
 }
+
+fn shuffle_and_batch(
+    batch_size: usize, 
+    unshuffled_queue: Arc<ArrayQueue<ThreadCommand<SequenceTargetContexts>>>,
+    batch_queue: Arc<ArrayQueue<ThreadCommand<SequenceBatch>>>, 
+    jobs: Arc<AtomicCell<usize>>) 
+{
+
+    let backoff = Backoff::new();
+
+    let mut received: Vec<SequenceTargetContexts> = Vec::with_capacity(batch_size*10);
+
+    loop {
+        if let Ok(command) = unshuffled_queue.pop() {
+
+            // We are finished, end the thread...
+            if let ThreadCommand::Terminate = command {
+                while received.len() > 0 {
+                    received.shuffle(&mut thread_rng()); // Give it a "good" shuffle
+
+                    let this_batch_size = 
+                        if received.len() > batch_size {
+                            batch_size
+                        } else {
+                            received.len()
+                        };
+
+                    let batch: Vec<SequenceTargetContexts>;
+                    batch = received.drain(0..this_batch_size).collect();
+    
+                    let wp = ThreadCommand::Work(batch);
+    
+                    let mut result = batch_queue.push(wp);
+                    while let Err(PushError(wp)) = result {
+                        backoff.snooze();
+                        result = batch_queue.push(wp);
+                    }
+                }
+                
+                return;
+            }
+
+            received.push(command.unwrap());
+
+            jobs.fetch_sub(1); // Yes? No? Not keeping tracking of it right now...
+
+            if received.len() >= batch_size*10 {
+                received.shuffle(&mut thread_rng()); // Give it a "good" shuffle
+
+                let batch: Vec<SequenceTargetContexts>;
+                batch = received.drain(0..batch_size).collect();
+
+                let wp = ThreadCommand::Work(batch);
+
+                let mut result = batch_queue.push(wp);
+                while let Err(PushError(wp)) = result {
+                    backoff.snooze();
+                    result = batch_queue.push(wp);
+                }
+            }
+
+        } else {
+            backoff.snooze();
+            backoff.reset();
+        }
+    }
+}
+
 
 /// This function does the work of splitting up kmers into target and contexts...
 /// and shuffling it off to raw_queue. Reverse complement is handled in io_worker!
@@ -149,3 +229,4 @@ fn ntfasta_worker_thread (
         }
     }
 }
+
