@@ -22,10 +22,5 @@ extern crate lazy_static;
 extern crate static_assertions;
 
 mod utils;
-pub mod kmer_counting;
 mod threads;
-pub mod vocab;
-pub mod embeddings;
-pub mod kmervocab;
-pub mod model;
-pub mod kmer_hasher;
+mod fasta;
