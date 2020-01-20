@@ -2,14 +2,15 @@
 members = [
     "./oracular",
     "./liboracular",
-    # "./pyracular",
+    "./pyracular",
 ]
 
 [profile.release]
 opt-level = 3
+lto = true
 # debug = true # Eventually remove this.... but good to valgrind
 
 [profile.dev]
-opt-level = 3 # Memory allocation is too slow otherwise...
+# opt-level = 3 # Memory allocation is too slow otherwise...
 debug = true # Eventually remove this.... but good to valgrind
-lto = true
+# lto = true

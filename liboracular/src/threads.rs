@@ -1,5 +1,5 @@
 use crossbeam::atomic::AtomicCell;
-use opinionated::fasta::{capitalize_nucleotides};
+use opinionated::fasta::{capitalize_nucleotides, complement_nucleotides};
 
 use std::sync::{Arc, RwLock};
 
@@ -13,13 +13,13 @@ use std::io::{BufReader, Read, BufRead};
 use crossbeam::queue::{ArrayQueue, PushError};
 use crossbeam::utils::Backoff;
 
-use indicatif::ProgressBar;
-use indicatif::ProgressStyle;
-
 const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 
-pub type Sequence = Vec<u8>;
+pub struct Sequence {
+    pub rawseq: Vec<u8>,
+    pub id:     String,
+}
 
 pub enum ThreadCommand<T> {
     Work(T),
@@ -42,7 +42,6 @@ impl ThreadCommand<Sequence> {
 pub fn sequence_generator(
     kmer_size: usize,
     filename: &str,
-    msg: Arc<String>,
     epochs: u64
 ) -> (Arc<ArrayQueue<ThreadCommand<Sequence>>>, Arc<AtomicCell<usize>>, Arc<RwLock<bool>>, JoinHandle<()>, Vec<JoinHandle<()>>)
 // seq_queue jobs generator_done generator children
@@ -80,15 +79,16 @@ pub fn sequence_generator(
         let generator_done = Arc::clone(&generator_done);
         let rawseq_queue = Arc::clone(&rawseq_queue);
         let jobs = Arc::clone(&jobs);
-        let mut buffer: Sequence = Vec::with_capacity(1024);
+        let mut buffer: Vec<u8> = Vec::with_capacity(1024);
 
         generator = thread::Builder::new()
                             .name("Generator".to_string())
                             .stack_size(STACKSIZE)
                             .spawn(move||
         {
-            for epoch in 0..epochs {
-                let mut seqbuffer: Sequence = Vec::with_capacity(8 * 1024 * 1024); // 8 Mb to start, will likely increase...
+            for _ in 0..epochs {
+                let mut id: String = String::from("INVALID_ID_FIRST_ENTRY_YOU_SHOULD_NOT_SEE_THIS");
+                let mut seqbuffer: Vec<u8> = Vec::with_capacity(8 * 1024 * 1024); // 8 Mb to start, will likely increase...
                 let mut seqlen: usize = 0;
 
                 let file = match File::open(&filename) {
@@ -96,18 +96,12 @@ pub fn sequence_generator(
                     Ok(file) => file,
                 };
 
-                let pb = ProgressBar::new(file.metadata().unwrap().len());
-
                 let file = BufReader::with_capacity(64 * 1024 * 1024, file);
 
-                pb.set_style(ProgressStyle::default_bar()
-                    .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>5}/{len:5} {eta_precise} {msg}")
-                    .progress_chars("█▇▆▅▄▃▂▁  "));
-
                 let fasta: Box<dyn Read> = if filename.ends_with("gz") {
-                    Box::new(flate2::read::GzDecoder::new(pb.wrap_read(file)))
+                    Box::new(flate2::read::GzDecoder::new(file))
                 } else {
-                    Box::new(pb.wrap_read(file))
+                    Box::new(file)
                 };
 
                 let mut reader = BufReader::with_capacity(128 * 1024 * 1024, fasta);
@@ -115,11 +109,11 @@ pub fn sequence_generator(
                 let backoff = Backoff::new();
 
                 while let Ok(bytes_read) = reader.read_until(b'\n', &mut buffer) {
-                // pb.set_message("hello");
-                    if bytes_read == 0 {
+
+                    if bytes_read == 0 { // No more reads, thus no more data...
                         // Submit the last sequence (or in the case of some genomes, the entire sequence)
                         jobs.fetch_add(1 as usize);
-                        let wp = ThreadCommand::Work(seqbuffer[..seqlen].to_vec());
+                        let wp = ThreadCommand::Work(Sequence { rawseq: seqbuffer[..seqlen].to_vec(), id: id });
                         seqbuffer.clear();
 
                         let mut result = rawseq_queue.push(wp);
@@ -139,7 +133,7 @@ pub fn sequence_generator(
                         // 62 is a > meaning we have a new sequence id.
                         62 => {
                             jobs.fetch_add(1 as usize);
-                            let wp = ThreadCommand::Work(seqbuffer[..seqlen].to_vec());
+                            let wp = ThreadCommand::Work(Sequence { rawseq: seqbuffer[..seqlen].to_vec(), id: id });
                             seqbuffer.clear();
                             seqlen = 0;
 
@@ -148,7 +142,8 @@ pub fn sequence_generator(
                                 result = rawseq_queue.push(wp);
                             }
 
-                            // pb.set_message(&msg);
+                            let slice_end = bytes_read.saturating_sub(1);
+                            id = String::from_utf8(buffer[0..slice_end].to_vec()).expect("Invalid UTF-8 encoding...");
                         },
                         _  => {
                             let slice_end = bytes_read.saturating_sub(1);
@@ -193,8 +188,10 @@ fn io_worker_thread(
                 return;
             }
 
-            let mut rawseq = command.unwrap();
+            let seqpacket = command.unwrap();
             jobs.fetch_sub(1);
+            let mut rawseq = seqpacket.rawseq;
+            let id         = seqpacket.id;
 
             capitalize_nucleotides(&mut rawseq);
             let coords = super::utils::get_good_sequence_coords(&rawseq);
@@ -204,13 +201,27 @@ fn io_worker_thread(
                 if (end_coords - start_coords) >= kmer_size {
 
                     jobs.fetch_add(1 as usize);
-                    let wp = ThreadCommand::Work(rawseq[start_coords..end_coords].to_vec());
+                    let wp = ThreadCommand::Work(Sequence { rawseq: rawseq[start_coords..end_coords].to_vec(), id: id.clone() });
 
                     let mut result = seq_queue.push(wp);
                     while let Err(PushError(wp)) = result {
                         backoff.snooze();
                         result = seq_queue.push(wp);
                     }
+
+                    let mut rc = rawseq[start_coords..end_coords].to_vec();
+                    complement_nucleotides(&mut rc);
+                    rc.reverse();
+
+                    jobs.fetch_add(1 as usize);
+                    let wp = ThreadCommand::Work(Sequence { rawseq: rc.clone(), id: id.clone() });
+
+                    let mut result = seq_queue.push(wp);
+                    while let Err(PushError(wp)) = result {
+                        backoff.snooze();
+                        result = seq_queue.push(wp);
+                    }
+
 
                 }
                 
