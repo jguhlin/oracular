@@ -34,7 +34,6 @@ pub struct SequenceTargetContexts {
 
 pub type SequenceBatch = Vec<SequenceTargetContexts>;
 
-
 impl ThreadCommand<Sequence> {
     // Consumes the ThreadCommand, which is just fine...
     pub fn unwrap(self) -> Sequence {
@@ -55,6 +54,15 @@ impl ThreadCommand<SequenceTargetContexts> {
     }
 }
 
+impl ThreadCommand<SequenceBatch> {
+    // Consumes the ThreadCommand, which is just fine...
+    pub fn unwrap(self) -> SequenceBatch {
+        match self {
+            ThreadCommand::Work(x)   => x,
+            ThreadCommand::Terminate => panic!("Unable to unwrap terminate command"),
+        }
+    }
+}
 
 // Takes a file and submits Sequence type to buffers...
 // Fills up the seq_buffer that it returns

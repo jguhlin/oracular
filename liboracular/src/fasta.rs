@@ -6,6 +6,8 @@ use crossbeam::atomic::AtomicCell;
 use opinionated::fasta::{complement_nucleotides};
 use crossbeam::utils::Backoff;
 
+use std::thread::JoinHandle;
+
 use rand::thread_rng;
 use rand::seq::SliceRandom;
 
@@ -43,8 +45,13 @@ pub fn parse_ntfasta_target_contexts(
         buffer_size: usize,
         num_threads: usize) 
 
-        -> Arc<ArrayQueue<ThreadCommand<SequenceBatch>>> {
+        -> (Arc<ArrayQueue<ThreadCommand<SequenceBatch>>>,
+            Arc<RwLock<bool>>,
+            Arc<AtomicCell<usize>>,
+            Vec<JoinHandle<()>>)
     
+    {
+
     let unshuffled_queue   = Arc::new(ArrayQueue::<ThreadCommand<SequenceTargetContexts>>::new(shuffle_buffer));
     let batch_queue        = Arc::new(ArrayQueue::<ThreadCommand<SequenceBatch>>::new(buffer_size));
 
@@ -88,9 +95,7 @@ pub fn parse_ntfasta_target_contexts(
 
     // Need to return things (generator_done, generator, jobs, children) so that other threads/processes can handle them...
 
-    // The real one 
-    // (batch_queue, generator_done, jobs)
-    batch_queue // Hold us over...
+    (batch_queue, generator_done, jobs, children)
 }
 
 fn shuffle_and_batch(

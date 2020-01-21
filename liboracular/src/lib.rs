@@ -22,5 +22,5 @@ extern crate lazy_static;
 extern crate static_assertions;
 
 mod utils;
-mod threads;
-mod fasta;
+pub mod threads;
+pub mod fasta;

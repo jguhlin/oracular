@@ -12,5 +12,5 @@ lto = true
 
 [profile.dev]
 # opt-level = 3 # Memory allocation is too slow otherwise...
-debug = true # Eventually remove this.... but good to valgrind
+# debug = true # Eventually remove this.... but good to valgrind
 # lto = true
