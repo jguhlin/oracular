@@ -17,16 +17,15 @@ use std::thread::JoinHandle;
 // use std::fs::File;
 // use std::io::BufReader;
 
-/*
 #[pyclass]
 struct NtFasta {
     batch_queue: Arc<ArrayQueue<ThreadCommand<SequenceBatch>>>,
     generator_done: Arc<RwLock<bool>>,
     jobs: Arc<AtomicCell<usize>>,
     children: Vec<JoinHandle<()>>,
-} */
+}
 
-/* #[pymethods]
+#[pymethods]
 impl NtFasta {
     #[new]
     fn new(
@@ -42,7 +41,7 @@ impl NtFasta {
         NtFasta { batch_queue, generator_done, jobs, children }
     }
 
-    fn next_batch(self) -> PyObject {
+    fn next_batch(&self) -> PyResult<PyObject> {
         let batch = self.batch_queue.pop().unwrap(); // TODO: Add code for when we run out of sequence
 
         let gil = Python::acquire_gil();
@@ -60,17 +59,16 @@ impl NtFasta {
             pybatch.append(pyentry);
         }
 
-        pybatch.to_object(py)
+        Ok(pybatch.to_object(py))
     }
 
-
-}*/
+}
 
 
 /// This module is a python module implemented in Rust.
 #[pymodule]
 fn pyracular(py: Python, m: &PyModule) -> PyResult<()> {
-
+    m.add_class::<NtFasta>()?;
     Ok(())
 }
 
