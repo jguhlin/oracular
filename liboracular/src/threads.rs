@@ -16,20 +16,23 @@ use crossbeam::utils::Backoff;
 const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 
+#[derive(PartialEq)]
 pub struct Sequence {
     pub rawseq: Vec<u8>,
     pub id:     String,
 }
 
+#[derive(PartialEq)]
 pub enum ThreadCommand<T> {
     Work(T),
     Terminate,
 }
 
+#[derive(PartialEq)]
 pub struct SequenceTargetContexts {
     pub id: String,
-    pub target: Vec<u8>,
-    pub contexts: Vec<Vec<u8>>
+    pub target: String,
+    pub contexts: Vec<String>
 }
 
 pub type SequenceBatch = Vec<SequenceTargetContexts>;
@@ -171,7 +174,7 @@ pub fn sequence_generator(
                             }
 
                             let slice_end = bytes_read.saturating_sub(1);
-                            id = String::from_utf8(buffer[0..slice_end].to_vec()).expect("Invalid UTF-8 encoding...");
+                            id = String::from_utf8(buffer[1..slice_end].to_vec()).expect("Invalid UTF-8 encoding...");
                         },
                         _  => {
                             let slice_end = bytes_read.saturating_sub(1);

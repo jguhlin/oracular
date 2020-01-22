@@ -46,6 +46,9 @@ pub fn parse_ntfasta_target_contexts(
         num_threads: usize) 
 
         -> (Arc<ArrayQueue<ThreadCommand<SequenceBatch>>>,
+            Arc<ArrayQueue<ThreadCommand<Sequence>>>,
+            Arc<ArrayQueue<ThreadCommand<SequenceTargetContexts>>>,
+            JoinHandle<()>,
             Arc<RwLock<bool>>,
             Arc<AtomicCell<usize>>,
             Vec<JoinHandle<()>>)
@@ -81,6 +84,7 @@ pub fn parse_ntfasta_target_contexts(
     {
         let batch_queue = Arc::clone(&batch_queue);
         let jobs = Arc::clone(&jobs);
+        let unshuffled_queue = Arc::clone(&unshuffled_queue);
 
         let child = match Builder::new()
             .name("ShuffleAndBatch".into())
@@ -95,7 +99,7 @@ pub fn parse_ntfasta_target_contexts(
 
     // Need to return things (generator_done, generator, jobs, children) so that other threads/processes can handle them...
 
-    (batch_queue, generator_done, jobs, children)
+    (batch_queue, seq_queue, unshuffled_queue, generator, generator_done, jobs, children)
 }
 
 fn shuffle_and_batch(
@@ -110,6 +114,7 @@ fn shuffle_and_batch(
     let mut received: Vec<SequenceTargetContexts> = Vec::with_capacity(batch_size*10);
 
     loop {
+
         if let Ok(command) = unshuffled_queue.pop() {
 
             // We are finished, end the thread...
@@ -192,26 +197,31 @@ fn ntfasta_worker_thread (
             jobs.fetch_sub(1);
 
             let length = rawseq.len();
+
+            if length <= kmer_size*window_size*2+kmer_size {
+                continue
+            }
+
             let query_length = ((window_size * 2) + 1) * kmer_size;
             let end          = length - query_length;
 
             for i in 0..end {
                 let seq = rawseq[i..i+query_length].to_vec();
 
-                let mut contexts: Vec<Vec<u8>> = Vec::with_capacity(window_size*2);
-                let target  : Vec<u8>;
+                let mut contexts: Vec<String> = Vec::with_capacity(window_size*2);
+                let target  : String;
 
                 let kmers: Vec<&[u8]> = seq.chunks_exact(kmer_size).collect();
 
                 for z in 0..window_size {
-                    contexts.push(kmers[z].to_vec());
+                    contexts.push(String::from_utf8(kmers[z].to_vec()).expect("Invalid UTF-8 Encoding"));
                 }
 
                 for z in 0..window_size {
-                    contexts.push(kmers[window_size+z].to_vec());
+                    contexts.push(String::from_utf8(kmers[window_size+z].to_vec()).expect("Invalid UTF-8 Encoding"));
                 }
 
-                target = kmers[window_size].to_vec();
+                target = String::from_utf8(kmers[window_size].to_vec()).expect("Invalid UTF-8 Encoding");
 
                 let seq = SequenceTargetContexts { 
                         target,
