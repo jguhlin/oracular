@@ -131,6 +131,8 @@ pub fn sequence_generator(
 
                 let fasta: Box<dyn Read> = if filename.ends_with("gz") {
                     Box::new(flate2::read::GzDecoder::new(file))
+		} else if filename.ends_with("snappy") {
+		    Box::new(snap::Reader::new(file))
                 } else {
                     Box::new(file)
                 };
