@@ -193,6 +193,7 @@ pub fn sequence_generator(
             for _ in 0..4 {
                 let mut result = rawseq_queue.push(ThreadCommand::Terminate);
                 while let Err(PushError(wp)) = result {
+                    // println!("Parking generator thread...");
                     thread::park();
                     result = rawseq_queue.push(wp);
                 }
@@ -252,7 +253,8 @@ fn io_worker_thread(
 
                     let mut result = seq_queue.push(wp);
                     while let Err(PushError(wp)) = result {
-                        backoff.snooze();
+                        // println!("Parking IO worker thread -- FULL");
+                        thread::park();
                         result = seq_queue.push(wp);
                     }
 
@@ -261,9 +263,10 @@ fn io_worker_thread(
                 
             }
 
+            backoff.reset();
+
         } else {
             backoff.snooze();
-            backoff.reset();
         }
     }
 }

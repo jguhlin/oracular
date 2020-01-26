@@ -141,6 +141,7 @@ fn shuffle_and_batch(
                     let mut result = batch_queue.push(wp);
                     while let Err(PushError(wp)) = result {
                         // backoff.snooze();
+                        // println!("Parking shuffle and batch thread");
                         thread::park();
                         result = batch_queue.push(wp);
                     }
@@ -164,6 +165,7 @@ fn shuffle_and_batch(
                 let mut result = batch_queue.push(wp);
                 while let Err(PushError(wp)) = result {
                     // backoff.snooze();
+                    // println!("Parking shuffle and batch thread...");
                     thread::park();
                     result = batch_queue.push(wp);
                 }
@@ -240,6 +242,7 @@ fn ntfasta_worker_thread (
     
                 let mut result = unshuffled_queue.push(wp);
                 while let Err(PushError(wp)) = result {
+                    // println!("Parking worker thread");
                     thread::park();
                     result = unshuffled_queue.push(wp);
                 }
