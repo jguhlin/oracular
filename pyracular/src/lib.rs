@@ -14,7 +14,6 @@ use crossbeam::atomic::AtomicCell;
 use std::thread::JoinHandle;
 use crossbeam::utils::Backoff;
 
-
 // use std::fs::File;
 // use std::io::BufReader;
 
@@ -26,6 +25,7 @@ struct NtFasta {
     generator_done: Arc<RwLock<bool>>,
     generator: Option<JoinHandle<()>>,
     jobs: Arc<AtomicCell<usize>>,
+    children_asleep: Arc<RwLock<bool>>,
     children: Option<Vec<JoinHandle<()>>>,
     seq_queue_shutdown: bool,
     batch_queue_shutdown: bool,
@@ -43,16 +43,16 @@ impl NtFasta {
         batch_size: usize, 
         shuffle_buffer: usize, 
         buffer_size: usize,
-
         num_threads: usize) -> Self 
     {
-        let (batch_queue, seq_queue, unshuffled_queue, generator, generator_done, jobs, children) = parse_ntfasta_target_contexts(k, &filename, window_size, batch_size, shuffle_buffer, buffer_size, num_threads);
+        let (batch_queue, seq_queue, unshuffled_queue, generator, generator_done, children_asleep, jobs, children) = parse_ntfasta_target_contexts(k, &filename, window_size, batch_size, shuffle_buffer, buffer_size, num_threads);
         NtFasta { 
             batch_queue, 
             seq_queue, 
             unshuffled_queue,
             generator: Some(generator), 
             generator_done, 
+            children_asleep,
             jobs, 
             children: Some(children), 
             num_threads,
@@ -66,6 +66,15 @@ impl NtFasta {
         let mut pop = self.batch_queue.pop();
         let backoff = Backoff::new();
         let batch;
+
+        // Unpark all threads
+        for child in self.children.as_ref().unwrap() {
+            child.thread().unpark();
+        }
+
+        self.generator.as_ref().unwrap().thread().unpark();
+
+
 
         // Generator is done
         if *self.generator_done.read().unwrap() {
@@ -144,8 +153,6 @@ impl NtFasta {
 
             while pop == Err(PopError) {
 
-                backoff.snooze();
-                backoff.snooze();
                 backoff.snooze();
                 pop = self.batch_queue.pop();
             }

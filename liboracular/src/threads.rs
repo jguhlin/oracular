@@ -193,6 +193,7 @@ pub fn sequence_generator(
             for _ in 0..4 {
                 let mut result = rawseq_queue.push(ThreadCommand::Terminate);
                 while let Err(PushError(wp)) = result {
+                    thread::park();
                     result = rawseq_queue.push(wp);
                 }
             }}

@@ -6,6 +6,7 @@ use crossbeam::atomic::AtomicCell;
 use opinionated::fasta::{complement_nucleotides};
 use crossbeam::utils::Backoff;
 
+use std::thread;
 use std::thread::JoinHandle;
 
 use rand::thread_rng;
@@ -50,6 +51,7 @@ pub fn parse_ntfasta_target_contexts(
             Arc<ArrayQueue<ThreadCommand<SequenceTargetContexts>>>,
             JoinHandle<()>,
             Arc<RwLock<bool>>,
+            Arc<RwLock<bool>>,
             Arc<AtomicCell<usize>>,
             Vec<JoinHandle<()>>)
     
@@ -57,6 +59,8 @@ pub fn parse_ntfasta_target_contexts(
 
     let unshuffled_queue   = Arc::new(ArrayQueue::<ThreadCommand<SequenceTargetContexts>>::new(shuffle_buffer));
     let batch_queue        = Arc::new(ArrayQueue::<ThreadCommand<SequenceBatch>>::new(buffer_size));
+
+    let children_asleep = Arc::new(RwLock::new(false));
 
     let (seq_queue, jobs, generator_done, generator, mut children) 
         = sequence_generator(kmer_size, &filename, 1_u64);
@@ -99,7 +103,7 @@ pub fn parse_ntfasta_target_contexts(
 
     // Need to return things (generator_done, generator, jobs, children) so that other threads/processes can handle them...
 
-    (batch_queue, seq_queue, unshuffled_queue, generator, generator_done, jobs, children)
+    (batch_queue, seq_queue, unshuffled_queue, generator, generator_done, children_asleep, jobs, children)
 }
 
 fn shuffle_and_batch(
@@ -111,7 +115,7 @@ fn shuffle_and_batch(
 
     let backoff = Backoff::new();
 
-    let mut received: Vec<SequenceTargetContexts> = Vec::with_capacity(batch_size*10);
+    let mut received: Vec<SequenceTargetContexts> = Vec::with_capacity(batch_size*50);
 
     loop {
 
@@ -136,7 +140,8 @@ fn shuffle_and_batch(
     
                     let mut result = batch_queue.push(wp);
                     while let Err(PushError(wp)) = result {
-                        backoff.snooze();
+                        // backoff.snooze();
+                        thread::park();
                         result = batch_queue.push(wp);
                     }
                 }
@@ -158,14 +163,16 @@ fn shuffle_and_batch(
 
                 let mut result = batch_queue.push(wp);
                 while let Err(PushError(wp)) = result {
-                    backoff.snooze();
+                    // backoff.snooze();
+                    thread::park();
                     result = batch_queue.push(wp);
                 }
             }
 
+            backoff.reset();
+
         } else {
             backoff.snooze();
-            backoff.reset();
         }
     }
 }
@@ -233,14 +240,15 @@ fn ntfasta_worker_thread (
     
                 let mut result = unshuffled_queue.push(wp);
                 while let Err(PushError(wp)) = result {
-                    backoff.snooze();
+                    thread::park();
                     result = unshuffled_queue.push(wp);
                 }
             }
 
+            backoff.reset();
+
         } else {
             backoff.snooze();
-            backoff.reset();
         }
     }
 }
