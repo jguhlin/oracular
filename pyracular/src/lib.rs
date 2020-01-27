@@ -1,10 +1,12 @@
+extern crate rayon;
+
 use liboracular::fasta::{parse_ntfasta_target_contexts};
 use liboracular::threads::{Sequence, ThreadCommand, SequenceBatch, SequenceTargetContexts};
 
 use pyo3::prelude::*;
 // use pyo3::wrap_pyfunction;
 // use pyo3::{PyIterProtocol, PyClassShell};
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyDict, PyList, PyTuple};
 
 // use pyo3::wrap_pyfunction;
 
@@ -25,6 +27,7 @@ struct NtFasta {
     generator_done: Arc<RwLock<bool>>,
     generator: Option<JoinHandle<()>>,
     jobs: Arc<AtomicCell<usize>>,
+    batch_size: usize,
     children_asleep: Arc<RwLock<bool>>,
     children: Option<Vec<JoinHandle<()>>>,
     seq_queue_shutdown: bool,
@@ -48,6 +51,7 @@ impl NtFasta {
         let (batch_queue, seq_queue, unshuffled_queue, generator, generator_done, children_asleep, jobs, children) = parse_ntfasta_target_contexts(k, &filename, window_size, batch_size, shuffle_buffer, buffer_size, num_threads);
         NtFasta { 
             batch_queue, 
+            batch_size,
             seq_queue, 
             unshuffled_queue,
             generator: Some(generator), 
@@ -73,8 +77,6 @@ impl NtFasta {
         }
 
         self.generator.as_ref().unwrap().thread().unpark();
-
-
 
         // Generator is done
         if *self.generator_done.read().unwrap() {
@@ -170,20 +172,33 @@ impl NtFasta {
 
             let gil = Python::acquire_gil();
             let py = gil.python();
-            let pybatch = PyList::empty(py);
+
+            let mut idvec = Vec::with_capacity(self.batch_size);
+            let mut targetvec = Vec::with_capacity(self.batch_size);
+            let mut contextvec = Vec::with_capacity(self.batch_size);
+            // let pybatch = PyList::empty(py);
 
             for entry in batch.unwrap() {
-                let pyentry = PyDict::new(py);
-                pyentry.set_item("ID", entry.id);
-                pyentry.set_item("target", entry.target);
+                // let pyentry = PyDict::new(py);
+                idvec.push(entry.id);
+                targetvec.push(entry.target);
+                contextvec.push(entry.contexts);
+//                pyentry.set_item("ID", entry.id);
+//                pyentry.set_item("target", entry.target);
                 // Convert contexts into PyList
-                let contexts = PyList::new(py, entry.contexts);
-                pyentry.set_item("contexts", contexts);
+//                let contexts = PyList::new(py, entry.contexts);
+//                pyentry.set_item("contexts", contexts);
 
-                pybatch.append(pyentry);
+//                batchvec.push(pyentry);
+                // pybatch.append(pyentry);
             }
 
-            Ok(pybatch.to_object(py))
+            //Ok(PyList::new(py, batchvec).to_object(py))
+            let pyout = PyDict::new(py);
+            pyout.set_item("IDs", idvec);
+            pyout.set_item("contexts", contextvec);
+            pyout.set_item("targets", targetvec);
+            Ok(pyout.to_object(py))
         }
     }
 
