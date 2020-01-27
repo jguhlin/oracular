@@ -152,6 +152,13 @@ impl NtFasta {
         } else {
 
             while pop == Err(PopError) {
+                // Unpark all threads
+                for child in self.children.as_ref().unwrap() {
+                    child.thread().unpark();
+                }
+
+                self.generator.as_ref().unwrap().thread().unpark();
+
 
                 backoff.snooze();
                 pop = self.batch_queue.pop();
