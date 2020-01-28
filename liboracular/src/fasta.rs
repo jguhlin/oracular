@@ -17,7 +17,7 @@ use std::thread::Builder;
 const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 
 /// Meant to be called from pyracular, but can be called from other spots too
-/// # parse_ntfasta_target_contexts
+/// # parse_ctfasta_target_contexts
 /// Parses a nucleotide FASTA file and its reverse complement into batches of 
 /// the FASTA ID, a target kmer (in the middle of window_size kmers) and context kmers
 /// meant to be used in the learning process.
@@ -37,7 +37,7 @@ const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > B
 /// Shuffling is done on windows of *shuffle_buffer* size (Recommend: 200k or more)
 /// The FASTA file should probably itself be pre-shuffled to help things out... (TEST THIS TODO)
 /// 
-pub fn parse_ntfasta_target_contexts(
+pub fn parse_ctfasta_target_contexts(
         kmer_size: usize,
         filename: &str,
         window_size: usize,
@@ -73,11 +73,11 @@ pub fn parse_ntfasta_target_contexts(
         let jobs = Arc::clone(&jobs);
 
         let child = match Builder::new()
-            .name("ntfasta_worker".into())
+            .name("ctfasta_worker".into())
             .stack_size(WORKERSTACKSIZE)
-            .spawn(move || ntfasta_worker_thread(kmer_size, window_size, seq_queue, unshuffled_queue, jobs)) {
+            .spawn(move || ctfasta_worker_thread(kmer_size, window_size, seq_queue, unshuffled_queue, jobs)) {
                 Ok(x)  => x,
-                Err(y) => panic!("Unable to create ntfasta_worker_thread {}", y)
+                Err(y) => panic!("Unable to create ctfasta_worker_thread {}", y)
             };
 
         children.push(child);
@@ -182,7 +182,7 @@ fn shuffle_and_batch(
 
 /// This function does the work of splitting up kmers into target and contexts...
 /// and shuffling it off to raw_queue. Reverse complement is handled in io_worker!
-fn ntfasta_worker_thread (
+fn ctfasta_worker_thread (
     kmer_size: usize, 
     window_size: usize,
     seq_queue: Arc<ArrayQueue<ThreadCommand<Sequence>>>,
