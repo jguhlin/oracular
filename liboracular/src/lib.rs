@@ -15,7 +15,6 @@ extern crate ndarray;
 extern crate snap;
 extern crate bincode;
 
-#[macro_use]
 extern crate lazy_static;
 
 // #[macro_use]

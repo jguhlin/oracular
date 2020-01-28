@@ -35,7 +35,15 @@ pub struct SequenceTargetContexts {
     pub contexts: Vec<String>
 }
 
+#[derive(PartialEq)]
+pub struct SequenceKmers {
+    pub id: String,
+    pub kmers: Vec<String>
+}
+
+// TODO: Should be able to combine these with an ENUM
 pub type SequenceBatch = Vec<SequenceTargetContexts>;
+pub type SequenceBatchKmers = Vec<SequenceKmers>;
 
 impl ThreadCommand<Sequence> {
     // Consumes the ThreadCommand, which is just fine...
@@ -57,9 +65,29 @@ impl ThreadCommand<SequenceTargetContexts> {
     }
 }
 
+impl ThreadCommand<SequenceKmers> {
+    // Consumes the ThreadCommand, which is just fine...
+    pub fn unwrap(self) -> SequenceKmers {
+        match self {
+            ThreadCommand::Work(x)   => x,
+            ThreadCommand::Terminate => panic!("Unable to unwrap terminate command"),
+        }
+    }
+}
+
 impl ThreadCommand<SequenceBatch> {
     // Consumes the ThreadCommand, which is just fine...
     pub fn unwrap(self) -> SequenceBatch {
+        match self {
+            ThreadCommand::Work(x)   => x,
+            ThreadCommand::Terminate => panic!("Unable to unwrap terminate command"),
+        }
+    }
+}
+
+impl ThreadCommand<SequenceBatchKmers> {
+    // Consumes the ThreadCommand, which is just fine...
+    pub fn unwrap(self) -> SequenceBatchKmers {
         match self {
             ThreadCommand::Work(x)   => x,
             ThreadCommand::Terminate => panic!("Unable to unwrap terminate command"),
