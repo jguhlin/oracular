@@ -1,6 +1,6 @@
 extern crate rayon;
 
-use liboracular::fasta::{parse_ntfasta_target_contexts};
+use liboracular::fasta::{parse_ctfasta_target_contexts};
 use liboracular::threads::{Sequence, ThreadCommand, SequenceBatch, SequenceTargetContexts};
 
 use pyo3::prelude::*;
@@ -20,7 +20,7 @@ use crossbeam::utils::Backoff;
 // use std::io::BufReader;
 
 #[pyclass]
-struct NtFasta {
+struct CTFasta {
     batch_queue: Arc<ArrayQueue<ThreadCommand<SequenceBatch>>>,
     seq_queue: Arc<ArrayQueue<ThreadCommand<Sequence>>>,
     unshuffled_queue: Arc<ArrayQueue<ThreadCommand<SequenceTargetContexts>>>,
@@ -37,7 +37,7 @@ struct NtFasta {
 }
 
 #[pymethods]
-impl NtFasta {
+impl CTFasta {
     #[new]
     fn new(
         k: usize, 
@@ -48,8 +48,8 @@ impl NtFasta {
         buffer_size: usize,
         num_threads: usize) -> Self 
     {
-        let (batch_queue, seq_queue, unshuffled_queue, generator, generator_done, children_asleep, jobs, children) = parse_ntfasta_target_contexts(k, &filename, window_size, batch_size, shuffle_buffer, buffer_size, num_threads);
-        NtFasta { 
+        let (batch_queue, seq_queue, unshuffled_queue, generator, generator_done, children_asleep, jobs, children) = parse_ctfasta_target_contexts(k, &filename, window_size, batch_size, shuffle_buffer, buffer_size, num_threads);
+        CTFasta { 
             batch_queue, 
             batch_size,
             seq_queue, 
@@ -208,7 +208,7 @@ impl NtFasta {
 /// This module is a python module implemented in Rust.
 #[pymodule]
 fn pyracular(py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_class::<NtFasta>()?;
+    m.add_class::<CTFasta>()?;
     Ok(())
 }
 
