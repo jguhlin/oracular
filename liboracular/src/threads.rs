@@ -157,13 +157,14 @@ pub fn sequence_generator(
 
                 let file = BufReader::with_capacity(64 * 1024 * 1024, file);
 
-                let fasta: Box<dyn Read> = if filename.ends_with("gz") {
-                    Box::new(flate2::read::GzDecoder::new(file))
-		} else if filename.ends_with("snappy") {
-		    Box::new(snap::Reader::new(file))
-                } else {
-                    Box::new(file)
-                };
+                let fasta: Box<dyn Read> = 
+                    if filename.ends_with("gz") {
+                        Box::new(flate2::read::GzDecoder::new(file))
+            		} else if filename.ends_with("snappy") {
+		                Box::new(snap::Reader::new(file))
+                    } else {
+                        Box::new(file)
+                    };
 
                 let mut reader = BufReader::with_capacity(128 * 1024 * 1024, fasta);
 
