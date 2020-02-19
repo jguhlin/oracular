@@ -161,7 +161,7 @@ pub fn sequence_generator(
                     if filename.ends_with("gz") {
                         Box::new(flate2::read::GzDecoder::new(file))
             		} else if filename.ends_with("snappy") {
-		                Box::new(snap::Reader::new(file))
+		                Box::new(snap::read::FrameDecoder::new(file))
                     } else {
                         Box::new(file)
                     };
