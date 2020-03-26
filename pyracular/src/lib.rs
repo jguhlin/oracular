@@ -3,6 +3,7 @@ extern crate rayon;
 use liboracular::kmers::{KmerWindowGenerator, DiscriminatorMasked, DiscriminatorMaskedGenerator};
 use liboracular::fasta::{parse_ctfasta_target_contexts, parse_fasta_kmers};
 use liboracular::threads::{Sequence, ThreadCommand, SequenceBatch, SequenceTargetContexts, SequenceBatchKmers, SequenceKmers};
+use liboracular::sfasta;
 
 use pyo3::prelude::*;
 // use pyo3::wrap_pyfunction;
@@ -15,8 +16,9 @@ use crossbeam::queue::{ArrayQueue, PopError};
 use std::sync::{Arc, RwLock};
 use crossbeam::atomic::AtomicCell;
 use std::thread::JoinHandle;
-use std::thread;
 use crossbeam::utils::Backoff;
+use pyo3::wrap_pyfunction;
+
 
 // use std::fs::File;
 // use std::io::BufReader;
@@ -498,11 +500,18 @@ impl FastaKmers {
 
 }
 
+#[pyfunction]
+fn convert_fasta_to_sfasta(input: String, output: String) {
+    sfasta::convert_fasta_file(input, output);
+}
+
 /// This module is a python module implemented in Rust.
 #[pymodule]
-fn pyracular(py: Python, m: &PyModule) -> PyResult<()> {
+fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<CTFasta>()?;
     m.add_class::<FastaKmers>()?;
     m.add_class::<DiscriminatorMaskedGeneratorWrapper>()?;
+    m.add_wrapped(wrap_pyfunction!(convert_fasta_to_sfasta))?;
+
     Ok(())
 }
