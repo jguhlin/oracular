@@ -114,11 +114,11 @@ pub fn get_headers_from_sfasta(filename: String) -> Vec<String>
         Ok(file) => file,
     };
 
-    let mut reader = BufReader::with_capacity(32 * 1024 * 1024, fasta);
+    let mut reader = BufReader::with_capacity(32 * 1024 * 1024, file);
 
-    let ids = Vec::with_capacity(2048);
+    let mut ids: Vec<String> = Vec::with_capacity(2048);
 
-    while let Ok(entry) = bincode::deserialize_from(&mut reader) {
+    while let Ok(entry) = bincode::deserialize_from::<_, EntryCompressed>(&mut reader) {
         ids.push(entry.id);
     }
 
