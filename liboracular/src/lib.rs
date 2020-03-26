@@ -25,3 +25,4 @@ pub mod threads;
 pub mod fasta;
 pub mod kmers;
 pub mod io;
+pub mod sfasta;
