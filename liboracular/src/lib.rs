@@ -23,3 +23,5 @@ extern crate static_assertions;
 mod utils;
 pub mod threads;
 pub mod fasta;
+pub mod kmers;
+pub mod io;

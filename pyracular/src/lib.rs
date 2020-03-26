@@ -1,12 +1,13 @@
 extern crate rayon;
 
+use liboracular::kmers::{KmerWindowGenerator, DiscriminatorMasked, DiscriminatorMaskedGenerator};
 use liboracular::fasta::{parse_ctfasta_target_contexts, parse_fasta_kmers};
 use liboracular::threads::{Sequence, ThreadCommand, SequenceBatch, SequenceTargetContexts, SequenceBatchKmers, SequenceKmers};
 
 use pyo3::prelude::*;
 // use pyo3::wrap_pyfunction;
-// use pyo3::{PyIterProtocol, PyClassShell};
 use pyo3::types::{PyDict, PyList};
+use pyo3::{PyIterProtocol};
 
 // use pyo3::wrap_pyfunction;
 
@@ -14,10 +15,123 @@ use crossbeam::queue::{ArrayQueue, PopError};
 use std::sync::{Arc, RwLock};
 use crossbeam::atomic::AtomicCell;
 use std::thread::JoinHandle;
+use std::thread;
 use crossbeam::utils::Backoff;
 
 // use std::fs::File;
 // use std::io::BufReader;
+
+#[inline(always)]
+fn convert_string_to_array(k: usize, s: &[u8]) -> Vec<u8> {
+    let mut out: Vec<u8> = vec![0; k*5];
+
+    let mut x = 0;
+    for c in s {
+        match c {
+            65 => out[5*x] = 1,   // A
+            84 => out[5*x+1] = 1, // T
+            67 => out[5*x+3] = 1, // C
+            71 => out[5*x+4] = 1, // G
+            78 => out[5*x+2] = 1, // N
+            _  => out[5*x+2] = 1, // N for everything else...
+            // A_  => { out[5*x+2] = 1; println!("Invalid Character! {} in {}", c, std::str::from_utf8(s).unwrap()) }  // N
+        };
+
+        x += 1;
+    }
+
+    out
+}
+
+#[pyclass]
+struct DiscriminatorMaskedGeneratorWrapper {
+    iter: Box<dyn Iterator<Item = DiscriminatorMasked>>, // + Send>,
+    batch_size: usize,
+    k: usize,
+    offset: usize,
+}
+
+#[pyproto]
+impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
+    fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        Ok(mypyself.into_py(py))
+    }
+
+    fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
+
+        // Generate Batch
+        let mut batch_kmers: Vec<Vec<Vec<u8>>> = Vec::with_capacity(mypyself.batch_size);
+        let mut batch_id: Vec<String> = Vec::with_capacity(mypyself.batch_size);
+        let mut batch_taxons: Vec<Vec<usize>> = Vec::with_capacity(mypyself.batch_size);
+        let mut batch_taxon: Vec<usize> = Vec::with_capacity(mypyself.batch_size);
+        let mut batch_truth: Vec<Vec<u8>> = Vec::with_capacity(mypyself.batch_size);
+
+        for _ in 0..mypyself.batch_size {
+            let item = match mypyself.iter.next() {
+                Some(x) => x,
+                None    => return Ok(None)
+            };
+
+            let DiscriminatorMasked { kmers, id, taxons, taxon, truth} = item;
+            let kmers = kmers.iter().map(|x| convert_string_to_array(mypyself.k, x)).collect();
+            batch_kmers.push(kmers);
+            batch_id.push(id);
+            batch_taxons.push(taxons);
+            batch_taxon.push(taxon);
+            batch_truth.push(truth);
+        }
+
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        let pyout = PyDict::new(py);
+        pyout.set_item("kmers",  batch_kmers ).expect("Error with Python");
+        pyout.set_item("id",     batch_id    ).expect("Error with Python");
+        pyout.set_item("taxons", batch_taxons).expect("Error with Python");
+        pyout.set_item("taxon",  batch_taxon ).expect("Error with Python");
+        pyout.set_item("truth",  batch_truth ).expect("Error with Python");
+        Ok(Some(pyout.to_object(py)))
+    }
+}
+
+#[pymethods]
+impl DiscriminatorMaskedGeneratorWrapper {
+    #[new]
+    fn new(
+        k: usize, 
+        filename: String, 
+        window_size: usize, 
+        batch_size: usize,
+        replacement_pct: f32,
+    ) -> Self 
+    {
+
+        // Create KmerWindowGenerator
+        let kmer_window_generator = KmerWindowGenerator::new(
+                                        filename, 
+                                        k.clone(), 
+                                        window_size,
+                                        0);
+        
+        let discriminator_masked_generator = DiscriminatorMaskedGenerator::new(
+                                        replacement_pct,
+                                        k.clone(),
+                                        kmer_window_generator);
+
+        DiscriminatorMaskedGeneratorWrapper { 
+            iter: Box::new(discriminator_masked_generator),
+            batch_size: batch_size,
+            k,
+            offset: 0,
+        }
+    }
+}
+
+// SPSC Implementation
+// Single producer, single consumer
+// One thread processes, the other thread generates the data
+// TODO
 
 #[pyclass]
 struct CTFasta {
@@ -195,9 +309,9 @@ impl CTFasta {
 
             //Ok(PyList::new(py, batchvec).to_object(py))
             let pyout = PyDict::new(py);
-            pyout.set_item("IDs", idvec);
-            pyout.set_item("contexts", contextvec);
-            pyout.set_item("targets", targetvec);
+            pyout.set_item("IDs", idvec).expect("Error with Python");
+            pyout.set_item("contexts", contextvec).expect("Error with Python");
+            pyout.set_item("targets", targetvec).expect("Error with Python");
             Ok(pyout.to_object(py))
         }
     }
@@ -376,8 +490,8 @@ impl FastaKmers {
 
             //Ok(PyList::new(py, batchvec).to_object(py))
             let pyout = PyDict::new(py);
-            pyout.set_item("IDs", idvec);
-            pyout.set_item("kmers", kmersvec);
+            pyout.set_item("IDs", idvec).expect("Error with Python");
+            pyout.set_item("kmers", kmersvec).expect("Error with Python");
             Ok(pyout.to_object(py))
         }
     }
@@ -389,15 +503,6 @@ impl FastaKmers {
 fn pyracular(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<CTFasta>()?;
     m.add_class::<FastaKmers>()?;
+    m.add_class::<DiscriminatorMaskedGeneratorWrapper>()?;
     Ok(())
 }
-
-
-/*
-#[cfg(test)]
-mod test {
-    // use std::fs::File;
-    // use std::io::BufReader;
-
-}
-*/

@@ -8,10 +8,18 @@ use crossbeam::utils::Backoff;
 use std::thread;
 use std::thread::JoinHandle;
 
+use std::fs::File;
+use std::io::{BufReader, Read, BufRead};
+
+use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
+
 use rand::thread_rng;
 use rand::seq::SliceRandom;
 
 use std::thread::Builder;
+
+use crate::kmers;
 
 const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 
@@ -33,10 +41,6 @@ const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > B
 /// 
 /// So this function fills up a buffer with *buffer_size* sets of *batch_size* SequenceTargetContexts, waiting for
 /// python or another function to pull from it.
-/// 
-/// THIS FOLLOWING IS A LIE
-/// Shuffling is done on windows of *shuffle_buffer* size (Recommend: 200k or more)
-/// The FASTA file should probably itself be pre-shuffled to help things out... (TEST THIS TODO)
 /// 
 pub fn parse_ctfasta_target_contexts(
         kmer_size: usize,
@@ -179,7 +183,6 @@ fn shuffle_and_batch(
         }
     }
 }
-
 
 /// This function does the work of splitting up kmers into target and contexts...
 /// and shuffling it off to raw_queue. Reverse complement is handled in io_worker!
