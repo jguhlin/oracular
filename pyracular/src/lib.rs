@@ -505,6 +505,12 @@ fn convert_fasta_to_sfasta(input: String, output: String) {
     sfasta::convert_fasta_file(input, output);
 }
 
+#[pyfunction]
+fn get_headers_from_sfasta(input: String) -> Vec<String>
+{
+    sfasta::get_headers_from_sfasta(input)
+}
+
 /// This module is a python module implemented in Rust.
 #[pymodule]
 fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -512,6 +518,7 @@ fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<FastaKmers>()?;
     m.add_class::<DiscriminatorMaskedGeneratorWrapper>()?;
     m.add_wrapped(wrap_pyfunction!(convert_fasta_to_sfasta))?;
+    m.add_wrapped(wrap_pyfunction!(get_headers_from_sfasta))?;
 
     Ok(())
 }

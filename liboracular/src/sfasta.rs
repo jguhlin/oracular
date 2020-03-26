@@ -87,8 +87,10 @@ pub fn convert_fasta_file(filename: String, output: String,)
             // 62 is a > meaning we have a new sequence id.
             62 => {
                 // Write out entry...
-                let entry = generate_sfasta_entry(id, seqbuffer[..seqlen].to_vec());
-                bincode::serialize_into(&mut out_fh, &entry).expect("Unable to write to bincode output");
+                if seqlen > 0 { // Ignore first one..
+                    let entry = generate_sfasta_entry(id, seqbuffer[..seqlen].to_vec());
+                    bincode::serialize_into(&mut out_fh, &entry).expect("Unable to write to bincode output");
+                }
 
                 seqbuffer.clear();
                 seqlen = 0;
@@ -103,7 +105,24 @@ pub fn convert_fasta_file(filename: String, output: String,)
             }
         }
     }
+}
 
+pub fn get_headers_from_sfasta(filename: String) -> Vec<String>
+{
+    let file = match File::open(&filename) {
+        Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
+        Ok(file) => file,
+    };
+
+    let mut reader = BufReader::with_capacity(32 * 1024 * 1024, fasta);
+
+    let ids = Vec::with_capacity(2048);
+
+    while let Ok(entry) = bincode::deserialize_from(&mut reader) {
+        ids.push(entry.id);
+    }
+
+    return ids
 }
 
 /*
