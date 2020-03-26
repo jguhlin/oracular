@@ -51,11 +51,11 @@ pub fn convert_fasta_file(filename: String, output: String,)
     }
 
     let out_file = File::create(output_filename).expect("Unable to write to file");
-    let mut out_fh = BufWriter::with_capacity(32 * 1024 * 1024, out_file);
+    let mut out_fh = BufWriter::with_capacity(64 * 1024 * 1024, out_file);
 
     let mut buffer: Vec<u8> = Vec::with_capacity(1024);
     let mut id: String = String::from("INVALID_ID_FIRST_ENTRY_YOU_SHOULD_NOT_SEE_THIS");
-    let mut seqbuffer: Vec<u8> = Vec::with_capacity(16 * 1024 * 1024); // 8 Mb to start, will likely increase...
+    let mut seqbuffer: Vec<u8> = Vec::with_capacity(64 * 1024 * 1024);
     let mut seqlen: usize = 0;
 
     let file = match File::open(&filename) {
@@ -71,7 +71,7 @@ pub fn convert_fasta_file(filename: String, output: String,)
         Box::new(file)
     };
 
-    let mut reader = BufReader::with_capacity(32 * 1024 * 1024, fasta);
+    let mut reader = BufReader::with_capacity(64 * 1024 * 1024, fasta);
     while let Ok(bytes_read) = reader.read_until(b'\n', &mut buffer) {
 
         if bytes_read == 0 { 
@@ -90,10 +90,10 @@ pub fn convert_fasta_file(filename: String, output: String,)
                 if seqlen > 0 { // Ignore first one..
                     let entry = generate_sfasta_entry(id, seqbuffer[..seqlen].to_vec());
                     bincode::serialize_into(&mut out_fh, &entry).expect("Unable to write to bincode output");
-                }
 
-                seqbuffer.clear();
-                seqlen = 0;
+                    seqbuffer.clear();
+                    seqlen = 0;
+                }
 
                 let slice_end = bytes_read.saturating_sub(1);
                 id = String::from_utf8(buffer[1..slice_end].to_vec()).expect("Invalid UTF-8 encoding...");
@@ -104,6 +104,8 @@ pub fn convert_fasta_file(filename: String, output: String,)
                 seqlen = seqlen.saturating_add(slice_end);
             }
         }
+
+        buffer.clear();
     }
 }
 
