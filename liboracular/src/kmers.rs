@@ -8,6 +8,7 @@ use rand::prelude::*;
 
 use crate::io;
 use crate::sfasta;
+use crate::utils;
 
 // Not as well implemented, but based off of ELECTRA model
 // https://github.com/google-research/electra
@@ -48,6 +49,7 @@ pub struct KmerWindowGenerator {
     needed_sequence: usize,
     curseq: io::Sequence,
     offset: usize,
+    rc: bool,
 }
 
 impl DiscriminatorMaskedGenerator {
@@ -110,12 +112,25 @@ impl KmerWindowGenerator {
                 k: usize,
                 window_size: usize,
                 offset: usize,
+                rc: bool,
             ) -> KmerWindowGenerator {
         let mut sequences = Box::new(sfasta::Sequences::new(filename));
-        let curseq = match sequences.next() {
+        let mut curseq = match sequences.next() {
             Some(x) => x,
             None    => panic!("File is empty or invalid format!")
         };
+
+        if rc {
+            let io::Sequence { id, mut seq } = curseq;
+
+            utils::complement_nucleotides(&mut seq);
+            seq.reverse();
+
+            curseq = io::Sequence { 
+                id, 
+                seq,
+            };
+        }
         
         let kmer_generator = Kmers::new(curseq.seq.clone(), k, offset);
         let needed_sequence = k * window_size;
@@ -128,6 +143,7 @@ impl KmerWindowGenerator {
             needed_sequence, 
             curseq,
             offset,
+            rc,
         }
     }
 }
@@ -144,10 +160,23 @@ impl Iterator for KmerWindowGenerator {
             // Don't have enough remaining sequence to fill out this.
             // Get the next sequence...            
 
-            let curseq: io::Sequence = match self.sequences.next() {
+            let mut curseq: io::Sequence = match self.sequences.next() {
                 Some(x) => x,
                 None    => return None // That's it... no more!
             };
+
+            if self.rc {
+                let io::Sequence { id, mut seq } = curseq;
+    
+                utils::complement_nucleotides(&mut seq);
+                seq.reverse();
+    
+                curseq = io::Sequence { 
+                    id, 
+                    seq,
+                };
+            }
+
             self.curseq = curseq;
             self.kmer_generator.seq = self.curseq.seq.clone();
             self.kmer_generator.curpos = 0;

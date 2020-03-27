@@ -33,3 +33,30 @@ pub fn get_good_sequence_coords (seq: &[u8]) -> Vec<(usize, usize)> {
 
     coords
 }
+
+#[inline(always)]
+fn _complement_nucl(nucl: u8) -> u8 {
+    // Should all be capitalized by now...
+    // N -> 78
+    // A -> 65
+    // C -> 67
+    // G -> 71
+    // T -> 84
+    match &nucl {
+        65 => 84, // A -> T
+        67 => 71, // C -> G
+        84 => 65, // T -> A
+        71 => 67, // G -> C
+        78 => 78, // Complement of N is N
+        _ => 78,  // Everything else -> N
+    }
+}
+
+// Mutability here because we change everything to uppercase
+/// Reverse complement(RC) nucleotides
+#[inline(always)]
+pub fn complement_nucleotides(slice: &mut [u8]) {
+    for x in slice.iter_mut() {
+        *x = _complement_nucl(*x);
+    }
+}

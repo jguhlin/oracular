@@ -54,6 +54,7 @@ struct DiscriminatorMaskedGeneratorWrapper {
     window_size: usize,
     filename: String,
     replacement_pct: f32,
+    rc: bool,
 }
 
 #[pyproto]
@@ -76,15 +77,23 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
                 Some(x) => x,
                 None    => { 
                     mypyself.offset = mypyself.offset + 1;
-                    if mypyself.k == mypyself.offset {
+                    if (mypyself.k == mypyself.offset) && mypyself.rc {
                         return Ok(None)
                     } else {
+
+                        if mypyself.k == mypyself.offset {
+                            mypyself.rc = true;
+                            mypyself.k = 0;
+                        }
+
                         // TODO: Still need RC support
                         let kmer_window_generator = KmerWindowGenerator::new(
                             mypyself.filename.clone(), 
                             mypyself.k.clone(), 
                             mypyself.window_size.clone(),
-                            mypyself.offset.clone());
+                            mypyself.offset.clone(),
+                            mypyself.rc.clone(),
+                        );
 
                         let discriminator_masked_generator = DiscriminatorMaskedGenerator::new(
                             mypyself.replacement_pct.clone(),
@@ -131,7 +140,8 @@ impl DiscriminatorMaskedGeneratorWrapper {
                                         filename.clone(), 
                                         k.clone(), 
                                         window_size,
-                                        0);
+                                        0,
+                                        false);
         
         let discriminator_masked_generator = DiscriminatorMaskedGenerator::new(
                                         replacement_pct,
@@ -146,6 +156,7 @@ impl DiscriminatorMaskedGeneratorWrapper {
             filename: filename.clone(),
             window_size: window_size.clone(),
             replacement_pct,
+            rc: false,
         }
     }
 }
