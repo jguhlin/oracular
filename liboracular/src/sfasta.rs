@@ -225,8 +225,7 @@ fn open_file(filename: String) -> Box<dyn Read> {
     };
 
     let file = BufReader::with_capacity(32 * 1024 * 1024, file);
-    let sfasta: Box<dyn Read> = Box::new(snap::read::FrameDecoder::new(file));
-    let reader = BufReader::with_capacity(32 * 1024 * 1024, sfasta);
+    let reader = BufReader::with_capacity(32 * 1024 * 1024, file);
 
     return Box::new(reader)
 }
