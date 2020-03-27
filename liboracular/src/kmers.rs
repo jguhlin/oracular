@@ -7,16 +7,23 @@ use rand::Rng;
 use rand::prelude::*;
 
 use crate::io;
+use crate::sfasta;
 
 // Not as well implemented, but based off of ELECTRA model
 // https://github.com/google-research/electra
 pub struct DiscriminatorMasked {
     pub kmers: Vec<Vec<u8>>,
     pub id: String,
+    pub truth: Vec<u8>,
+}
+
+/*pub struct DiscriminatorMaskedA2T {
+    pub kmers: Vec<Vec<u8>>,
+    pub id: String,
     pub taxons: Vec<usize>,
     pub taxon: usize,
     pub truth: Vec<u8>,
-}
+} */
 
 pub struct DiscriminatorMaskedGenerator {
     kmer_window_generator: KmerWindowGenerator,
@@ -29,12 +36,12 @@ pub struct DiscriminatorMaskedGenerator {
 pub struct KmerWindow {
     pub kmers: Vec<Vec<u8>>,
     pub id: String,
-    pub taxons: Vec<usize>,
-    pub taxon: usize,
+//    pub taxons: Vec<usize>,
+//    pub taxon: usize,
 }
 
 pub struct KmerWindowGenerator {
-    sequences: io::Sequences,
+    sequences: Box<dyn Iterator<Item = io::Sequence>>,
     window_size: usize,
     k: usize,
     kmer_generator: Kmers,
@@ -49,7 +56,7 @@ impl DiscriminatorMaskedGenerator {
         k: usize,
         generator: KmerWindowGenerator) -> DiscriminatorMaskedGenerator 
     {
-        let mut rng = rand::thread_rng();
+        let rng = rand::thread_rng();
 
         DiscriminatorMaskedGenerator {
             kmer_window_generator: generator,
@@ -64,12 +71,12 @@ impl Iterator for DiscriminatorMaskedGenerator {
     type Item = DiscriminatorMasked;
 
     fn next(&mut self) -> Option<DiscriminatorMasked> {
-        let mut next_item = match self.kmer_window_generator.next() {
+        let next_item = match self.kmer_window_generator.next() {
             Some(x) => x,
             None    => return None
         };
 
-        let KmerWindow { mut kmers, id, taxons, taxon } = next_item;
+        let KmerWindow { mut kmers, id } = next_item;
 
         // TODO: Make switchable, so we can train protein sequences
         // ~2% chance of an N
@@ -90,7 +97,8 @@ impl Iterator for DiscriminatorMaskedGenerator {
             }
         }
 
-        return Some(DiscriminatorMasked { kmers, id, taxons, taxon, truth })
+        // return Some(DiscriminatorMasked { kmers, id, taxons, taxon, truth })
+        return Some(DiscriminatorMasked { kmers, id, truth })
     }
 }
 
@@ -103,7 +111,7 @@ impl KmerWindowGenerator {
                 window_size: usize,
                 offset: usize,
             ) -> KmerWindowGenerator {
-        let mut sequences = io::Sequences::new(filename);
+        let mut sequences = Box::new(sfasta::Sequences::new(filename));
         let curseq = match sequences.next() {
             Some(x) => x,
             None    => panic!("File is empty or invalid format!")
@@ -154,8 +162,8 @@ impl Iterator for KmerWindowGenerator {
         Some(KmerWindow { 
             kmers, 
             id: self.curseq.id.clone(), 
-            taxons: self.curseq.taxons.clone(),
-            taxon: self.curseq.taxon.clone(),
+//            taxons: self.curseq.taxons.clone(),
+//            taxon: self.curseq.taxon.clone(),
         })
 
     }

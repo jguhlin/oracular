@@ -51,10 +51,119 @@ struct DiscriminatorMaskedGeneratorWrapper {
     batch_size: usize,
     k: usize,
     offset: usize,
+    window_size: usize,
+    filename: String,
+    replacement_pct: f32,
 }
 
 #[pyproto]
 impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
+    fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        Ok(mypyself.into_py(py))
+    }
+
+    fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
+
+        // Generate Batch
+        let mut batch_kmers: Vec<Vec<Vec<u8>>> = Vec::with_capacity(mypyself.batch_size);
+        let mut batch_id: Vec<String> = Vec::with_capacity(mypyself.batch_size);
+        let mut batch_truth: Vec<Vec<u8>> = Vec::with_capacity(mypyself.batch_size);
+
+        for _ in 0..mypyself.batch_size {
+            let item = match mypyself.iter.next() {
+                Some(x) => x,
+                None    => { 
+                    mypyself.offset = mypyself.offset + 1;
+                    if mypyself.k == mypyself.offset {
+                        return Ok(None)
+                    } else {
+                        // TODO: Still need RC support
+                        let kmer_window_generator = KmerWindowGenerator::new(
+                            mypyself.filename.clone(), 
+                            mypyself.k.clone(), 
+                            mypyself.window_size.clone(),
+                            mypyself.offset.clone());
+
+                        let discriminator_masked_generator = DiscriminatorMaskedGenerator::new(
+                            mypyself.replacement_pct.clone(),
+                            mypyself.k.clone(),
+                            kmer_window_generator);
+
+                        mypyself.iter = Box::new(discriminator_masked_generator);
+                        mypyself.iter.next().unwrap()
+                    }
+                }
+            };
+
+            let DiscriminatorMasked { kmers, id, truth} = item;
+            let kmers = kmers.iter().map(|x| convert_string_to_array(mypyself.k, x)).collect();
+            batch_kmers.push(kmers);
+            batch_id.push(id);
+            batch_truth.push(truth);
+        }
+
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        let pyout = PyDict::new(py);
+        pyout.set_item("kmers",  batch_kmers ).expect("Error with Python");
+        pyout.set_item("id",     batch_id    ).expect("Error with Python");
+        pyout.set_item("truth",  batch_truth ).expect("Error with Python");
+        Ok(Some(pyout.to_object(py)))
+    }
+}
+
+#[pymethods]
+impl DiscriminatorMaskedGeneratorWrapper {
+    #[new]
+    fn new(
+        k: usize, 
+        filename: String, 
+        window_size: usize, 
+        batch_size: usize,
+        replacement_pct: f32,
+    ) -> Self 
+    {
+
+        // Create KmerWindowGenerator
+        let kmer_window_generator = KmerWindowGenerator::new(
+                                        filename.clone(), 
+                                        k.clone(), 
+                                        window_size,
+                                        0);
+        
+        let discriminator_masked_generator = DiscriminatorMaskedGenerator::new(
+                                        replacement_pct,
+                                        k.clone(),
+                                        kmer_window_generator);
+
+        DiscriminatorMaskedGeneratorWrapper { 
+            iter: Box::new(discriminator_masked_generator),
+            batch_size: batch_size,
+            k,
+            offset: 0,
+            filename: filename.clone(),
+            window_size: window_size.clone(),
+            replacement_pct,
+        }
+    }
+}
+
+// Acc2Tax Discriminator Generator
+// TODO: Move to Acc2Tax OR Have Acc2Tax put a wrapper around this fn! (Even smarter!)
+
+/*
+#[pyclass]
+struct DiscriminatorMaskedGeneratorWrapperA2T {
+    iter: Box<dyn Iterator<Item = DiscriminatorMasked>>, // + Send>,
+    batch_size: usize,
+    k: usize,
+    offset: usize,
+}
+
+#[pyproto]
+impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperA2T {
     fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
         let gil = Python::acquire_gil();
         let py = gil.python();
@@ -98,7 +207,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
 }
 
 #[pymethods]
-impl DiscriminatorMaskedGeneratorWrapper {
+impl DiscriminatorMaskedGeneratorWrapperA2T {
     #[new]
     fn new(
         k: usize, 
@@ -128,7 +237,7 @@ impl DiscriminatorMaskedGeneratorWrapper {
             offset: 0,
         }
     }
-}
+}*/
 
 // SPSC Implementation
 // Single producer, single consumer

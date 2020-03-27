@@ -5,14 +5,11 @@ use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 
 use serde::{Serialize, Deserialize};
-use crate::kmers;
 
 #[derive(PartialEq, Serialize, Deserialize)]
 pub struct Sequence {
     pub seq: Vec<u8>,
     pub id:  String,
-    pub taxons: Vec<usize>,
-    pub taxon: usize,
 }
 
 pub struct Sequences {
@@ -41,7 +38,7 @@ fn open_file_with_progress_bar(filename: String) -> (Box<dyn Read>, ProgressBar)
         Box::new(file)
     };
 
-    let mut reader = BufReader::with_capacity(32 * 1024 * 1024, fasta);
+    let reader = BufReader::with_capacity(32 * 1024 * 1024, fasta);
     return (Box::new(reader), pb)
 }
 
@@ -62,7 +59,7 @@ fn open_file(filename: String) -> Box<dyn Read>
         Box::new(file)
     };
 
-    let mut reader = BufReader::with_capacity(32 * 1024 * 1024, fasta);
+    let reader = BufReader::with_capacity(32 * 1024 * 1024, fasta);
     return Box::new(reader)
 }
 
@@ -72,7 +69,7 @@ impl Iterator for Sequences {
     fn next(&mut self) -> Option<Sequence> {
         let seq: Sequence = match bincode::deserialize_from(&mut self.reader) {
             Ok(x)   => x,
-            Err(_)  => return(None)
+            Err(_)  => return None
         };
         Some(seq)
     }

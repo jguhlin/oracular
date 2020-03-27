@@ -3,21 +3,95 @@ use std::io::BufWriter;
 
 use std::sync::{Arc, RwLock};
 
+use std::convert::From;
+
 use std::fs::File;
 use std::io::{BufReader, Read, BufRead};
 
 use serde::{Serialize, Deserialize};
 
+use crate::io;
+
+/// Represents an entry from an SFASTA file
 #[derive(PartialEq, Serialize, Deserialize)]
 pub struct Entry {
     pub id:  String,
     pub seq: Vec<u8>,
 }
 
+/// SFASTA files stored on disk are bincoded, with the sequence being compressed.
+/// Decompression does not occur unless EntryCompressed is converted to an Entry.
+/// This allows faster searching of SFASTA files without spending CPU cycles on
+/// decompression prematurely.
 #[derive(PartialEq, Serialize, Deserialize)]
 pub struct EntryCompressed {
     pub id:  String,
     pub compressed_seq: Vec<u8>,
+}
+
+/// Iterator to return io::Sequences
+pub struct Sequences {
+    reader: Box<dyn Read>,
+}
+
+// TODO: Should be a TryFrom really...
+/// Convert an EntryCompressed to Entry.
+/// Automatically performs the decompression.
+impl From<EntryCompressed> for Entry {
+    fn from(item: EntryCompressed) -> Self {
+        let len = item.compressed_seq.len();
+        let mut seq_reader = snap::read::FrameDecoder::new(&item.compressed_seq[..]);
+        let mut seq: Vec<u8> = Vec::with_capacity(len * 2);
+        seq_reader.read_to_end(&mut seq).expect("Unable to read compressed sequence");
+        Entry { id: item.id, seq }
+    }
+}
+
+// TODO: Should be a TryFrom really...
+/// Converts an Entry into EntryCompressed. Performs the compression automatically.
+impl From<Entry> for EntryCompressed {
+    fn from(item: Entry) -> Self {
+        let compressed_seq = Vec::with_capacity(item.seq.len());
+        let mut writer = snap::write::FrameEncoder::new(compressed_seq);
+        writer.write_all(&item.seq).expect("Unable to write to vector...");
+        writer.flush().expect("Unable to flush");
+        let compressed_seq = writer.into_inner().unwrap();
+        EntryCompressed{ id: item.id, compressed_seq }
+    }
+}
+
+/// Converts an SFASTA::Entry into io::Sequence for further processing
+/// Really an identity function...
+impl From<Entry> for io::Sequence {
+    fn from(item: Entry) -> Self {
+        io::Sequence { id: item.id, seq: item.seq }
+    }
+}
+
+impl Sequences {
+    /// Given a filename, returns a Sequences variable.
+    /// Can be used as an iterator.
+    pub fn new(filename: String) -> Sequences {
+        return Sequences { reader: open_file(filename) }
+    }
+}
+
+impl Iterator for Sequences {
+    type Item = io::Sequence;
+
+    /// Get the next SFASTA entry as io::Sequence type
+    fn next(&mut self) -> Option<io::Sequence> {
+        let ec: EntryCompressed = match bincode::deserialize_from(&mut self.reader) {
+            Ok(x)   => x,
+            Err(_)  => return None
+        };
+
+        // Have to convert from EntryCompressed to Entry, this handles that middle
+        // conversion.
+        let middle: Entry = ec.into();
+
+        Some(middle.into())
+    }
 }
 
 // sfasta is:
@@ -26,7 +100,8 @@ pub struct EntryCompressed {
 //   snappy compressed sequence
 // TODO: Add some form of indexing?
 
-// TODO: Make into trait and impl and From and To stuff...
+// TODO: Remove this code since we have the trait now...
+/// Should remove...
 fn generate_sfasta_entry(id: String, sequence: Vec<u8>) -> EntryCompressed {
     let mut compressed: Vec<u8> = Vec::with_capacity(sequence.len());
     let mut writer = snap::write::FrameEncoder::new(compressed);
@@ -37,18 +112,15 @@ fn generate_sfasta_entry(id: String, sequence: Vec<u8>) -> EntryCompressed {
     EntryCompressed { id, compressed_seq: compressed }
 }
 
+/// Converts a FASTA file to an SFASTA file...
 pub fn convert_fasta_file(filename: String, output: String,)
 // TODO: Add progress bar option
+//
 // Convert file to bincode/snappy for faster processing
 // Stores accession/taxon information inside the Sequence struct
 {
 
-    let output_filename;
-    if !output.ends_with(".sfasta") {
-        output_filename = format!("{}.sfasta", output);
-    } else {
-        output_filename = output;
-    }
+    let output_filename = check_extension(output);
 
     let out_file = File::create(output_filename).expect("Unable to write to file");
     let mut out_fh = BufWriter::with_capacity(64 * 1024 * 1024, out_file);
@@ -71,7 +143,7 @@ pub fn convert_fasta_file(filename: String, output: String,)
         Box::new(file)
     };
 
-    let mut reader = BufReader::with_capacity(64 * 1024 * 1024, fasta);
+    let mut reader = BufReader::with_capacity(32 * 1024 * 1024, fasta);
     while let Ok(bytes_read) = reader.read_until(b'\n', &mut buffer) {
 
         if bytes_read == 0 { 
@@ -109,6 +181,8 @@ pub fn convert_fasta_file(filename: String, output: String,)
     }
 }
 
+/// Get all IDs from an SFASTA file
+/// Really a debugging function...
 pub fn get_headers_from_sfasta(filename: String) -> Vec<String>
 {
     let file = match File::open(&filename) {
@@ -125,6 +199,36 @@ pub fn get_headers_from_sfasta(filename: String) -> Vec<String>
     }
 
     return ids
+}
+
+
+/// Checks that the file extension ends in .sfasta or adds it if necessary
+#[inline(always)]
+fn check_extension(filename: String) -> String {
+    let outfname;
+    if !filename.ends_with(".sfasta") {
+        outfname = format!("{}.sfasta", filename);
+    } else {
+        outfname = filename;
+    }
+    outfname
+}
+
+/// Opens an SFASTA file and returns a Box<dyn Read> type
+fn open_file(filename: String) -> Box<dyn Read> {
+
+    let filename = check_extension(filename);
+
+    let file = match File::open(&filename) {
+        Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
+        Ok(file) => file,
+    };
+
+    let file = BufReader::with_capacity(32 * 1024 * 1024, file);
+    let sfasta: Box<dyn Read> = Box::new(snap::read::FrameDecoder::new(file));
+    let reader = BufReader::with_capacity(32 * 1024 * 1024, sfasta);
+
+    return Box::new(reader)
 }
 
 /*
