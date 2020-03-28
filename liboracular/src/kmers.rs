@@ -184,8 +184,11 @@ impl Iterator for KmerWindowGenerator {
         }
 
         let mut kmers: Vec<Vec<u8>> = Vec::with_capacity(self.window_size);
-        for _i in 0..self.window_size {
-            kmers.push(self.kmer_generator.next().unwrap());
+        for _ in 0..self.window_size {
+            match self.kmer_generator.next() {
+                Some(x) => kmers.push(x),
+                None    => return None
+            };
         }
 
         Some(KmerWindow { 
@@ -194,7 +197,6 @@ impl Iterator for KmerWindowGenerator {
 //            taxons: self.curseq.taxons.clone(),
 //            taxon: self.curseq.taxon.clone(),
         })
-
     }
 }
 
