@@ -227,7 +227,7 @@ impl Iterator for Kmers {
 
     #[inline(always)]
     fn next(&mut self) -> Option<Vec<u8>> {
-        if (self.offset + self.curpos + self.k) > self.len {
+        if (self.offset + self.curpos + self.k) >= self.len {
             None
         } else {
             let start = self.offset + self.curpos;

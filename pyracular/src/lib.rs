@@ -7,7 +7,7 @@ use liboracular::sfasta;
 
 use pyo3::prelude::*;
 // use pyo3::wrap_pyfunction;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyDict, PyList, PyTuple};
 use pyo3::{PyIterProtocol};
 
 // use pyo3::wrap_pyfunction;
@@ -150,6 +150,118 @@ impl DiscriminatorMaskedGeneratorWrapper {
         DiscriminatorMaskedGeneratorWrapper { 
             iter: Box::new(discriminator_masked_generator),
             batch_size: batch_size,
+            k,
+            offset: 0,
+            filename: filename.clone(),
+            window_size: window_size.clone(),
+            replacement_pct,
+            rc: false,
+        }
+    }
+}
+
+// Non-batch mode
+#[pyclass]
+struct DiscriminatorMaskedGeneratorWrapperNB {
+    iter: Box<dyn Iterator<Item = DiscriminatorMasked>>, // + Send>,
+    k: usize,
+    offset: usize,
+    window_size: usize,
+    filename: String,
+    replacement_pct: f32,
+    rc: bool,
+}
+
+#[pyproto]
+impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
+    fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        Ok(mypyself.into_py(py))
+    }
+
+    fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
+
+        let mut finished = false;
+        let mut item = None;
+
+        while !finished {
+            item = match mypyself.iter.next() {
+                Some(x) => { finished = true; Some(x) },
+                None    => { 
+                    mypyself.offset = mypyself.offset + 1;
+                    if (mypyself.k == mypyself.offset) && mypyself.rc {
+                        return Ok(None)
+                    } else {
+
+                        if mypyself.k == mypyself.offset {
+                            mypyself.rc = true;
+                            mypyself.k = 0;
+                        }
+
+                        let kmer_window_generator = KmerWindowGenerator::new(
+                            mypyself.filename.clone(), 
+                            mypyself.k.clone(), 
+                            mypyself.window_size.clone(),
+                            mypyself.offset.clone(),
+                            mypyself.rc.clone(),
+                        );
+
+                        let discriminator_masked_generator = DiscriminatorMaskedGenerator::new(
+                            mypyself.replacement_pct.clone(),
+                            mypyself.k.clone(),
+                            kmer_window_generator);
+
+                        mypyself.iter = Box::new(discriminator_masked_generator);
+                        continue
+                    }
+                }
+            };
+        }
+
+        if let DiscriminatorMasked { kmers, truth, id: _} = item.unwrap() {
+            let kmers: Vec<Vec<u8>> = kmers.iter().map(|x| convert_string_to_array(mypyself.k, x)).collect();
+
+            let gil = Python::acquire_gil();
+            let py = gil.python();
+            let pyout = PyDict::new(py);
+            // let pyout = PyTuple::new(py, [kmers, truth]);
+            pyout.set_item("kmers", kmers);
+            pyout.set_item("truths", truth);
+
+            Ok(Some(pyout.to_object(py)))
+        } else {
+            return Ok(None)
+        }
+    }
+}
+
+#[pymethods]
+impl DiscriminatorMaskedGeneratorWrapperNB {
+    #[new]
+    fn new(
+        k: usize, 
+        filename: String, 
+        window_size: usize, 
+        replacement_pct: f32,
+    ) -> Self 
+    {
+
+        // Create KmerWindowGenerator
+        let kmer_window_generator = KmerWindowGenerator::new(
+                                        filename.clone(), 
+                                        k.clone(), 
+                                        window_size,
+                                        0,
+                                        false);
+        
+        let discriminator_masked_generator = DiscriminatorMaskedGenerator::new(
+                                        replacement_pct,
+                                        k.clone(),
+                                        kmer_window_generator);
+
+        DiscriminatorMaskedGeneratorWrapperNB { 
+            iter: Box::new(discriminator_masked_generator),
             k,
             offset: 0,
             filename: filename.clone(),
