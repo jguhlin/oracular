@@ -72,7 +72,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
         let mut batch_id: Vec<String> = Vec::with_capacity(mypyself.batch_size);
         let mut batch_truth: Vec<Vec<u8>> = Vec::with_capacity(mypyself.batch_size);
 
-        for _ in 0..mypyself.batch_size {
+        while batch_kmers.len() < mypyself.batch_size {
             let item = match mypyself.iter.next() {
                 Some(x) => x,
                 None    => { 
@@ -86,8 +86,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
                             mypyself.k = 0;
                         }
 
-                        // TODO: Still need RC support
-                        let kmer_window_generator = KmerWindowGenerator::new(
++                        let kmer_window_generator = KmerWindowGenerator::new(
                             mypyself.filename.clone(), 
                             mypyself.k.clone(), 
                             mypyself.window_size.clone(),
@@ -101,7 +100,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
                             kmer_window_generator);
 
                         mypyself.iter = Box::new(discriminator_masked_generator);
-                        mypyself.iter.next().unwrap()
+                        continue
                     }
                 }
             };
