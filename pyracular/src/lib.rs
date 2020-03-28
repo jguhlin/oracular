@@ -224,12 +224,17 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
                 let DiscriminatorMasked { kmers, truth, id: _} = x;
                 let kmers: Vec<Vec<u8>> = kmers.iter().map(|x| convert_string_to_array(mypyself.k, x)).collect();
 
+                // TODO: WHY DO WE NEED THIS
+                if (kmers[0].len() == 0) {
+                    return Ok(None)
+                }
+
                 let gil = Python::acquire_gil();
                 let py = gil.python();
                 let pyout = PyDict::new(py);
                 // let pyout = PyTuple::new(py, [kmers, truth]);
-                pyout.set_item("kmers", kmers);
-                pyout.set_item("truths", truth);
+                pyout.set_item("kmers", kmers).expect("Py Error");
+                pyout.set_item("truths", truth).expect("Py Error");
                 return Ok(Some(pyout.to_object(py)))
             },
             None => return Ok(None)
