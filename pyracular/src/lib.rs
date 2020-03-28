@@ -86,7 +86,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
                             mypyself.k = 0;
                         }
 
-+                        let kmer_window_generator = KmerWindowGenerator::new(
+                        let kmer_window_generator = KmerWindowGenerator::new(
                             mypyself.filename.clone(), 
                             mypyself.k.clone(), 
                             mypyself.window_size.clone(),
