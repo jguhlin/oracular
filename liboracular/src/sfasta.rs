@@ -119,10 +119,11 @@ pub fn convert_fasta_file(filename: String, output: String,)
 // Convert file to bincode/snappy for faster processing
 // Stores accession/taxon information inside the Sequence struct
 {
+    let mut total_counts: usize = 0;
 
     let output_filename = check_extension(output);
 
-    let out_file = File::create(output_filename).expect("Unable to write to file");
+    let out_file = File::create(output_filename.clone()).expect("Unable to write to file");
     let mut out_fh = BufWriter::with_capacity(64 * 1024 * 1024, out_file);
 
     let mut buffer: Vec<u8> = Vec::with_capacity(1024);
@@ -158,6 +159,7 @@ pub fn convert_fasta_file(filename: String, output: String,)
         match buffer[0] {
             // 62 is a > meaning we have a new sequence id.
             62 => {
+                total_counts += 1;
                 // Write out entry...
                 if seqlen > 0 { // Ignore first one..
                     let entry = generate_sfasta_entry(id, seqbuffer[..seqlen].to_vec());
@@ -178,6 +180,32 @@ pub fn convert_fasta_file(filename: String, output: String,)
         }
 
         buffer.clear();
+    }
+
+    drop(out_fh);
+
+    let file = match File::open(&output_filename) {
+        Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
+        Ok(file) => file,
+    };
+
+    let mut reader = BufReader::with_capacity(32 * 1024 * 1024, file);
+
+    let mut ids: Vec<String> = Vec::with_capacity(2048);
+
+    let mut saved_count: usize = 0;
+
+    let mut last_entry: String = "".to_string();
+
+    while let Ok(entry) = bincode::deserialize_from::<_, EntryCompressed>(&mut reader) {
+        saved_count += 1;
+        last_entry = entry.id;
+    }
+
+    if saved_count != total_counts {
+        println!("Error: Not the right amount!");
+        println!("Last Entry: {}", last_entry);
+        panic!("Error converting file");
     }
 }
 
