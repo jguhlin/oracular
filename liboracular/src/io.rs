@@ -6,7 +6,7 @@ use indicatif::ProgressStyle;
 
 use serde::{Serialize, Deserialize};
 
-#[derive(PartialEq, Serialize, Deserialize)]
+#[derive(PartialEq, Serialize, Deserialize, Clone)]
 pub struct Sequence {
     pub seq: Vec<u8>,
     pub id:  String,

@@ -155,15 +155,17 @@ impl Iterator for KmerWindowGenerator {
 
     fn next(&mut self) -> Option<KmerWindow> {
         // While instead of if, because if we get a too short sequence we should skip it...
-        while (self.kmer_generator.len - self.kmer_generator.curpos) < self.needed_sequence {
+        while (self.kmer_generator.len - self.kmer_generator.curpos) <= self.needed_sequence {
             // Don't have enough remaining sequence to fill out this.
             // Get the next sequence...            
 
-            println!("Getting new sequence...");
+//            println!("Getting new sequence...");
             let mut curseq: io::Sequence = match self.sequences.next() {
                 Some(x) => x,
                 None    => { println!("Reporting we are out of sequence!"); return None }  // That's it... no more!
             };
+            
+//            println!("Getting new sequence... {}", &curseq.id);
 
             if self.rc {
                 let io::Sequence { id, mut seq } = curseq;
@@ -177,10 +179,13 @@ impl Iterator for KmerWindowGenerator {
                 };
             }
 
-            self.curseq = curseq;
-            self.kmer_generator.seq = self.curseq.seq.clone();
-            self.kmer_generator.curpos = 0;
-            self.kmer_generator.len = self.kmer_generator.seq.len();
+            self.curseq = curseq.clone();
+            let kmer_generator = Kmers::new(curseq.seq.clone(), self.k, self.offset);
+	    self.kmer_generator = kmer_generator;
+
+//            self.kmer_generator.seq = self.curseq.seq.clone();
+//            self.kmer_generator.curpos = 0;
+//            self.kmer_generator.len = self.kmer_generator.seq.len();
         }
 
         let mut kmers: Vec<Vec<u8>> = Vec::with_capacity(self.window_size);
