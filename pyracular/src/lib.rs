@@ -83,7 +83,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
 
                         if mypyself.k == mypyself.offset {
                             mypyself.rc = true;
-                            mypyself.k = 0;
+                            mypyself.offset = 0;
                         }
 
                         let kmer_window_generator = KmerWindowGenerator::new(
@@ -225,17 +225,17 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
                 let DiscriminatorMasked { kmers, truth, id} = x;
                 let kmers: Vec<Vec<u8>> = kmers.iter().map(|x| convert_string_to_array(mypyself.k, x)).collect();
 
-                // TODO: WHY DO WE NEED THIS
+/*                // TODO: I think this is fixed.  Leaving it in for now!
                 if kmers[0].len() == 0 {
-		    println!("----");
+        		    println!("----");
                     println!("{:#?}", mypyself.rc);
-	            println!("{:#?}", mypyself.offset);
+	                println!("{:#?}", mypyself.offset);
                     println!("{:#?}", id);
                     println!("{:#?}", truth);
                     println!("{:#?}", kmers);
                     println!("Out of kmers -- Shouldn't get here...");
                     return Ok(None)
-                }
+                }*/
 
                 let gil = Python::acquire_gil();
                 let py = gil.python();
