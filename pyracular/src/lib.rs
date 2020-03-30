@@ -190,6 +190,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
                 None    => { 
                     mypyself.offset = mypyself.offset + 1;
                     if (mypyself.k == mypyself.offset) && mypyself.rc {
+                        println!("Finished, at the correct step...");
                         return Ok(None)
                     } else {
 
@@ -224,7 +225,8 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
                 let kmers: Vec<Vec<u8>> = kmers.iter().map(|x| convert_string_to_array(mypyself.k, x)).collect();
 
                 // TODO: WHY DO WE NEED THIS
-                if (kmers[0].len() == 0) {
+                if kmers[0].len() == 0 {
+                    println!("Out of kmers -- Shouldn't get here...");
                     return Ok(None)
                 }
 
