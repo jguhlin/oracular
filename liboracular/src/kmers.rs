@@ -12,6 +12,7 @@ use crate::utils;
 
 // Not as well implemented, but based off of ELECTRA model
 // https://github.com/google-research/electra
+#[derive(Debug, PartialEq)]
 pub struct DiscriminatorMasked {
     pub kmers: Vec<Vec<u8>>,
     pub id: String,

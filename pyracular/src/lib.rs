@@ -221,11 +221,17 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
 
         match item {
             Some(x) => {
-                let DiscriminatorMasked { kmers, truth, id: _} = x;
+                let DiscriminatorMasked { kmers, truth, id} = x;
                 let kmers: Vec<Vec<u8>> = kmers.iter().map(|x| convert_string_to_array(mypyself.k, x)).collect();
 
                 // TODO: WHY DO WE NEED THIS
                 if kmers[0].len() == 0 {
+		    println!("----");
+                    println!("{:#?}", mypyself.rc);
+	            println!("{:#?}", mypyself.offset);
+                    println!("{:#?}", id);
+                    println!("{:#?}", truth);
+                    println!("{:#?}", kmers);
                     println!("Out of kmers -- Shouldn't get here...");
                     return Ok(None)
                 }
