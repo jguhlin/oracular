@@ -76,6 +76,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
                 Some(x) => x,
                 None    => { 
                     mypyself.offset = mypyself.offset + 1;
+
                     if (mypyself.k == mypyself.offset) && mypyself.rc {
                         return Ok(None)
                     } else {
@@ -196,7 +197,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
 
                         if mypyself.k == mypyself.offset {
                             mypyself.rc = true;
-                            mypyself.k = 0;
+                            mypyself.offset = 0;
                         }
 
                         let kmer_window_generator = KmerWindowGenerator::new(
