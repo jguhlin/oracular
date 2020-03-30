@@ -106,8 +106,6 @@ impl Iterator for DiscriminatorMaskedGenerator {
 }
 
 impl KmerWindowGenerator {
-    // TODO: If RC, then do RC here.... or maybe elsewhere?
-    // TODO: Make offset automatic? Or a diff fn to handle it internally?
 
     pub fn new(filename: String,
                 k: usize,
@@ -163,7 +161,7 @@ impl Iterator for KmerWindowGenerator {
 
             let mut curseq: io::Sequence = match self.sequences.next() {
                 Some(x) => x,
-                None    => return None // That's it... no more!
+                None    => { println!("Reporting we are out of sequence!"); return None }  // That's it... no more!
             };
 
             if self.rc {
