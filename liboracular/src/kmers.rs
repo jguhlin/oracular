@@ -159,6 +159,7 @@ impl Iterator for KmerWindowGenerator {
             // Don't have enough remaining sequence to fill out this.
             // Get the next sequence...            
 
+            println!("Getting new sequence...");
             let mut curseq: io::Sequence = match self.sequences.next() {
                 Some(x) => x,
                 None    => { println!("Reporting we are out of sequence!"); return None }  // That's it... no more!
