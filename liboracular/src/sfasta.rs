@@ -229,6 +229,25 @@ pub fn get_headers_from_sfasta(filename: String) -> Vec<String>
     return ids
 }
 
+/// Get all IDs from an SFASTA file
+/// Really a debugging function...
+pub fn test_sfasta(filename: String)
+{
+    let file = match File::open(&filename) {
+        Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
+        Ok(file) => file,
+    };
+
+    let mut reader = BufReader::with_capacity(32 * 1024 * 1024, file);
+
+    loop {
+        match bincode::deserialize_from::<_, EntryCompressed>(&mut reader) {
+            Ok(entry) => (),
+            Err(x)    => panic!("Found error: {}", x),
+        };
+    }
+}
+
 
 /// Checks that the file extension ends in .sfasta or adds it if necessary
 #[inline(always)]
