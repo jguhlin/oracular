@@ -240,9 +240,12 @@ pub fn test_sfasta(filename: String)
 
     let mut reader = BufReader::with_capacity(32 * 1024 * 1024, file);
 
+    let mut seqnum: usize = 0;
+
     loop {
+        seqnum += 1;
         match bincode::deserialize_from::<_, EntryCompressed>(&mut reader) {
-            Ok(entry) => (),
+            Ok(entry) => println!("OK SEQ: {}", seqnum),
             Err(x)    => panic!("Found error: {}", x),
         };
     }
