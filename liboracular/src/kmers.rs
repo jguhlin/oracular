@@ -185,7 +185,14 @@ impl Iterator for KmerWindowGenerator {
         let mut kmers: Vec<Vec<u8>> = Vec::with_capacity(self.window_size);
         for _ in 0..self.window_size {
             match self.kmer_generator.next() {
-                Some(x) => kmers.push(x),
+                Some(x) => {
+                    if x.len() == self.k {
+                        kmers.push(x)
+                    } else {
+                        panic!("Invalid KMER");
+
+                    }
+                },
                 None    => return None
             };
         }
