@@ -165,7 +165,7 @@ impl Iterator for KmerWindowGenerator {
                 None    => { println!("Reporting we are out of sequence!"); return None }  // That's it... no more!
             };
             
-//            println!("Getting new sequence... {}", &curseq.id);
+            println!("Getting new sequence... {}", &curseq.id);
 
             if self.rc {
                 let io::Sequence { id, mut seq } = curseq;
