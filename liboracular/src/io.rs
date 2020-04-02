@@ -6,6 +6,10 @@ use indicatif::ProgressStyle;
 
 use serde::{Serialize, Deserialize};
 
+use std::collections::VecDeque;
+
+use crate::io;
+
 #[derive(PartialEq, Serialize, Deserialize, Clone)]
 pub struct Sequence {
     pub seq: Vec<u8>,
@@ -14,6 +18,61 @@ pub struct Sequence {
 
 pub struct Sequences {
     reader: Box<dyn Read>
+}
+
+pub struct SequenceSplitter3N {
+    sequences: Box<dyn Iterator<Item = io::Sequence>>,
+    curseq: Sequence,
+    coords: VecDeque<(usize, usize)>,
+}
+
+impl SequenceSplitter3N {
+    pub fn new(mut sequences: Box<dyn Iterator<Item = io::Sequence>>) 
+    -> SequenceSplitter3N {
+
+        let curseq = match sequences.next() {
+            Some(x) => x,
+            None    => panic!("File is empty!"),
+        };
+
+        let coords: VecDeque<(usize, usize)>; 
+        coords = crate::utils::get_good_sequence_coords(&curseq.seq).into_iter().collect();
+
+        SequenceSplitter3N { 
+            sequences, 
+            curseq,
+            coords,
+        }
+    }
+}
+
+impl Iterator for SequenceSplitter3N {
+    type Item = Sequence;
+
+    #[inline]
+    fn next(&mut self) -> Option<Sequence> {
+        let coords = match self.coords.pop_front() {
+            Some(x) => x,
+            None    => { 
+                let curseq = match self.sequences.next() {
+                    Some(x) => x,
+                    None    => return None, // Out of data..
+                };
+
+                let coords: VecDeque<(usize, usize)>; 
+                coords = crate::utils::get_good_sequence_coords(&curseq.seq).into_iter().collect();
+
+                self.curseq = curseq;
+                self.coords = coords;
+                self.coords.pop_front().unwrap()
+            }
+        };
+
+        Some(Sequence { 
+            id: self.curseq.id.clone(),
+            seq: self.curseq.seq[coords.0..coords.1].to_vec(),
+        })
+    }
 }
 
 fn open_file_with_progress_bar(filename: String) -> (Box<dyn Read>, ProgressBar)

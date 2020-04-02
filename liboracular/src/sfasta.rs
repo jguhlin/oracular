@@ -83,7 +83,7 @@ impl Iterator for Sequences {
     fn next(&mut self) -> Option<io::Sequence> {
         let ec: EntryCompressed = match bincode::deserialize_from(&mut self.reader) {
             Ok(x)   => x,
-            Err(y)  => return None // panic!("Error at SFASTA::Sequences::next: {}", y)
+            Err(_)  => return None // panic!("Error at SFASTA::Sequences::next: {}", y)
         };
 
         // Have to convert from EntryCompressed to Entry, this handles that middle
