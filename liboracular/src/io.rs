@@ -68,6 +68,8 @@ impl Iterator for SequenceSplitter3N {
             }
         };
 
+        println!("{} {}", coords.0, coords.1);
+
         Some(Sequence { 
             id: self.curseq.id.clone(),
             seq: self.curseq.seq[coords.0..coords.1].to_vec(),
