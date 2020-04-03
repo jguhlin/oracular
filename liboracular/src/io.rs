@@ -46,6 +46,8 @@ impl SequenceSplitter3N {
     }
 }
 
+// TODO: This is the right place to do this, but I feel it's happening somewhere else
+// and wasting CPU cycles...
 impl Sequence {
     pub fn make_uppercase(&mut self) {
         self.seq.make_ascii_uppercase();
