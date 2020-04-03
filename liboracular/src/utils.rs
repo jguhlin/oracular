@@ -9,7 +9,6 @@ pub fn get_good_sequence_coords (seq: &[u8]) -> Vec<(usize, usize)> {
 
     // Do we need to filter the sequence at all?
     if bytecount::count(&seq, b'N') < 3 {
-        println!("Debug: {}", bytecount::count(&seq, b'N'));
         coords.push( (0, seq.len()) );
         return coords
     }
