@@ -46,6 +46,12 @@ impl SequenceSplitter3N {
     }
 }
 
+impl Sequence {
+    pub fn make_uppercase(&mut self) {
+        self.seq.make_ascii_uppercase();
+    }
+}
+
 impl Iterator for SequenceSplitter3N {
     type Item = Sequence;
 

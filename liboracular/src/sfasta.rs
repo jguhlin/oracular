@@ -1,8 +1,6 @@
 use std::io::prelude::*;
 use std::io::BufWriter;
 
-use std::sync::{Arc, RwLock};
-
 use std::convert::From;
 
 use std::fs::File;
@@ -76,6 +74,8 @@ impl Sequences {
     }
 }
 
+// TODO: Create the option to pass back lowercase stuff too..
+// Maybe for repeat masking and such? Right now it's all uppercase.
 impl Iterator for Sequences {
     type Item = io::Sequence;
 
@@ -89,8 +89,10 @@ impl Iterator for Sequences {
         // Have to convert from EntryCompressed to Entry, this handles that middle
         // conversion.
         let middle: Entry = ec.into();
+        let mut seq: io::Sequence = middle.into();
+        seq.make_uppercase();
 
-        Some(middle.into())
+        Some(seq)
     }
 }
 
@@ -191,8 +193,6 @@ pub fn convert_fasta_file(filename: String, output: String,)
 
     let mut reader = BufReader::with_capacity(32 * 1024 * 1024, file);
 
-    let mut ids: Vec<String> = Vec::with_capacity(2048);
-
     let mut saved_count: usize = 0;
 
     let mut last_entry: String = "".to_string();
@@ -245,7 +245,7 @@ pub fn test_sfasta(filename: String)
     loop {
         seqnum += 1;
         match bincode::deserialize_from::<_, EntryCompressed>(&mut reader) {
-            Ok(entry) => println!("OK SEQ: {}", seqnum),
+            Ok(_) => println!("OK SEQ: {}", seqnum),
             Err(x)    => panic!("Found error: {}", x),
         };
     }
