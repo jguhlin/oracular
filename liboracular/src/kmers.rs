@@ -115,7 +115,7 @@ impl KmerWindowGenerator {
                 offset: usize,
                 rc: bool,
             ) -> KmerWindowGenerator {
-        let mut sequences = Box::new(sfasta::Sequences::new(filename));
+        let sequences = Box::new(sfasta::Sequences::new(filename));
         let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
         let mut curseq = match sequences.next() {
             Some(x) => x,
