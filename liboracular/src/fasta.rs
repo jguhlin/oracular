@@ -8,18 +8,10 @@ use crossbeam::utils::Backoff;
 use std::thread;
 use std::thread::JoinHandle;
 
-use std::fs::File;
-use std::io::{BufReader, Read, BufRead};
-
-use indicatif::ProgressBar;
-use indicatif::ProgressStyle;
-
 use rand::thread_rng;
 use rand::seq::SliceRandom;
 
 use std::thread::Builder;
-
-use crate::kmers;
 
 const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 

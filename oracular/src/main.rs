@@ -31,7 +31,7 @@ use clap::App;
 fn main() {
 
     let yaml = load_yaml!("cli.yaml");
-    let matches = App::from_yaml(yaml).get_matches();
+    let _matches = App::from_yaml(yaml).get_matches();
 
 /*     if let Some(matches) = matches.subcommand_matches("generate-embeddings") {
         generate_embeddings(matches);

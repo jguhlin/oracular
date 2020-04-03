@@ -13,8 +13,6 @@ use std::io::{BufReader, Read, BufRead};
 use crossbeam::queue::{ArrayQueue, PushError};
 use crossbeam::utils::Backoff;
 
-use serde::{Serialize, Deserialize};
-
 const STACKSIZE: usize = 256 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 const WORKERSTACKSIZE: usize = 64 * 1024 * 1024;  // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 

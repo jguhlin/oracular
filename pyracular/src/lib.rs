@@ -7,14 +7,13 @@ use liboracular::sfasta;
 
 use pyo3::prelude::*;
 // use pyo3::wrap_pyfunction;
-use pyo3::types::{PyDict, PyList, PyTuple};
+use pyo3::types::{PyDict, PyList};
 use pyo3::{PyIterProtocol};
 
 // use pyo3::wrap_pyfunction;
 
 use crossbeam::queue::{ArrayQueue, PopError};
 use std::sync::{Arc, RwLock};
-use crossbeam::atomic::AtomicCell;
 use std::thread::JoinHandle;
 use crossbeam::utils::Backoff;
 use pyo3::wrap_pyfunction;
@@ -222,7 +221,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
 
         match item {
             Some(x) => {
-                let DiscriminatorMasked { kmers, truth, id} = x;
+                let DiscriminatorMasked { kmers, truth, id: _} = x;
                 let kmers: Vec<Vec<u8>> = kmers.iter().map(|x| convert_string_to_array(mypyself.k, x)).collect();
 
 /*                // TODO: I think this is fixed.  Leaving it in for now!
@@ -387,9 +386,7 @@ struct CTFasta {
     unshuffled_queue: Arc<ArrayQueue<ThreadCommand<SequenceTargetContexts>>>,
     generator_done: Arc<RwLock<bool>>,
     generator: Option<JoinHandle<()>>,
-    jobs: Arc<AtomicCell<usize>>,
     batch_size: usize,
-    children_asleep: Arc<RwLock<bool>>,
     children: Option<Vec<JoinHandle<()>>>,
     seq_queue_shutdown: bool,
     batch_queue_shutdown: bool,
@@ -409,7 +406,7 @@ impl CTFasta {
         buffer_size: usize,
         num_threads: usize) -> Self 
     {
-        let (batch_queue, seq_queue, unshuffled_queue, generator, generator_done, children_asleep, jobs, children) = parse_ctfasta_target_contexts(k, &filename, window_size, batch_size, shuffle_buffer, buffer_size, num_threads);
+        let (batch_queue, seq_queue, unshuffled_queue, generator, generator_done, _children_asleep, _jobs, children) = parse_ctfasta_target_contexts(k, &filename, window_size, batch_size, shuffle_buffer, buffer_size, num_threads);
         CTFasta { 
             batch_queue, 
             batch_size,
@@ -417,8 +414,6 @@ impl CTFasta {
             unshuffled_queue,
             generator: Some(generator), 
             generator_done, 
-            children_asleep,
-            jobs, 
             children: Some(children), 
             num_threads,
             seq_queue_shutdown: false,
@@ -572,7 +567,6 @@ struct FastaKmers {
     unshuffled_queue: Arc<ArrayQueue<ThreadCommand<SequenceKmers>>>,
     generator_done: Arc<RwLock<bool>>,
     generator: Option<JoinHandle<()>>,
-    jobs: Arc<AtomicCell<usize>>,
     batch_size: usize,
     children: Option<Vec<JoinHandle<()>>>,
     seq_queue_shutdown: bool,
@@ -593,7 +587,7 @@ impl FastaKmers {
         buffer_size: usize,
         num_threads: usize) -> Self 
     {
-        let (batch_queue, seq_queue, unshuffled_queue, generator, generator_done, jobs, children) = parse_fasta_kmers(k, &filename, sample_size, batch_size, shuffle_buffer, buffer_size, num_threads);
+        let (batch_queue, seq_queue, unshuffled_queue, generator, generator_done, _jobs, children) = parse_fasta_kmers(k, &filename, sample_size, batch_size, shuffle_buffer, buffer_size, num_threads);
         FastaKmers { 
             batch_queue, 
             batch_size,
@@ -601,7 +595,6 @@ impl FastaKmers {
             unshuffled_queue,
             generator: Some(generator), 
             generator_done, 
-            jobs, 
             children: Some(children), 
             num_threads,
             seq_queue_shutdown: false,

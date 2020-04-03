@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{BufReader, Read, BufRead};
+use std::io::{BufReader, Read};
 
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
@@ -83,7 +83,7 @@ impl Iterator for SequenceSplitter3N {
     }
 }
 
-fn open_file_with_progress_bar(filename: String) -> (Box<dyn Read>, ProgressBar)
+fn _open_file_with_progress_bar(filename: String) -> (Box<dyn Read>, ProgressBar)
 {
     let file = match File::open(&filename) {
         Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
