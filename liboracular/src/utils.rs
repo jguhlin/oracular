@@ -4,11 +4,12 @@ pub fn get_good_sequence_coords (seq: &[u8]) -> Vec<(usize, usize)> {
     let mut cur: usize = 0;
     let mut start_coords;
     let mut end_coords;
-    let mut coords: Vec<(usize, usize)> = Vec::with_capacity(8);
+    let mut coords: Vec<(usize, usize)> = Vec::with_capacity(64);
     //let results = seq.windows(3).enumerate().filter(|(_y, x)| x != &[78, 78, 78]).map(|(y, _x)| y);
 
     // Do we need to filter the sequence at all?
     if bytecount::count(&seq, b'N') < 3 {
+        println!("Debug: {}", bytecount::count(&seq, b'N'));
         coords.push( (0, seq.len()) );
         return coords
     }
