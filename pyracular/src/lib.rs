@@ -216,7 +216,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
                         continue
                     }
                 }
-            };
+            }; 
         }
 
         match item {
@@ -284,6 +284,8 @@ impl DiscriminatorMaskedGeneratorWrapperNB {
         }
     }
 }
+
+// Offset & RC Wrapper
 
 // Acc2Tax Discriminator Generator
 // TODO: Move to Acc2Tax OR Have Acc2Tax put a wrapper around this fn! (Even smarter!)
