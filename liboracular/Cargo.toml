@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 fnv = "1"
-serde = { version = "1.0.104", features = ["derive"] }
+serde = { version = "1.0.106", features = ["derive"] }
 rand = "0.7.3"
 rand_core = "0.5"
 rand_xorshift = "0.2"
@@ -29,3 +29,5 @@ ndarray-rand = "0.11"
 snap = "1"
 bincode = "1.2.1"
 lazy_static = "1.4.0"
+rust-lapper = "0.4.4"
+itertools = "0.9.0"

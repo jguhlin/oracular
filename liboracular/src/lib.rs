@@ -14,8 +14,8 @@ extern crate t1ha;
 extern crate ndarray;
 extern crate snap;
 extern crate bincode;
-
 extern crate lazy_static;
+extern crate itertools;
 
 // #[macro_use]
 extern crate static_assertions;
@@ -26,3 +26,5 @@ pub mod fasta;
 pub mod kmers;
 pub mod io;
 pub mod sfasta;
+pub mod gff3;
+pub mod intervals;
