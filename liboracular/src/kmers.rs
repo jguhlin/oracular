@@ -5,22 +5,16 @@ use crate::io;
 use crate::sfasta;
 use crate::utils;
 
-// Not as well implemented, but based off of ELECTRA model
+// Loosely based off of ELECTRA model
 // https://github.com/google-research/electra
 #[derive(Debug, PartialEq)]
 pub struct DiscriminatorMasked {
     pub kmers: Vec<Vec<u8>>,
     pub id: String,
-    pub truth: Vec<u8>,
+    pub truth: Vec<u8>, // TODO: Should this be bool? 
+                        // Maybe it's not because doesn't work with python? 
+                        // Or because tf works best with 0 and 1?
 }
-
-/*pub struct DiscriminatorMaskedA2T {
-    pub kmers: Vec<Vec<u8>>,
-    pub id: String,
-    pub taxons: Vec<usize>,
-    pub taxon: usize,
-    pub truth: Vec<u8>,
-} */
 
 pub struct DiscriminatorMaskedGenerator {
     kmer_window_generator: KmerWindowGenerator,
@@ -96,7 +90,7 @@ impl Iterator for DiscriminatorMaskedGenerator {
         }
 
         // return Some(DiscriminatorMasked { kmers, id, taxons, taxon, truth })
-        return Some(DiscriminatorMasked { kmers, id, truth })
+        Some(DiscriminatorMasked { kmers, id, truth })
     }
 }
 
@@ -238,8 +232,17 @@ impl Iterator for Kmers {
         } else {
             let start = self.offset + self.curpos;
             let end = self.offset + self.curpos + self.k;
-            self.curpos = self.curpos + self.k;
+            self.curpos += self.k;
             Some(self.seq[start..end].to_vec())
         }
     }
 }
+
+
+/*pub struct DiscriminatorMaskedA2T {
+    pub kmers: Vec<Vec<u8>>,
+    pub id: String,
+    pub taxons: Vec<usize>,
+    pub taxon: usize,
+    pub truth: Vec<u8>,
+} */

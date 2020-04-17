@@ -25,8 +25,7 @@ use pyo3::wrap_pyfunction;
 fn convert_string_to_array(k: usize, s: &[u8]) -> Vec<u8> {
     let mut out: Vec<u8> = vec![0; k*5];
 
-    let mut x = 0;
-    for c in s {
+    for (x, c) in s.iter().enumerate() {
         match c {
             65 => out[5*x] = 1,   // A
             84 => out[5*x+1] = 1, // T
@@ -36,8 +35,6 @@ fn convert_string_to_array(k: usize, s: &[u8]) -> Vec<u8> {
             _  => out[5*x+2] = 1, // N for everything else...
             // A_  => { out[5*x+2] = 1; println!("Invalid Character! {} in {}", c, std::str::from_utf8(s).unwrap()) }  // N
         };
-
-        x += 1;
     }
 
     out

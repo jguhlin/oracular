@@ -13,7 +13,6 @@ extern crate serde;
 extern crate snap;
 extern crate bincode;
 
-
 // extern crate mimalloc;
 // use mimalloc::MiMalloc;
 // #[global_allocator]
@@ -40,6 +39,6 @@ fn main() {
         query_embeddings(matches);
     } */
 
-    println!("I don't do anything anymore / right now");
+    println!("I don't do anything right now");
 }
 

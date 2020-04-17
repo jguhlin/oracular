@@ -136,6 +136,7 @@ pub fn parse_gff3_line(line: &str) -> Option<Gff3Entry> {
     if feature_type.to_lowercase() == "chromosome" { return None }
     if feature_type.to_lowercase() == "scaffold" { return None }
     if feature_type.to_lowercase() == "contig" { return None }
+    // Probably more, only "region" is valid GFF3 if I remember correctly
 
     Some(Gff3Entry { 
         landmark: x[0].to_string(),
