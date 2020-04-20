@@ -451,7 +451,9 @@ impl Iterator for Gff3KmersIter {
 
             for x in found {
                 for (i, m) in (*x).val.iter().enumerate() {
-                    kmer_classification[i] += m;
+                    if *m == 1 {
+                        kmer_classification[i] = 1;
+                    }
                 }
             }
 
