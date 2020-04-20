@@ -12,8 +12,9 @@ use crate::io;
 
 #[derive(PartialEq, Serialize, Deserialize, Clone)]
 pub struct Sequence {
-    pub seq: Vec<u8>,
-    pub id:  String,
+    pub seq:      Vec<u8>,
+    pub id:       String,
+    pub location: usize,
 }
 
 pub struct Sequences {
@@ -77,8 +78,9 @@ impl Iterator for SequenceSplitter3N {
         };
 
         Some(Sequence { 
-            id: self.curseq.id.clone(),
-            seq: self.curseq.seq[coords.0..coords.1].to_vec(),
+            id:       self.curseq.id.clone(),
+            seq:      self.curseq.seq[coords.0..coords.1].to_vec(),
+            location: coords.0 as usize
         })
     }
 }
@@ -106,7 +108,7 @@ fn _open_file_with_progress_bar(filename: String) -> (Box<dyn Read>, ProgressBar
     };
 
     let reader = BufReader::with_capacity(32 * 1024 * 1024, fasta);
-    return (Box::new(reader), pb)
+    (Box::new(reader), pb)
 }
 
 fn open_file(filename: String) -> Box<dyn Read>
@@ -127,7 +129,7 @@ fn open_file(filename: String) -> Box<dyn Read>
     };
 
     let reader = BufReader::with_capacity(32 * 1024 * 1024, fasta);
-    return Box::new(reader)
+    Box::new(reader)
 }
 
 impl Iterator for Sequences {
@@ -144,6 +146,23 @@ impl Iterator for Sequences {
 
 impl Sequences {
     pub fn new(filename: String) -> Sequences {
-        return Sequences { reader: open_file(filename) }
+        Sequences { reader: open_file(filename) }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs::File;
+    use std::io::prelude::*;
+    use crate::sfasta;
+    use super::*;
+
+    #[test]
+    pub fn test_3n_splitter() {
+        let sequences = Box::new(sfasta::Sequences::new("test_data/test.sfasta".to_string()));
+        let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
+        assert!(sequences.coords == [(0, 19), (38, 63)]);
+    }
+}
+
+

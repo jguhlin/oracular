@@ -87,18 +87,18 @@ pub fn start_stop_sort(start: usize, stop: usize) -> (usize, usize) {
     (v[0], v[1])
 }
 
-pub fn get_gff3_intervals(filename: String) -> (intervals::IntervalMap<Vec<bool>>, Vec<String>) { // TODO!: Return Type
+pub fn get_gff3_intervals(filename: String) -> (intervals::IntervalMap<Vec<u8>>, Vec<String>) { // TODO!: Return Type
     let (entries, mut types) = parse_gff3_file(filename);
 
     let types: Vec<String> = types.drain().collect();
 
-    let mut types_one_hot: HashMap<String, Vec<bool>, BuildHasherDefault<XxHash64>> = Default::default();
+    let mut types_one_hot: HashMap<String, Vec<u8>, BuildHasherDefault<XxHash64>> = Default::default();
 
     let types_len = types.len(); // Calculate only once...
     
     for (x, t) in types.iter().enumerate() {
-        let mut b: Vec<bool> = vec![false; types_len];
-        b[x] = true;
+        let mut b: Vec<u8> = vec![0; types_len];
+        b[x] = 1;
 
         types_one_hot.insert(t.clone(), b);
     }
@@ -107,10 +107,9 @@ pub fn get_gff3_intervals(filename: String) -> (intervals::IntervalMap<Vec<bool>
         .map(|x| (x.landmark.clone(), x)) // Convert to tuples of (landmark, x)
         .into_group_map(); // Put it into a hashmap of landmark -> Vec(xs)
 
-    let mut intervals: intervals::IntervalMap<Vec<bool>> = Default::default();
+    let mut intervals: intervals::IntervalMap<Vec<u8>> = Default::default();
     
     for (landmark, vals) in entries.iter() {
-        println!("Landmark: {}", landmark.clone());
         let data = vals.iter()
                         .map(|x| Interval { start: x.start as u32, 
                                             stop: x.end as u32, 
@@ -178,7 +177,6 @@ mod tests {
         assert!(first_landmark == "NC_004354.4");
         println!("{:#?}", intervals.landmarks.get(first_landmark).unwrap().cov());
         assert!(21668 == intervals.landmarks.get(first_landmark).unwrap().cov());
-
     }
 }
 

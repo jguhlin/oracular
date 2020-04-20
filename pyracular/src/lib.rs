@@ -1,6 +1,6 @@
 extern crate rayon;
 
-use liboracular::kmers::{KmerWindowGenerator, DiscriminatorMasked, DiscriminatorMaskedGenerator};
+use liboracular::kmers::{KmerWindowGenerator, DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3KmersGenerator};
 use liboracular::fasta::{parse_ctfasta_target_contexts, parse_fasta_kmers};
 use liboracular::threads::{Sequence, ThreadCommand, SequenceBatch, SequenceTargetContexts, SequenceBatchKmers, SequenceKmers};
 use liboracular::sfasta;
@@ -71,7 +71,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
             let item = match mypyself.iter.next() {
                 Some(x) => x,
                 None    => { 
-                    mypyself.offset = mypyself.offset + 1;
+                    mypyself.offset += 1;
 
                     if (mypyself.k == mypyself.offset) && mypyself.rc {
                         return Ok(None)
@@ -84,15 +84,15 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
 
                         let kmer_window_generator = KmerWindowGenerator::new(
                             mypyself.filename.clone(), 
-                            mypyself.k.clone(), 
-                            mypyself.window_size.clone(),
-                            mypyself.offset.clone(),
-                            mypyself.rc.clone(),
+                            mypyself.k, 
+                            mypyself.window_size,
+                            mypyself.offset,
+                            mypyself.rc,
                         );
 
                         let discriminator_masked_generator = DiscriminatorMaskedGenerator::new(
-                            mypyself.replacement_pct.clone(),
-                            mypyself.k.clone(),
+                            mypyself.replacement_pct,
+                            mypyself.k,
                             kmer_window_generator);
 
                         mypyself.iter = Box::new(discriminator_masked_generator);
@@ -133,23 +133,23 @@ impl DiscriminatorMaskedGeneratorWrapper {
         // Create KmerWindowGenerator
         let kmer_window_generator = KmerWindowGenerator::new(
                                         filename.clone(), 
-                                        k.clone(), 
+                                        k, 
                                         window_size,
                                         0,
                                         false);
         
         let discriminator_masked_generator = DiscriminatorMaskedGenerator::new(
                                         replacement_pct,
-                                        k.clone(),
+                                        k,
                                         kmer_window_generator);
 
         DiscriminatorMaskedGeneratorWrapper { 
             iter: Box::new(discriminator_masked_generator),
-            batch_size: batch_size,
+            batch_size,
             k,
             offset: 0,
-            filename: filename.clone(),
-            window_size: window_size.clone(),
+            filename,
+            window_size,
             replacement_pct,
             rc: false,
         }
@@ -185,7 +185,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
             item = match mypyself.iter.next() {
                 Some(x) => { finished = true; Some(x) },
                 None    => { 
-                    mypyself.offset = mypyself.offset + 1;
+                    mypyself.offset += 1;
                     if (mypyself.k == mypyself.offset) && mypyself.rc {
                         println!("Finished, at the correct step...");
                         return Ok(None)
@@ -198,15 +198,15 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
 
                         let kmer_window_generator = KmerWindowGenerator::new(
                             mypyself.filename.clone(), 
-                            mypyself.k.clone(), 
-                            mypyself.window_size.clone(),
-                            mypyself.offset.clone(),
-                            mypyself.rc.clone(),
+                            mypyself.k, 
+                            mypyself.window_size,
+                            mypyself.offset,
+                            mypyself.rc,
                         );
 
                         let discriminator_masked_generator = DiscriminatorMaskedGenerator::new(
-                            mypyself.replacement_pct.clone(),
-                            mypyself.k.clone(),
+                            mypyself.replacement_pct,
+                            mypyself.k,
                             kmer_window_generator);
 
                         mypyself.iter = Box::new(discriminator_masked_generator);
@@ -239,9 +239,9 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
                 // let pyout = PyTuple::new(py, [kmers, truth]);
                 pyout.set_item("kmers", kmers).expect("Py Error");
                 pyout.set_item("truths", truth).expect("Py Error");
-                return Ok(Some(pyout.to_object(py)))
+                Ok(Some(pyout.to_object(py)))
             },
-            None => return Ok(None)
+            None => Ok(None)
         }
     }
 }
@@ -260,22 +260,22 @@ impl DiscriminatorMaskedGeneratorWrapperNB {
         // Create KmerWindowGenerator
         let kmer_window_generator = KmerWindowGenerator::new(
                                         filename.clone(), 
-                                        k.clone(), 
+                                        k, 
                                         window_size,
                                         0,
                                         false);
         
         let discriminator_masked_generator = DiscriminatorMaskedGenerator::new(
                                         replacement_pct,
-                                        k.clone(),
+                                        k,
                                         kmer_window_generator);
 
         DiscriminatorMaskedGeneratorWrapperNB { 
             iter: Box::new(discriminator_masked_generator),
             k,
             offset: 0,
-            filename: filename.clone(),
-            window_size: window_size.clone(),
+            filename,
+            window_size,
             replacement_pct,
             rc: false,
         }
@@ -434,11 +434,9 @@ impl CTFasta {
         self.generator.as_ref().unwrap().thread().unpark();
 
         // Generator is done
-        if *self.generator_done.read().unwrap() {
-            if self.generator.is_some() {
-                println!("DBG: Entire file read, shutting down children threads... More data may still be incoming...");
-                self.generator.take().expect("Unable to get generator thread").join().expect("Unable to join generator thread...");
-            }
+        if *self.generator_done.read().unwrap() && self.generator.is_some() {
+            println!("DBG: Entire file read, shutting down children threads... More data may still be incoming...");
+            self.generator.take().expect("Unable to get generator thread").join().expect("Unable to join generator thread...");
         }
 
         // Generator is done...
@@ -615,11 +613,9 @@ impl FastaKmers {
         self.generator.as_ref().unwrap().thread().unpark();
 
         // Generator is done
-        if *self.generator_done.read().unwrap() {
-            if self.generator.is_some() {
-                println!("DBG: Entire file read, shutting down children threads... More data may still be incoming...");
-                self.generator.take().expect("Unable to get generator thread").join().expect("Unable to join generator thread...");
-            }
+        if *self.generator_done.read().unwrap() && self.generator.is_some() {
+            println!("DBG: Entire file read, shutting down children threads... More data may still be incoming...");
+            self.generator.take().expect("Unable to get generator thread").join().expect("Unable to join generator thread...");
         }
 
         // Generator is done...

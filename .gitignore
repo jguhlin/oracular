@@ -16,3 +16,4 @@ work/
 work/*
 *.so
 *.log
+*.sfasta

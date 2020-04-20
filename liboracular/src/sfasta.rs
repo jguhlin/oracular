@@ -62,7 +62,7 @@ impl From<Entry> for EntryCompressed {
 /// Really an identity function...
 impl From<Entry> for io::Sequence {
     fn from(item: Entry) -> Self {
-        io::Sequence { id: item.id, seq: item.seq }
+        io::Sequence { id: item.id, seq: item.seq, location: 0 }
     }
 }
 
@@ -70,7 +70,7 @@ impl Sequences {
     /// Given a filename, returns a Sequences variable.
     /// Can be used as an iterator.
     pub fn new(filename: String) -> Sequences {
-        return Sequences { reader: open_file(filename) }
+        Sequences { reader: open_file(filename) }
     }
 }
 
@@ -173,6 +173,7 @@ pub fn convert_fasta_file(filename: String, output: String,)
 
                 let slice_end = bytes_read.saturating_sub(1);
                 id = String::from_utf8(buffer[1..slice_end].to_vec()).expect("Invalid UTF-8 encoding...");
+                id = id.trim().to_string();
             },
             _  => {
                 let slice_end = bytes_read.saturating_sub(1);
@@ -226,7 +227,7 @@ pub fn get_headers_from_sfasta(filename: String) -> Vec<String>
         ids.push(entry.id);
     }
 
-    return ids
+    ids
 }
 
 /// Get all IDs from an SFASTA file
@@ -255,13 +256,11 @@ pub fn test_sfasta(filename: String)
 /// Checks that the file extension ends in .sfasta or adds it if necessary
 #[inline(always)]
 fn check_extension(filename: String) -> String {
-    let outfname;
     if !filename.ends_with(".sfasta") {
-        outfname = format!("{}.sfasta", filename);
+        format!("{}.sfasta", filename)
     } else {
-        outfname = filename;
+        filename
     }
-    outfname
 }
 
 /// Opens an SFASTA file and returns a Box<dyn Read> type
@@ -277,7 +276,7 @@ fn open_file(filename: String) -> Box<dyn Read> {
     let file = BufReader::with_capacity(32 * 1024 * 1024, file);
     let reader = BufReader::with_capacity(32 * 1024 * 1024, file);
 
-    return Box::new(reader)
+    Box::new(reader)
 }
 
 /*
@@ -312,3 +311,16 @@ fn snappy_output(filename: String) -> Box<dyn Write> {
         File::create(filename).expect("Unable to write to file!"));
     Box::new(BufWriter::with_capacity(16 * 1024 * 1024, snap::write::FrameEncoder::new(buffer)))
 }*/
+
+#[cfg(test)]
+mod tests {
+    use std::fs::File;
+    use std::io::prelude::*;
+    use super::*;
+
+    #[test]
+    pub fn convert_fasta_to_sfasta() {
+//        convert_fasta_file("test_data/test.fna".to_string(), 
+//                           "test_data/test.sfasta".to_string());
+    }
+}
