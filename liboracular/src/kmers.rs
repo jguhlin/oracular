@@ -148,7 +148,7 @@ impl KmerWindowGenerator {
         };
 
         if rc {
-            let io::Sequence { id, mut seq, location } = curseq;
+            let io::Sequence { id, mut seq, location, end } = curseq;
 
             utils::complement_nucleotides(&mut seq);
             seq.reverse();
@@ -159,10 +159,11 @@ impl KmerWindowGenerator {
                 id, 
                 seq,
                 location,
+                end,
             };
         }
         
-        let kmer_generator = Kmers::new(curseq.seq.clone(), k, offset);
+        let kmer_generator = Kmers::new(curseq.seq.clone(), k, offset, rc);
         let needed_sequence = k * window_size;
 
         KmerWindowGenerator {
@@ -190,7 +191,7 @@ impl Iterator for KmerWindowGenerator {
             };
             
             if self.rc {
-                let io::Sequence { id, mut seq, location } = curseq;
+                let io::Sequence { id, mut seq, location, end } = curseq;
     
                 utils::complement_nucleotides(&mut seq);
                 seq.reverse();
@@ -199,11 +200,12 @@ impl Iterator for KmerWindowGenerator {
                     id, 
                     seq,
                     location,
+                    end,
                 };
             }
 
             self.curseq = curseq.clone();
-            let kmer_generator = Kmers::new(curseq.seq.clone(), self.k, self.offset);
+            let kmer_generator = Kmers::new(curseq.seq.clone(), self.k, self.offset, self.rc);
 	        self.kmer_generator = kmer_generator;
         }
 
@@ -263,21 +265,20 @@ impl KmerCoordsWindowIter {
         };
 
         if rc {
-            let io::Sequence { id, mut seq, location } = curseq;
+            let io::Sequence { id, mut seq, location, end } = curseq;
 
             utils::complement_nucleotides(&mut seq);
             seq.reverse();
-
-            // TODO: How to deal with rc?
 
             curseq = io::Sequence { 
                 id, 
                 seq,
                 location,
+                end,
             };
         }
         
-        let kmer_generator = Kmers::new(curseq.seq.clone(), k, offset);
+        let kmer_generator = Kmers::new(curseq.seq.clone(), k, offset, rc);
         let needed_sequence = k * window_size;
 
         KmerCoordsWindowIter {
@@ -305,7 +306,7 @@ impl Iterator for KmerCoordsWindowIter {
             };
             
             if self.rc {
-                let io::Sequence { id, mut seq, location } = curseq;
+                let io::Sequence { id, mut seq, location, end } = curseq;
     
                 utils::complement_nucleotides(&mut seq);
                 seq.reverse();
@@ -314,11 +315,16 @@ impl Iterator for KmerCoordsWindowIter {
                     id, 
                     seq,
                     location,
+                    end,
                 };
             }
 
             self.curseq = curseq.clone();
-            let kmer_generator = Kmers::new(curseq.seq.clone(), self.k, self.offset);
+            let kmer_generator = Kmers::new(
+                                    curseq.seq.clone(), 
+                                    self.k, 
+                                    self.offset,
+                                    self.rc);
 	        self.kmer_generator = kmer_generator;
         }
 
@@ -338,11 +344,17 @@ impl Iterator for KmerCoordsWindowIter {
             };
         }
 
-        // TODO: Math is probably different when RC
-        let coords = coords.iter().map(
+/*        if self.rc {
+            coords = coords.iter().map(
+                |(x, y)| 
+                (self.curseq.location+self.curseq.end-y,
+                 self.curseq.location+self.curseq.end-x-1,)).collect();
+        } else { */
+            coords = coords.iter().map(
                         |(x, y)| 
                         (x+self.curseq.location,
                          y+self.curseq.location,)).collect();
+        //}
 
         Some(KmerCoordsWindow { 
             kmers, 
@@ -358,6 +370,7 @@ pub struct Kmers {
     offset: usize, 
     curpos: usize,
     len: usize,
+    rc: bool,
 }
 
 impl Kmers {
@@ -365,11 +378,12 @@ impl Kmers {
         seq: Vec<u8>,
         k: usize, 
         offset: usize,
+        rc: bool,
     ) -> Kmers {
         let len = seq.len();
        
         Kmers { 
-            seq, k, offset, len, curpos: 0
+            seq, k, offset, len, curpos: 0, rc
         }
     }
 }
@@ -385,9 +399,18 @@ impl Iterator for Kmers {
             let start = self.offset + self.curpos;
             let end = self.offset + self.curpos + self.k;
             self.curpos += self.k;
+            let coords;
+            if self.rc {
+                // Start counting from the BACK of the sequence
+                // Sequence already represents RC, but coords do not...
+                coords = (self.len - end, self.len - start - 1)
+            } else {
+                coords = (start, end - 1)
+            }
+
             Some((
                 self.seq[start..end].to_vec(),
-                (start, end-1)
+                coords
             ))
         }
     }
@@ -484,7 +507,7 @@ mod tests {
 
     #[test]
     pub fn test_kmers_iter() {
-        let mut kmers = Kmers::new(b"ACTGACTGACTGACTG".to_vec(), 3, 0);
+        let mut kmers = Kmers::new(b"ACTGACTGACTGACTG".to_vec(), 3, 0, false);
 
         let k1 = kmers.next().expect("Unable to get Kmer");
         assert!("ACT".to_string() == std::str::from_utf8(&k1.0).expect("Unable to convert from Vec<u8>"));
@@ -493,7 +516,6 @@ mod tests {
         assert!("GAC".to_string() == std::str::from_utf8(&k2.0).expect("Unable to convert from Vec<u8>"));
         assert!((3,5) == k2.1);
     }
-
 
     #[test]
     pub fn test_kmer_window_generator() {
@@ -509,10 +531,23 @@ mod tests {
     }
 
     #[test]
+    pub fn test_kmers_rc_coords() {
+        let mut kmers = Kmers::new(b"ACTGACTGACTGACTG".to_vec(), 3, 0, true);
+
+        let k1 = kmers.next().expect("Unable to get Kmer");
+        assert!(k1.1 == (13,15));
+        assert!("ACT".to_string() == std::str::from_utf8(&k1.0).expect("Unable to convert from Vec<u8>"));
+
+        let mut kmers = Kmers::new(b"ACTGACTGACTGACTG".to_vec(), 3, 0, true);
+        let coords: Vec<_> = kmers.map(|x| x.1).collect();
+
+        println!("{:#?}", coords);
+    }
+
+    #[test]
     pub fn test_kmer_coords_window_generator() {
         let mut kmers = KmerCoordsWindowIter::new("test_data/test.sfasta".to_string(), 3, 3, 0, false);
         let first = kmers.next().expect("Unable to get KmerWindow");
-        println!("{:#?}", first.coords);
 
         assert!(first.coords == [(0,2),(3,5),(6,8)]);
         assert!(first.kmers[0] == b"ACT");
@@ -521,7 +556,18 @@ mod tests {
 
         let mut skipped = kmers.skip(2).next().expect("Unable to skip ahead");
         assert!(skipped.kmers[0] == b"NAC");
-        println!("{:#?}", skipped.coords);
+        // println!("{:#?}", skipped.coords);
         assert!(skipped.coords == [(38,40),(41,43),(44,46)]);
+
+        // Have to get the right coords for RC
+        let mut kmers = KmerCoordsWindowIter::new(
+                            "test_data/test.sfasta".to_string(), 
+                            8, 2, 0, true);
+
+        println!("{:#?}", coords);
+                            
+        let coords: Vec<_> = kmers.map(|x| x.coords).collect();
+        assert!(coords[0] == [(11,18), (3, 10)]);
+        assert!(coords[1] == [(55,62), (47, 54)]);
     }
 }

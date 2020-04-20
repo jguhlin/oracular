@@ -15,6 +15,7 @@ pub struct Sequence {
     pub seq:      Vec<u8>,
     pub id:       String,
     pub location: usize,
+    pub end:      usize
 }
 
 pub struct Sequences {
@@ -80,7 +81,8 @@ impl Iterator for SequenceSplitter3N {
         Some(Sequence { 
             id:       self.curseq.id.clone(),
             seq:      self.curseq.seq[coords.0..coords.1].to_vec(),
-            location: coords.0 as usize
+            location: coords.0 as usize,
+            end:      coords.1 as usize,
         })
     }
 }

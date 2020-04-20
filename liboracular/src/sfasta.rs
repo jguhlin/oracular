@@ -62,7 +62,8 @@ impl From<Entry> for EntryCompressed {
 /// Really an identity function...
 impl From<Entry> for io::Sequence {
     fn from(item: Entry) -> Self {
-        io::Sequence { id: item.id, seq: item.seq, location: 0 }
+        let len = item.seq.len();
+        io::Sequence { id: item.id, seq: item.seq, location: 0, end: len }
     }
 }
 

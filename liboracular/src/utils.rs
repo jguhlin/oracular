@@ -2,9 +2,9 @@ pub fn get_good_sequence_coords (seq: &[u8]) -> Vec<(usize, usize)> {
     let mut start: Option<usize> = None;
     let mut end: usize;
     let mut cur: usize = 0;
-    let mut start_coords = 0;
-    let mut end_coords = 0;
-    let mut coords: Vec<(usize, usize)> = Vec::with_capacity(64);
+    let mut start_coords;
+    let mut end_coords;
+    let mut coords: Vec<(usize, usize)> = Vec::with_capacity(4096);
     //let results = seq.windows(3).enumerate().filter(|(_y, x)| x != &[78, 78, 78]).map(|(y, _x)| y);
 
     // Do we need to filter the sequence at all?
@@ -31,6 +31,7 @@ pub fn get_good_sequence_coords (seq: &[u8]) -> Vec<(usize, usize)> {
         }
     }
 
+    // Push final set of coords to the system
     if start != None {
         end = cur;
         start_coords = start.unwrap();
@@ -62,7 +63,7 @@ fn _complement_nucl(nucl: u8) -> u8 {
 }
 
 // Mutability here because we change everything to uppercase
-/// Reverse complement(RC) nucleotides
+/// Complement nucleotides -- Reverse is easy enough with Rust internals
 #[inline(always)]
 pub fn complement_nucleotides(slice: &mut [u8]) {
     for x in slice.iter_mut() {
@@ -90,6 +91,16 @@ mod tests {
         let coords = get_good_sequence_coords(b"NNNAAAAAAAAAAAAAAAAAAAANNNAAAAAAAAAAAAAAAAAAAAAAAANNN");
         println!("{:#?}", coords);
         assert!(coords == [(1, 22), (25, 49)]);
+    }
+
+    #[test]
+    pub fn test_complement_nucleotides() {
+        let mut seq = b"AGTCCCNTNNNNTAAGATTTAGAGACCAAAAA".to_vec();
+        complement_nucleotides(&mut seq);
+        assert!(seq == b"TCAGGGNANNNNATTCTAAATCTCTGGTTTTT");
+        seq.reverse();
+        assert!(seq == b"TTTTTGGTCTCTAAATCTTANNNNANGGGACT");
+
     }
 
 }
