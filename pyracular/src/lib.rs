@@ -155,6 +155,10 @@ impl Gff3KmerGenerator {
             rc: false,
         }
     }
+
+    fn types(&self) -> Vec<String> {
+        self.types.clone()
+    }
 }
 
 // ** Discriminator Masked Generator Wrapper

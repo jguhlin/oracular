@@ -173,7 +173,7 @@ pub fn convert_fasta_file(filename: String, output: String,)
 
                 let slice_end = bytes_read.saturating_sub(1);
                 id = String::from_utf8(buffer[1..slice_end].to_vec()).expect("Invalid UTF-8 encoding...");
-                id = id.trim().to_string();
+                id = id.split(' ').next().unwrap().trim().to_string();
             },
             _  => {
                 let slice_end = bytes_read.saturating_sub(1);
