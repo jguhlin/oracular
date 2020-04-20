@@ -564,9 +564,8 @@ mod tests {
                             "test_data/test.sfasta".to_string(), 
                             8, 2, 0, true);
 
-        println!("{:#?}", coords);
-                            
         let coords: Vec<_> = kmers.map(|x| x.coords).collect();
+        println!("{:#?}", coords);
         assert!(coords[0] == [(11,18), (3, 10)]);
         assert!(coords[1] == [(55,62), (47, 54)]);
     }
