@@ -876,6 +876,7 @@ fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<FastaKmers>()?;
     m.add_class::<DiscriminatorMaskedGeneratorWrapper>()?;
     m.add_class::<DiscriminatorMaskedGeneratorWrapperNB>()?;
+    m.add_class::<Gff3KmerGenerator>()?;
     m.add_wrapped(wrap_pyfunction!(convert_fasta_to_sfasta))?;
     m.add_wrapped(wrap_pyfunction!(get_headers_from_sfasta))?;
     m.add_wrapped(wrap_pyfunction!(test_sfasta))?;
