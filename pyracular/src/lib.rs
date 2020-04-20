@@ -1,6 +1,9 @@
 extern crate rayon;
 
-use liboracular::kmers::{KmerWindowGenerator, DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3KmersGenerator};
+// NOTE: New naming convention
+// Rust-y stuff is "iter" Python is "Generator"
+
+use liboracular::kmers::{KmerWindowGenerator, DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3KmersIter, Gff3Kmers, KmerCoordsWindowIter};
 use liboracular::fasta::{parse_ctfasta_target_contexts, parse_fasta_kmers};
 use liboracular::threads::{Sequence, ThreadCommand, SequenceBatch, SequenceTargetContexts, SequenceBatchKmers, SequenceKmers};
 use liboracular::sfasta;
@@ -39,6 +42,122 @@ fn convert_string_to_array(k: usize, s: &[u8]) -> Vec<u8> {
 
     out
 }
+
+// ** Kmer Classification GFF3
+// Non-batch discriminator masked generator
+#[pyclass]
+struct Gff3KmerGenerator {
+    iter: Box<dyn Iterator<Item = Gff3Kmers>>,
+    k: usize,
+    offset: usize,
+    window_size: usize,
+    filename: String,
+    gff3filename: String,
+    rc: bool,
+    types: Vec<String>,
+}
+
+#[pyproto]
+impl PyIterProtocol for Gff3KmerGenerator {
+    fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        Ok(mypyself.into_py(py))
+    }
+
+    fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
+
+        let mut finished = false;
+        let mut item = None;
+
+        while !finished {
+            item = match mypyself.iter.next() {
+                Some(x) => { finished = true; Some(x) },
+                None    => { 
+                    mypyself.offset += 1;
+                    if (mypyself.k == mypyself.offset) && mypyself.rc {
+                        println!("Finished, at the correct step...");
+                        return Ok(None)
+                    } else {
+
+                        if mypyself.k == mypyself.offset {
+                            mypyself.rc = true;
+                            mypyself.offset = 0;
+                        }
+
+                        let kmercoords_window_iter = KmerCoordsWindowIter::new(
+                            mypyself.filename.clone(), 
+                            mypyself.k, 
+                            mypyself.window_size,
+                            mypyself.offset,
+                            mypyself.rc,
+                        );
+
+                        let iter = Gff3KmersIter::new(
+                                            mypyself.gff3filename.clone(),
+                                            kmercoords_window_iter);
+
+                        mypyself.iter = Box::new(iter);
+                        continue
+                    }
+                }
+            }; 
+        }
+
+        match item {
+            Some(x) => {
+                let Gff3Kmers { kmers, classifications, id: _} = x;
+                let kmers: Vec<Vec<u8>> = kmers.iter().map(|x| convert_string_to_array(mypyself.k, x)).collect();
+
+                let gil = Python::acquire_gil();
+                let py = gil.python();
+                let pyout = PyDict::new(py);
+                // let pyout = PyTuple::new(py, [kmers, truth]);
+                pyout.set_item("kmers", kmers).expect("Py Error");
+                pyout.set_item("classifications", classifications).expect("Py Error");
+                Ok(Some(pyout.to_object(py)))
+            },
+            None => Ok(None)
+        }
+    }
+}
+
+#[pymethods]
+impl Gff3KmerGenerator {
+    #[new]
+    fn new(
+        k: usize, 
+        filename: String, 
+        window_size: usize, 
+        gff3filename: String,
+    ) -> Self 
+    {
+
+        // Create KmerWindowGenerator
+        let kmercoords_window_iter = KmerCoordsWindowIter::new(
+                                        filename.clone(), 
+                                        k, 
+                                        window_size,
+                                        0,
+                                        false);
+        
+        let iter = Gff3KmersIter::new(gff3filename.clone(), kmercoords_window_iter);
+        let types = iter.types.clone();
+
+        Gff3KmerGenerator { 
+            iter: Box::new(iter),
+            k,
+            offset: 0,
+            filename,
+            gff3filename,
+            window_size,
+            types,
+            rc: false,
+        }
+    }
+}
+
+// ** Discriminator Masked Generator Wrapper
 
 #[pyclass]
 struct DiscriminatorMaskedGeneratorWrapper {
@@ -156,7 +275,7 @@ impl DiscriminatorMaskedGeneratorWrapper {
     }
 }
 
-// Non-batch mode
+// Non-batch discriminator masked generator
 #[pyclass]
 struct DiscriminatorMaskedGeneratorWrapperNB {
     iter: Box<dyn Iterator<Item = DiscriminatorMasked>>, // + Send>,
