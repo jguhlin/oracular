@@ -441,18 +441,21 @@ impl Iterator for Gff3KmersIter {
 
         for (n, _) in kmers.iter().enumerate() {
             let found = 
-              self.intervals
-                .landmarks
-                .get(&id)
-                .expect("GFF3 File Error")
-                .find(coords[n].0 as u32, coords[n].1 as u32);
+              match self.intervals
+                        .landmarks
+                        .get(&id) {
+                Some(x) => Some(x.find(coords[n].0 as u32, coords[n].1 as u32)),
+                None    => None
+            };
 
             let mut kmer_classification = blank.clone();
 
-            for x in found {
-                for (i, m) in (*x).val.iter().enumerate() {
-                    if *m == 1 {
-                        kmer_classification[i] = 1;
+            if let Some(found) = found {
+                for x in found {
+                    for (i, m) in (*x).val.iter().enumerate() {
+                        if *m == 1 {
+                            kmer_classification[i] = 1;
+                        }
                     }
                 }
             }
