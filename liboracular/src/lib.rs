@@ -16,6 +16,7 @@ extern crate snap;
 extern crate bincode;
 extern crate lazy_static;
 extern crate itertools;
+extern crate linked_hash_set;
 
 // #[macro_use]
 extern crate static_assertions;

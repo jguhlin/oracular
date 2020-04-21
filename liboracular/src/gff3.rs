@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
-use std::collections::HashSet;
+//use std::collections::HashSet;
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
 
@@ -9,6 +9,7 @@ use crate::intervals;
 
 use rust_lapper::{Interval, Lapper};
 use twox_hash::XxHash64;
+use linked_hash_set::LinkedHashSet;
 
 // use std::collections::HashMap;
 
@@ -63,13 +64,13 @@ fn parse_phase(x: &str) -> Option<u8> {
     }
 }
 
-pub fn parse_gff3_file(filename: String) -> (Vec<Gff3Entry>, HashSet<String>) {
+pub fn parse_gff3_file(filename: String) -> (Vec<Gff3Entry>, LinkedHashSet<String>) {
     let file = File::open(filename).expect("Unable to open file test_data/dmel.gff3");
     let reader = BufReader::new(file);
     let lines = reader.lines();
 
     let mut entries = Vec::with_capacity(1024 * 1024);
-    let mut types = HashSet::new();
+    let mut types = LinkedHashSet::new();
 
     for line in lines {
         if let Some(x) = parse_gff3_line(&line.expect("Unable to parse line")) {
@@ -88,9 +89,9 @@ pub fn start_stop_sort(start: usize, stop: usize) -> (usize, usize) {
 }
 
 pub fn get_gff3_intervals(filename: String) -> (intervals::IntervalMap<Vec<u8>>, Vec<String>) { // TODO!: Return Type
-    let (entries, mut types) = parse_gff3_file(filename);
+    let (entries, types) = parse_gff3_file(filename);
 
-    let types: Vec<String> = types.drain().collect();
+    let types: Vec<String> = types.into_iter().collect();
 
     let mut types_one_hot: HashMap<String, Vec<u8>, BuildHasherDefault<XxHash64>> = Default::default();
 
