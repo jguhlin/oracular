@@ -122,9 +122,9 @@ impl Iterator for DiscriminatorMaskedGenerator {
                     new_kmer.push(choices.choose_weighted(&mut self.rng, |item| item.1).unwrap().0);
                 }
                 *kmer = new_kmer;
-                truth.push(1);
-            } else {
                 truth.push(0);
+            } else {
+                truth.push(1);
             }
         }
 

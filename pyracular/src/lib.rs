@@ -79,7 +79,6 @@ impl PyIterProtocol for Gff3KmerGenerator {
                         println!("Finished, at the correct step...");
                         return Ok(None)
                     } else {
-
                         if mypyself.k == mypyself.offset {
                             mypyself.rc = true;
                             mypyself.offset = 0;
@@ -318,6 +317,8 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
                             mypyself.rc = true;
                             mypyself.offset = 0;
                         }
+
+                        // println!("New Offset: {} {}", mypyself.offset, mypyself.rc);
 
                         let kmer_window_generator = KmerWindowGenerator::new(
                             mypyself.filename.clone(), 
