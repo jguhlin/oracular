@@ -74,7 +74,7 @@ impl Iterator for SequenceSplitter3N {
 
                 self.curseq = curseq;
                 self.coords = coords;
-                self.coords.pop_front().unwrap()
+                self.coords.pop_front()
             }
         };
 
