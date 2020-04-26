@@ -74,7 +74,10 @@ impl Iterator for SequenceSplitter3N {
 
                 self.curseq = curseq;
                 self.coords = coords;
-                self.coords.pop_front()
+                match self.coords.pop_front() {
+                    Some(x) => x,
+                    None    => return None
+                }
             }
         };
 
