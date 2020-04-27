@@ -64,20 +64,27 @@ impl Iterator for SequenceSplitter3N {
         let coords = match self.coords.pop_front() {
             Some(x) => x,
             None    => { 
-                let curseq = match self.sequences.next() {
-                    Some(x) => x,
-                    None    => return None, // Out of data..
-                };
 
-                let coords: VecDeque<(usize, usize)>; 
-                coords = crate::utils::get_good_sequence_coords(&curseq.seq).into_iter().collect();
+                let mut x = None;
+                while x == None {
 
-                self.curseq = curseq;
-                self.coords = coords;
-                match self.coords.pop_front() {
-                    Some(x) => x,
-                    None    => return None
+                    let curseq = match self.sequences.next() {
+                        Some(x) => x,
+                        None    => return None,
+                    };
+
+                    let coords: VecDeque<(usize, usize)>; 
+                    coords = crate::utils::get_good_sequence_coords(&curseq.seq).into_iter().collect();
+
+                    self.curseq = curseq;
+                    self.coords = coords;
+                    x = match self.coords.pop_front() {
+                        Some(x) => Some(x),
+                        None    => None
+                    }
                 }
+
+                x.unwrap()
             }
         };
 
