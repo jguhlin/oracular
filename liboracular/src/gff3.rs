@@ -162,6 +162,7 @@ pub fn parse_gff3_line(line: &str) -> Option<Gff3Entry> {
     })
 }
 
+// TODO: Add a test, make sure GFF3 is the same as the intervals we find...
 #[cfg(test)]
 mod tests {
     use std::fs::File;
