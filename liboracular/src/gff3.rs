@@ -26,6 +26,7 @@ pub struct Gff3Entry {
     pub landmark: String,
     pub source: String,
     pub feature_type: String,
+    pub feature_type_strand: String,
     pub start: usize,
     pub end: usize,
     pub score: Option<f32>,
@@ -72,9 +73,10 @@ pub fn parse_gff3_file(filename: String) -> (Vec<Gff3Entry>, LinkedHashSet<Strin
     let mut entries = Vec::with_capacity(1024 * 1024);
     let mut types = LinkedHashSet::new();
 
+
     for line in lines {
         if let Some(x) = parse_gff3_line(&line.expect("Unable to parse line")) {
-            types.insert(x.feature_type.clone());
+            types.insert(x.feature_type_strand.clone());
             entries.push(x)
         }
     }
@@ -112,9 +114,10 @@ pub fn get_gff3_intervals(filename: String) -> (intervals::IntervalMap<Vec<u8>>,
     
     for (landmark, vals) in entries.iter() {
         let data = vals.iter()
-                        .map(|x| Interval { start: x.start as u32, 
+                        .map(|x| 
+                            Interval { start: x.start as u32, 
                                             stop: x.end as u32, 
-                                            val: types_one_hot.get(&x.feature_type).expect("Missing type!").clone() });
+                                            val: types_one_hot.get(&x.feature_type_strand).expect("Missing type!").clone() });
         let lapper = Lapper::new(data.collect()); // ::<Vec<Interval<Vec<bool>>>>());
         intervals.landmarks.insert(landmark.to_string(), lapper);
     }
@@ -138,14 +141,22 @@ pub fn parse_gff3_line(line: &str) -> Option<Gff3Entry> {
     if feature_type.to_lowercase() == "contig" { return None }
     // Probably more, only "region" is valid GFF3 if I remember correctly
 
+    let strand = parse_strand(x[6]);
+    let feature_type_strand = match strand {
+        Some(Strand::Plus)  => format!("{}_Plus", feature_type),
+        Some(Strand::Minus) => format!("{}_Minus", feature_type),
+        None                => feature_type.clone()
+    };
+
     Some(Gff3Entry { 
         landmark: x[0].to_string(),
         source: x[1].to_string(),
         feature_type,
+        feature_type_strand,
         start,
         end,
         score: parse_score(x[5]),
-        strand: parse_strand(x[6]),
+        strand,
         phase: parse_phase(x[7]),
         attributes: x[8].to_string()
     })

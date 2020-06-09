@@ -91,10 +91,11 @@ impl PyIterProtocol for Gff3KmerGenerator {
                             mypyself.offset,
                             mypyself.rc,
                         );
-
+ 
                         let iter = Gff3KmersIter::new(
                                             mypyself.gff3filename.clone(),
-                                            kmercoords_window_iter);
+                                            kmercoords_window_iter,
+                                            mypyself.k);
 
                         mypyself.iter = Box::new(iter);
                         continue
@@ -105,7 +106,7 @@ impl PyIterProtocol for Gff3KmerGenerator {
 
         match item {
             Some(x) => {
-                let Gff3Kmers { kmers, classifications, id: _} = x;
+                let Gff3Kmers { kmers, classifications, id, coords, rc} = x;
                 let kmers: Vec<Vec<u8>> = kmers.iter().map(|x| convert_string_to_array(mypyself.k, x)).collect();
 
                 let gil = Python::acquire_gil();
@@ -114,6 +115,9 @@ impl PyIterProtocol for Gff3KmerGenerator {
                 // let pyout = PyTuple::new(py, [kmers, truth]);
                 pyout.set_item("kmers", kmers).expect("Py Error");
                 pyout.set_item("classifications", classifications).expect("Py Error");
+                pyout.set_item("id", id).expect("Py Error");
+                pyout.set_item("rc", rc).expect("Py Error");
+                pyout.set_item("coords", coords).expect("Py Error");
                 Ok(Some(pyout.to_object(py)))
             },
             None => Ok(None)
@@ -140,7 +144,7 @@ impl Gff3KmerGenerator {
                                         0,
                                         false);
         
-        let iter = Gff3KmersIter::new(gff3filename.clone(), kmercoords_window_iter);
+        let iter = Gff3KmersIter::new(gff3filename.clone(), kmercoords_window_iter, k);
         let types = iter.types.clone();
 
         Gff3KmerGenerator { 
