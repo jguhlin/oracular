@@ -75,7 +75,7 @@ impl PyIterProtocol for Gff3KmerGenerator {
                 Some(x) => { finished = true; Some(x) },
                 None    => { 
                     mypyself.offset += 1;
-                    if (mypyself.k == mypyself.offset) {
+                    if mypyself.k == mypyself.offset && mypyself.rc {
                         println!("Finished, at the correct step...");
                         return Ok(None)
                     } else {
