@@ -128,7 +128,13 @@ mod tests {
         assert!(seq == b"TCAGGGNANNNNATTCTAAATCTCTGGTTTTT");
         seq.reverse();
         assert!(seq == b"TTTTTGGTCTCTAAATCTTANNNNANGGGACT");
+    }
 
+    #[test]
+    pub fn test_capitalize_nucleotides() {
+        let mut seq = b"agtcn".to_vec();
+        capitalize_nucleotides(&mut seq);
+        assert!(seq == b"AGTCN");
     }
 
 }

@@ -15,7 +15,7 @@ use linked_hash_set::LinkedHashSet;
 
 use itertools::Itertools;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Strand {
     Plus, // +
     Minus, // -
@@ -170,6 +170,31 @@ mod tests {
     use super::*;
 
     #[test]
+    pub fn test_parse_score() {
+        assert!(parse_score("") == None);
+        assert!(parse_score(".") == None);
+        assert!(parse_score("1.0") == Some(1.0));
+        assert!(parse_score("1") == Some(1.0));
+    }
+
+    #[test]
+    pub fn test_parse_strand() {
+        assert!(parse_strand("+") == Some(Strand::Plus));
+        assert!(parse_strand("-") == Some(Strand::Minus));
+        assert!(parse_strand("") == None);
+        assert!(parse_strand("Notastrand") == None);
+    }
+
+    #[test]
+    pub fn test_parse_phase() {
+        assert!(parse_phase("") == None);
+        assert!(parse_phase("0") == Some(0));
+        assert!(parse_phase("1") == Some(1));
+        assert!(parse_phase("2") == Some(2));
+        assert!(parse_phase("3") == None);
+    }
+
+    #[test]
     pub fn test_gff3_parse() {
         let mut file = File::open("test_data/Dmel_head30.gff3").expect("Unable to open file test_data/dmel.gff3");
         let mut contents = String::new();
@@ -183,7 +208,7 @@ mod tests {
 
     #[test]
     pub fn test_gff3_to_intervals() {
-        let (intervals, types) = get_gff3_intervals("test_data/Dmel_head30.gff3".to_string());
+        let (intervals, _) = get_gff3_intervals("test_data/Dmel_head30.gff3".to_string());
 
         let first_landmark = intervals.landmarks.keys().next().unwrap();
 

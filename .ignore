@@ -1,0 +1,5 @@
+**/*.sfasta
+*.sfasta
+test_multiple.sfasta
+test.sfasta
+test_data/*

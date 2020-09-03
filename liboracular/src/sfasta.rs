@@ -11,7 +11,7 @@ use serde::{Serialize, Deserialize};
 use crate::io;
 
 /// Represents an entry from an SFASTA file
-#[derive(PartialEq, Serialize, Deserialize)]
+#[derive(PartialEq, Serialize, Deserialize, Debug)]
 pub struct Entry {
     pub id:  String,
     pub seq: Vec<u8>,

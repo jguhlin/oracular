@@ -458,3 +458,15 @@ fn shuffle_and_batch_kmers(
         }
     }
 }
+
+/*
+
+TODO: Refactor to make easier to test, use, and develop
+
+#[cfg(test)]
+mod tests {
+    use std::fs::File;
+    use std::io::prelude::*;
+    use super::*;
+
+}*/
