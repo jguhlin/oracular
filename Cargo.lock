@@ -386,7 +386,6 @@ dependencies = [
  "ndarray",
  "ndarray-rand",
  "once_cell",
- "opinionated",
  "rand",
  "rand_core",
  "rand_xorshift",

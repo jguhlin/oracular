@@ -2,7 +2,6 @@ extern crate crossbeam;
 extern crate thincollections;
 extern crate wyhash;
 extern crate once_cell;
-extern crate opinionated;
 extern crate bytecount;
 extern crate flate2;
 extern crate serde;

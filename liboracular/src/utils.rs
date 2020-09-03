@@ -44,6 +44,29 @@ pub fn get_good_sequence_coords (seq: &[u8]) -> Vec<(usize, usize)> {
     coords
 }
 
+// Copied from opinionated lib...
+// Mutability here because we change everything to uppercase
+#[inline]
+pub fn capitalize_nucleotides(slice: &mut [u8]) {
+    // Convert to uppercase (using, what is hopefully a fast op)
+    for nucl in slice.iter_mut() {
+        // *x = _convert_nucl(*x);
+        match &nucl {
+            65  => continue,  // A -> A
+            97  => *nucl = 65,  // a -> A
+            67  => continue,  // C -> C
+            99  => *nucl = 67,  // c -> C
+            116 => *nucl = 84, // t -> T
+            84  => continue,  // T -> T
+            103 => *nucl = 71, // g -> G
+            71  => continue,  // G -> G
+            78  => continue,  // N -> N
+            // 110 => *nucl = 78, // n -> N
+            _   => *nucl = 78,   // Everything else -> N
+        }
+    }
+}
+
 #[inline(always)]
 fn _complement_nucl(nucl: u8) -> u8 {
     // Should all be capitalized by now...
