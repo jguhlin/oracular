@@ -4,6 +4,22 @@ before_install:
 #  - curl -L https://github.com/mozilla/grcov/releases/latest/download/grcov-linux-x86_64.tar.bz2 | tar jxf -
   - cargo install grcov
 
+rust: 
+  - stable
+  - beta
+  - nightly
+
+addons:
+  apt:
+    packages:
+      - libcurl4-openssl-dev
+      - libelf-dev
+      - libdw-dev
+      - cmake
+      - gcc
+      - binutils-dev
+      - libiberty-dev
+
 matrix:
   include:
     - os: linux
@@ -17,6 +33,5 @@ script:
     - bash run_grcov.bash
 #    - cargo test --verbose $CARGO_OPTIONS
     - |
-      zip -0 ccov.zip `find . \( -name "oracular*.gc*" \) -print`;
-      grcov ccov.zip -s . -t lcov --llvm --branch --ignore-not-existing --ignore "/*" -o lcov.info;
+      grcov ./target/debug/ -s . -t lcov --llvm --branch --ignore-not-existing --ignore "/*" -o lcov.info;
       bash <(curl -s https://codecov.io/bash) -f lcov.info;
