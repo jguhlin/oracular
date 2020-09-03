@@ -91,6 +91,11 @@ mod tests {
         let coords = get_good_sequence_coords(b"NNNAAAAAAAAAAAAAAAAAAAANNNAAAAAAAAAAAAAAAAAAAAAAAANNN");
         println!("{:#?}", coords);
         assert!(coords == [(1, 22), (25, 49)]);
+
+        let coords = get_good_sequence_coords(b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+        println!("{:#?}", coords);
+        assert!(coords == [(0, 44)]);
+
     }
 
     #[test]
