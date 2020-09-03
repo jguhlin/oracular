@@ -45,7 +45,7 @@ fn convert_string_to_array(k: usize, s: &[u8]) -> Vec<u8> {
 
 // ** Kmer Classification GFF3
 // Non-batch discriminator masked generator
-#[pyclass]
+#[pyclass(unsendable)]
 struct Gff3KmerGenerator {
     iter: Box<dyn Iterator<Item = Gff3Kmers>>,
     k: usize,
@@ -166,7 +166,7 @@ impl Gff3KmerGenerator {
 
 // ** Discriminator Masked Generator Wrapper
 
-#[pyclass]
+#[pyclass(unsendable)]
 struct DiscriminatorMaskedGeneratorWrapper {
     iter: Box<dyn Iterator<Item = DiscriminatorMasked>>, // + Send>,
     batch_size: usize,
@@ -283,7 +283,7 @@ impl DiscriminatorMaskedGeneratorWrapper {
 }
 
 // Non-batch discriminator masked generator
-#[pyclass]
+#[pyclass(unsendable)]
 struct DiscriminatorMaskedGeneratorWrapperNB {
     iter: Box<dyn Iterator<Item = DiscriminatorMasked>>, // + Send>,
     k: usize,
@@ -506,7 +506,7 @@ impl DiscriminatorMaskedGeneratorWrapperA2T {
 // One thread processes, the other thread generates the data
 // TODO
 
-#[pyclass]
+#[pyclass(unsendable)]
 struct CTFasta {
     batch_queue: Arc<ArrayQueue<ThreadCommand<SequenceBatch>>>,
     seq_queue: Arc<ArrayQueue<ThreadCommand<Sequence>>>,
