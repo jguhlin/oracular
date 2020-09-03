@@ -506,7 +506,7 @@ impl DiscriminatorMaskedGeneratorWrapperA2T {
 // One thread processes, the other thread generates the data
 // TODO
 
-#[pyclass(unsendable)]
+#[pyclass]
 struct CTFasta {
     batch_queue: Arc<ArrayQueue<ThreadCommand<SequenceBatch>>>,
     seq_queue: Arc<ArrayQueue<ThreadCommand<Sequence>>>,
