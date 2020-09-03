@@ -66,7 +66,7 @@ fn parse_phase(x: &str) -> Option<u8> {
 }
 
 pub fn parse_gff3_file(filename: String) -> (Vec<Gff3Entry>, LinkedHashSet<String>) {
-    let file = File::open(filename).expect("Unable to open file test_data/dmel.gff3");
+    let file = File::open(filename).expect("Unable to open file {}", filename);
     let reader = BufReader::new(file);
     let lines = reader.lines();
 
