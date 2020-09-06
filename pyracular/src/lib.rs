@@ -870,6 +870,8 @@ struct FastaKmersGenerator {
     window_size: usize,
     filename: String,
     rc: bool,
+    sliding: bool,
+    start_rc: bool,
 }
 
 #[pyproto]
@@ -890,8 +892,7 @@ impl PyIterProtocol for FastaKmersGenerator {
                 Some(x) => { finished = true; Some(x) },
                 None    => { 
                     mypyself.offset += 1;
-                    if mypyself.k == mypyself.offset && mypyself.rc {
-                        println!("Finished, at the correct step...");
+                    if (mypyself.k == mypyself.offset && mypyself.rc) || !self.sliding {
                         return Ok(None)
                     } else {
                         if mypyself.k == mypyself.offset {
@@ -936,11 +937,20 @@ impl PyIterProtocol for FastaKmersGenerator {
 
 #[pymethods]
 impl FastaKmersGenerator {
+    /// Create a new FastaKmersGenerator
+    /// Arguments: 
+    ///     k: kmer size, integer (usize)
+    ///     filename: String, location of .fasta, .sfata file
+    ///     window_size: How many kmers to produce per iteration
+    ///     sliding: Sliding window or just a once-over?
+    ///     start_rc: Start on the reverse strand? WARNING: Only use this when not doing sliding windows...
     #[new]
     fn new(
         k: usize, 
         filename: String, 
         window_size: usize, 
+        sliding: bool,
+        start_rc: bool,
     ) -> Self 
     {
 
@@ -959,6 +969,8 @@ impl FastaKmersGenerator {
             filename,
             window_size,
             rc: false,
+            sliding,
+            start_rc: rc,
         }
     }
 
