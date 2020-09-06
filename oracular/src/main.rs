@@ -1,7 +1,6 @@
 extern crate num_traits;
 extern crate flate2;
 extern crate indicatif;
-extern crate opinionated;
 // extern crate rayon;
 extern crate crossbeam;
 extern crate fnv;

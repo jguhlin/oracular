@@ -1,5 +1,4 @@
 use crossbeam::atomic::AtomicCell;
-use opinionated::fasta::{capitalize_nucleotides, complement_nucleotides};
 
 use std::sync::{Arc, RwLock};
 
@@ -257,7 +256,7 @@ fn io_worker_thread(
             let mut rawseq = seqpacket.rawseq;
             let id         = seqpacket.id;
 
-            capitalize_nucleotides(&mut rawseq);
+            super::utils::capitalize_nucleotides(&mut rawseq);
             let coords = super::utils::get_good_sequence_coords(&rawseq);
             
             for (start_coords, end_coords) in coords {
@@ -274,7 +273,7 @@ fn io_worker_thread(
                     }
 
                     let mut rc = rawseq[start_coords..end_coords].to_vec();
-                    complement_nucleotides(&mut rc);
+                    super::utils::complement_nucleotides(&mut rc);
                     rc.reverse();
 
                     jobs.fetch_add(1 as usize);

@@ -238,15 +238,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
-name = "generic-array"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ed1e761351b56f54eb9dcd0cfaca9fd0daecf93918e1cfc01c8a3d26ee7adcd"
-dependencies = [
- "typenum",
-]
-
-[[package]]
 name = "getrandom"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -342,15 +333,6 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f56a2d0bc861f9165be4eb3442afd3c236d8a98afd426f65d92324ae1091a484"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
@@ -380,13 +362,12 @@ dependencies = [
  "flate2",
  "fnv",
  "indicatif",
- "itertools 0.9.0",
+ "itertools",
  "lazy_static",
  "linked_hash_set",
  "ndarray",
  "ndarray-rand",
  "once_cell",
- "opinionated",
  "rand",
  "rand_core",
  "rand_xorshift",
@@ -539,38 +520,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17b02fc0ff9a9e4b35b3342880f48e896ebf69f2967921fe8646bf5b7125956a"
 
 [[package]]
-name = "numeric-array"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da9a506060b7b02d3fa1326ed1b1cba90dc5902bd71bbb497bf46006cfe94181"
-dependencies = [
- "generic-array",
- "num-traits",
- "typenum",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "260e51e7efe62b592207e9e13a68e43692a7a279171d6ba57abd208bf23645ad"
-
-[[package]]
-name = "opinionated"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "clap",
- "flate2",
- "fnv",
- "generic-array",
- "itertools 0.8.2",
- "num-traits",
- "numeric-array",
- "rayon",
- "serde",
- "twox-hash",
-]
 
 [[package]]
 name = "oracular"
@@ -582,12 +535,11 @@ dependencies = [
  "flate2",
  "fnv",
  "indicatif",
- "itertools 0.9.0",
+ "itertools",
  "liboracular",
  "num-traits",
  "num_cpus",
  "once_cell",
- "opinionated",
  "serde",
  "snap",
  "thincollections",
@@ -1007,12 +959,6 @@ checksum = "3bfd5b7557925ce778ff9b9ef90e3ade34c524b5ff10e239c69a42d546d2af56"
 dependencies = [
  "rand",
 ]
-
-[[package]]
-name = "typenum"
-version = "1.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "373c8a200f9e67a0c95e62a4f52fbf80c23b4381c05a17845531982fa99e6b33"
 
 [[package]]
 name = "unicode-width"

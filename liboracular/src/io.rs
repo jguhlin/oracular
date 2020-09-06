@@ -10,7 +10,7 @@ use std::collections::VecDeque;
 
 use crate::io;
 
-#[derive(PartialEq, Serialize, Deserialize, Clone)]
+#[derive(PartialEq, Serialize, Deserialize, Clone, Debug)]
 pub struct Sequence {
     pub seq:      Vec<u8>,
     pub id:       String,
@@ -172,8 +172,38 @@ mod tests {
     #[test]
     pub fn test_3n_splitter() {
         let sequences = Box::new(sfasta::Sequences::new("test_data/test.sfasta".to_string()));
-        let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
+        let sequences = Box::new(io::SequenceSplitter3N::new(sequences));
         assert!(sequences.coords == [(0, 19), (38, 63)]);
+
+        sfasta::convert_fasta_file("test_data/test_multiple.fna".to_string(), "test_data/test_multiple.sfasta".to_string());
+        let sequences = Box::new(sfasta::Sequences::new("test_data/test_multiple.sfasta".to_string()));
+        let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
+        sequences.next();
+        assert!(sequences.coords == [(38,65)]);
+
+        sequences.next().unwrap();
+        sequences.next().unwrap();
+        sequences.next().unwrap();
+        sequences.next().unwrap();
+        let x = sequences.next().unwrap();
+
+        println!("{:#?}", x);
+        assert!(x.id == "test3");
+        assert!(x.seq == [65, 67, 84, 71, 65, 67, 84, 71, 65, 67, 84, 71, 65, 67, 84, 71, 65, 67, 84]);
+        assert!(x.location == 0);
+        assert!(x.end == 19);
+    }
+
+    #[test]
+    pub fn test_sequences_impl() {
+        Sequences::new("test_data/test.fna".to_string());
+    }
+
+    #[test]
+    #[should_panic(expected = "Couldn't open test_data/empty.fna.sfasta: The system cannot find the file specified. (os error 2)")]
+    pub fn test_3n_splitter_empty() {
+        let sequences = Box::new(sfasta::Sequences::new("test_data/empty.fna".to_string()));
+        let _ = Box::new(io::SequenceSplitter3N::new(sequences));
     }
 }
 
