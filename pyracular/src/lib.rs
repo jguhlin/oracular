@@ -926,7 +926,7 @@ impl PyIterProtocol for FastaKmersGenerator {
                 // let pyout = PyTuple::new(py, [kmers, truth]);
                 pyout.set_item("kmers", kmers).expect("Py Error");
                 pyout.set_item("coords", coords).expect("Py Error");
-                pyout.set_item("id", id).expect("Py Error");
+                pyout.set_item("ids", id).expect("Py Error");
                 pyout.set_item("rc", rc).expect("Py Error");
                 Ok(Some(pyout.to_object(py)))
             },
@@ -994,7 +994,7 @@ fn test_sfasta(input: String)
     sfasta::test_sfasta(input);
 }
 
-/// This module is a python module implemented in Rust.
+/// Provides functions for python dealing with Kmers from fasta and sfasta files...
 #[pymodule]
 fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<CTFasta>()?;
