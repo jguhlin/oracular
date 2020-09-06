@@ -892,7 +892,7 @@ impl PyIterProtocol for FastaKmersGenerator {
                 Some(x) => { finished = true; Some(x) },
                 None    => { 
                     mypyself.offset += 1;
-                    if (mypyself.k == mypyself.offset && mypyself.rc) || !self.sliding {
+                    if (mypyself.k == mypyself.offset && mypyself.rc) || !mypyself.sliding {
                         return Ok(None)
                     } else {
                         if mypyself.k == mypyself.offset {
@@ -960,7 +960,7 @@ impl FastaKmersGenerator {
                                         k, 
                                         window_size,
                                         0,
-                                        false);
+                                        start_rc);
         
         FastaKmersGenerator { 
             iter: Box::new(iter),
@@ -970,7 +970,7 @@ impl FastaKmersGenerator {
             window_size,
             rc: false,
             sliding,
-            start_rc: rc,
+            start_rc: start_rc,
         }
     }
 

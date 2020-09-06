@@ -272,50 +272,50 @@ pub fn parse_fasta_kmers_shuffle (
 
 {
 
-let unshuffled_queue   = Arc::new(ArrayQueue::<ThreadCommand<SequenceKmers>>::new(shuffle_buffer));
-let batch_queue        = Arc::new(ArrayQueue::<ThreadCommand<SequenceBatchKmers>>::new(buffer_size));
+    let unshuffled_queue   = Arc::new(ArrayQueue::<ThreadCommand<SequenceKmers>>::new(shuffle_buffer));
+    let batch_queue        = Arc::new(ArrayQueue::<ThreadCommand<SequenceBatchKmers>>::new(buffer_size));
 
-let (seq_queue, jobs, generator_done, generator, mut children) 
-    = sequence_generator(kmer_size, &filename, 1_u64);
+    let (seq_queue, jobs, generator_done, generator, mut children) 
+        = sequence_generator(kmer_size, &filename, 1_u64);
 
-for _ in 0..num_threads {
-    let seq_queue = Arc::clone(&seq_queue);
-    let unshuffled_queue = Arc::clone(&unshuffled_queue);
-    let kmer_size = kmer_size.clone();
-    let jobs = Arc::clone(&jobs);
+    for _ in 0..num_threads {
+        let seq_queue = Arc::clone(&seq_queue);
+        let unshuffled_queue = Arc::clone(&unshuffled_queue);
+        let kmer_size = kmer_size.clone();
+        let jobs = Arc::clone(&jobs);
 
-    let child = match Builder::new()
-        .name("ctfasta_worker".into())
-        .stack_size(WORKERSTACKSIZE)
-        .spawn(move || fasta_kmers_worker_thread(kmer_size, sample_size, seq_queue, unshuffled_queue, jobs)) {
-            Ok(x)  => x,
-            Err(y) => panic!("Unable to create fasta_kmers_worker_thread {}", y)
-        };
+        let child = match Builder::new()
+            .name("ctfasta_worker".into())
+            .stack_size(WORKERSTACKSIZE)
+            .spawn(move || fasta_kmers_worker_thread(kmer_size, sample_size, seq_queue, unshuffled_queue, jobs)) {
+                Ok(x)  => x,
+                Err(y) => panic!("Unable to create fasta_kmers_worker_thread {}", y)
+            };
 
-    children.push(child);
-}
+        children.push(child);
+    }
 
-// Thread to handle some minor shuffling and putting them into batches...
+    // Thread to handle some minor shuffling and putting them into batches...
 
-{
-    let batch_queue = Arc::clone(&batch_queue);
-    let jobs = Arc::clone(&jobs);
-    let unshuffled_queue = Arc::clone(&unshuffled_queue);
+    {
+        let batch_queue = Arc::clone(&batch_queue);
+        let jobs = Arc::clone(&jobs);
+        let unshuffled_queue = Arc::clone(&unshuffled_queue);
 
-    let child = match Builder::new()
-        .name("ShuffleAndBatchKmers".into())
-        .stack_size(WORKERSTACKSIZE)
-        .spawn(move || shuffle_and_batch_kmers(batch_size, unshuffled_queue, batch_queue, jobs)) {
-            Ok(x) => x,
-            Err(y) => panic!("Unable to create shuffle and batch kmers thread {}", y)
-        };
+        let child = match Builder::new()
+            .name("ShuffleAndBatchKmers".into())
+            .stack_size(WORKERSTACKSIZE)
+            .spawn(move || shuffle_and_batch_kmers(batch_size, unshuffled_queue, batch_queue, jobs)) {
+                Ok(x) => x,
+                Err(y) => panic!("Unable to create shuffle and batch kmers thread {}", y)
+            };
 
-    children.push(child);
-}
+        children.push(child);
+    }
 
-// Need to return things (generator_done, generator, jobs, children) so that other threads/processes can handle them...
+    // Need to return things (generator_done, generator, jobs, children) so that other threads/processes can handle them...
 
-(batch_queue, seq_queue, unshuffled_queue, generator, generator_done, jobs, children)
+    (batch_queue, seq_queue, unshuffled_queue, generator, generator_done, jobs, children)
 }
 
 /// This function does the work of splitting up kmers into target and contexts...
@@ -458,15 +458,3 @@ fn shuffle_and_batch_kmers(
         }
     }
 }
-
-/*
-
-TODO: Refactor to make easier to test, use, and develop
-
-#[cfg(test)]
-mod tests {
-    use std::fs::File;
-    use std::io::prelude::*;
-    use super::*;
-
-}*/
