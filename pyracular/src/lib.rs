@@ -3,8 +3,8 @@ extern crate rayon;
 // NOTE: New naming convention
 // Rust-y stuff is "iter" Python is "Generator"
 
-use liboracular::kmers::{KmerWindowGenerator, DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3KmersIter, Gff3Kmers, KmerCoordsWindowIter};
-use liboracular::fasta::{parse_ctfasta_target_contexts, parse_fasta_kmers};
+use liboracular::kmers::{KmerWindowGenerator, DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3KmersIter, Gff3Kmers, KmerCoordsWindowIter, KmerCoordsWindow};
+use liboracular::fasta::{parse_ctfasta_target_contexts, parse_fasta_kmers_shuffle};
 use liboracular::threads::{Sequence, ThreadCommand, SequenceBatch, SequenceTargetContexts, SequenceBatchKmers, SequenceKmers};
 use liboracular::sfasta;
 
@@ -686,7 +686,7 @@ impl CTFasta {
 }
 
 #[pyclass]
-struct FastaKmers {
+struct FastaKmersShuffle {
     batch_queue: Arc<ArrayQueue<ThreadCommand<SequenceBatchKmers>>>,
     seq_queue: Arc<ArrayQueue<ThreadCommand<Sequence>>>,
     unshuffled_queue: Arc<ArrayQueue<ThreadCommand<SequenceKmers>>>,
@@ -701,7 +701,7 @@ struct FastaKmers {
 }
 
 #[pymethods]
-impl FastaKmers {
+impl FastaKmersShuffle {
     #[new]
     fn new(
         k: usize, 
@@ -712,8 +712,8 @@ impl FastaKmers {
         buffer_size: usize,
         num_threads: usize) -> Self 
     {
-        let (batch_queue, seq_queue, unshuffled_queue, generator, generator_done, _jobs, children) = parse_fasta_kmers(k, &filename, sample_size, batch_size, shuffle_buffer, buffer_size, num_threads);
-        FastaKmers { 
+        let (batch_queue, seq_queue, unshuffled_queue, generator, generator_done, _jobs, children) = parse_fasta_kmers_shuffle(k, &filename, sample_size, batch_size, shuffle_buffer, buffer_size, num_threads);
+        FastaKmersShuffle { 
             batch_queue, 
             batch_size,
             seq_queue, 
@@ -861,6 +861,110 @@ impl FastaKmers {
 
 }
 
+// ** Fasta Kmer Generator
+#[pyclass(unsendable)]
+struct FastaKmersGenerator {
+    iter: Box<dyn Iterator<Item = KmerCoordsWindow>>,
+    k: usize,
+    offset: usize,
+    window_size: usize,
+    filename: String,
+    rc: bool,
+}
+
+#[pyproto]
+impl PyIterProtocol for FastaKmersGenerator {
+    fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        Ok(mypyself.into_py(py))
+    }
+
+    fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
+
+        let mut finished = false;
+        let mut item = None;
+
+        while !finished {
+            item = match mypyself.iter.next() {
+                Some(x) => { finished = true; Some(x) },
+                None    => { 
+                    mypyself.offset += 1;
+                    if mypyself.k == mypyself.offset && mypyself.rc {
+                        println!("Finished, at the correct step...");
+                        return Ok(None)
+                    } else {
+                        if mypyself.k == mypyself.offset {
+                            mypyself.rc = true;
+                            mypyself.offset = 0;
+                        }
+
+                        let iter = KmerCoordsWindowIter::new(
+                            mypyself.filename.clone(), 
+                            mypyself.k, 
+                            mypyself.window_size,
+                            mypyself.offset,
+                            mypyself.rc,
+                        );
+ 
+                        mypyself.iter = Box::new(iter);
+                        continue
+                    }
+                }
+            }; 
+        }
+
+        match item {
+            Some(x) => {
+                let KmerCoordsWindow { kmers, coords, id, rc } = x;
+                let kmers: Vec<Vec<u8>> = kmers.iter().map(|x| convert_string_to_array(mypyself.k, x)).collect();
+
+                let gil = Python::acquire_gil();
+                let py = gil.python();
+                let pyout = PyDict::new(py);
+                // let pyout = PyTuple::new(py, [kmers, truth]);
+                pyout.set_item("kmers", kmers).expect("Py Error");
+                pyout.set_item("coords", coords).expect("Py Error");
+                pyout.set_item("id", id).expect("Py Error");
+                pyout.set_item("rc", rc).expect("Py Error");
+                Ok(Some(pyout.to_object(py)))
+            },
+            None => Ok(None)
+        }
+    }
+}
+
+#[pymethods]
+impl FastaKmersGenerator {
+    #[new]
+    fn new(
+        k: usize, 
+        filename: String, 
+        window_size: usize, 
+    ) -> Self 
+    {
+
+        // Create KmerWindowGenerator
+        let iter = KmerCoordsWindowIter::new(
+                                        filename.clone(), 
+                                        k, 
+                                        window_size,
+                                        0,
+                                        false);
+        
+        FastaKmersGenerator { 
+            iter: Box::new(iter),
+            k,
+            offset: 0,
+            filename,
+            window_size,
+            rc: false,
+        }
+    }
+
+}
+
+
 #[pyfunction]
 fn convert_fasta_to_sfasta(input: String, output: String) {
     sfasta::convert_fasta_file(input, output);
@@ -882,13 +986,15 @@ fn test_sfasta(input: String)
 #[pymodule]
 fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<CTFasta>()?;
-    m.add_class::<FastaKmers>()?;
+    m.add_class::<FastaKmersGenerator>()?;   
     m.add_class::<DiscriminatorMaskedGeneratorWrapper>()?;
     m.add_class::<DiscriminatorMaskedGeneratorWrapperNB>()?;
     m.add_class::<Gff3KmerGenerator>()?;
     m.add_wrapped(wrap_pyfunction!(convert_fasta_to_sfasta))?;
     m.add_wrapped(wrap_pyfunction!(get_headers_from_sfasta))?;
     m.add_wrapped(wrap_pyfunction!(test_sfasta))?;
+
+    m.add_class::<FastaKmersShuffle>()?; // This one really isn't used anymore, I think
 
     Ok(())
 }

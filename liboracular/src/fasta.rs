@@ -253,7 +253,7 @@ fn ctfasta_worker_thread (
 }
 
 // Get kmers from FASTA file
-pub fn parse_fasta_kmers (
+pub fn parse_fasta_kmers_shuffle (
     kmer_size: usize,
     filename: &str,
     sample_size: usize,
