@@ -19,17 +19,17 @@ pub struct Sequence {
 }
 
 pub struct Sequences {
-    reader: Box<dyn Read>
+    reader: Box<dyn Read + Send>
 }
 
 pub struct SequenceSplitter3N {
-    sequences: Box<dyn Iterator<Item = io::Sequence>>,
+    sequences: Box<dyn Iterator<Item = io::Sequence> + Send>,
     curseq: Sequence,
     coords: VecDeque<(usize, usize)>,
 }
 
 impl SequenceSplitter3N {
-    pub fn new(mut sequences: Box<dyn Iterator<Item = io::Sequence>>) 
+    pub fn new(mut sequences: Box<dyn Iterator<Item = io::Sequence> + Send>) 
     -> SequenceSplitter3N {
 
         let curseq = match sequences.next() {
@@ -123,7 +123,7 @@ fn _open_file_with_progress_bar(filename: String) -> (Box<dyn Read>, ProgressBar
     (Box::new(reader), pb)
 }
 
-fn open_file(filename: String) -> Box<dyn Read>
+fn open_file(filename: String) -> Box<dyn Read + Send>
 {
     let file = match File::open(&filename) {
         Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
@@ -132,7 +132,7 @@ fn open_file(filename: String) -> Box<dyn Read>
 
     let file = BufReader::with_capacity(64 * 1024 * 1024, file);
 
-    let fasta: Box<dyn Read> = if filename.ends_with("gz") {
+    let fasta: Box<dyn Read + Send> = if filename.ends_with("gz") {
         Box::new(flate2::read::GzDecoder::new(file))
     } else if filename.ends_with("snappy") || filename.ends_with("sz") {
         Box::new(snap::read::FrameDecoder::new(file))

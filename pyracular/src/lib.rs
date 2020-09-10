@@ -45,9 +45,9 @@ fn convert_string_to_array(k: usize, s: &[u8]) -> Vec<u8> {
 
 // ** Kmer Classification GFF3
 // Non-batch discriminator masked generator
-#[pyclass(unsendable)]
+#[pyclass]
 struct Gff3KmerGenerator {
-    iter: Box<dyn Iterator<Item = Gff3Kmers>>,
+    iter: Box<dyn Iterator<Item = Gff3Kmers> + Send>,
     k: usize,
     offset: usize,
     window_size: usize,
@@ -166,9 +166,9 @@ impl Gff3KmerGenerator {
 
 // ** Discriminator Masked Generator Wrapper
 
-#[pyclass(unsendable)]
+#[pyclass]
 struct DiscriminatorMaskedGeneratorWrapper {
-    iter: Box<dyn Iterator<Item = DiscriminatorMasked>>, // + Send>,
+    iter: Box<dyn Iterator<Item = DiscriminatorMasked> + Send>, // + Send>,
     batch_size: usize,
     k: usize,
     offset: usize,
@@ -283,9 +283,9 @@ impl DiscriminatorMaskedGeneratorWrapper {
 }
 
 // Non-batch discriminator masked generator
-#[pyclass(unsendable)]
+#[pyclass]
 struct DiscriminatorMaskedGeneratorWrapperNB {
-    iter: Box<dyn Iterator<Item = DiscriminatorMasked>>, // + Send>,
+    iter: Box<dyn Iterator<Item = DiscriminatorMasked> + Send>, // + Send>,
     k: usize,
     offset: usize,
     window_size: usize,
@@ -862,9 +862,9 @@ impl FastaKmersShuffle {
 }
 
 // ** Fasta Kmer Generator
-#[pyclass(unsendable)]
+#[pyclass]
 struct FastaKmersGenerator {
-    iter: Box<dyn Iterator<Item = KmerCoordsWindow>>,
+    iter: Box<dyn Iterator<Item = KmerCoordsWindow> + Send>,
     k: usize,
     offset: usize,
     window_size: usize,

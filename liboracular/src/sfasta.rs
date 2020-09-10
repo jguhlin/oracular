@@ -29,7 +29,7 @@ pub struct EntryCompressed {
 
 /// Iterator to return io::Sequences
 pub struct Sequences {
-    reader: Box<dyn Read>,
+    reader: Box<dyn Read + Send>,
 }
 
 // TODO: Should be a TryFrom really...
@@ -265,7 +265,7 @@ fn check_extension(filename: String) -> String {
 }
 
 /// Opens an SFASTA file and returns a Box<dyn Read> type
-fn open_file(filename: String) -> Box<dyn Read> {
+fn open_file(filename: String) -> Box<dyn Read + Send> {
 
     let filename = check_extension(filename);
 

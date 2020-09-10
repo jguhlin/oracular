@@ -8,6 +8,8 @@ use crate::utils;
 use crate::gff3;
 use crate::intervals;
 
+use std::sync::{Arc, RwLock};
+
 type Kmer = Vec<u8>;
 type Coords = (usize, usize);
 
@@ -53,7 +55,7 @@ pub struct KmerWindow {
 }
 
 pub struct KmerWindowGenerator {
-    sequences: Box<dyn Iterator<Item = io::Sequence>>,
+    sequences: Box<dyn Iterator<Item = io::Sequence> + Send>,
     window_size: usize,
     k: usize,
     kmer_generator: Kmers,
@@ -77,7 +79,6 @@ pub struct DiscriminatorMasked {
 pub struct DiscriminatorMaskedGenerator {
     kmer_window_generator: KmerWindowGenerator,
     replacement_pct: f32,
-    rng: rand::prelude::ThreadRng,
     k: usize,
     // TODO: Put alphabet here so we can train proteins as well...
 }
@@ -88,12 +89,11 @@ impl DiscriminatorMaskedGenerator {
         k: usize,
         generator: KmerWindowGenerator) -> DiscriminatorMaskedGenerator 
     {
-        let rng = rand::thread_rng();
+        // let rng = Arc::new(RwLock::new(rand::thread_rng()));
 
         DiscriminatorMaskedGenerator {
             kmer_window_generator: generator,
             replacement_pct,
-            rng,
             k,
         }
     }
@@ -116,11 +116,13 @@ impl Iterator for DiscriminatorMaskedGenerator {
 
         let mut truth: Vec<u8> = Vec::with_capacity(kmers.len());
 
+        let mut rng = rand::thread_rng();
+
         for kmer in kmers.iter_mut() {
-            if self.rng.gen::<f32>() < self.replacement_pct {
+            if rng.gen::<f32>() < self.replacement_pct {
                 let mut new_kmer: Vec<u8> = Vec::with_capacity(self.k);
                 for _i in 0..self.k {
-                    new_kmer.push(choices.choose_weighted(&mut self.rng, |item| item.1).unwrap().0);
+                    new_kmer.push(choices.choose_weighted(&mut rng, |item| item.1).unwrap().0);
                 }
                 *kmer = new_kmer;
                 truth.push(0);
@@ -245,7 +247,7 @@ pub struct KmerCoordsWindow {
 }
 
 pub struct KmerCoordsWindowIter {
-    sequences: Box<dyn Iterator<Item = io::Sequence>>,
+    sequences: Box<dyn Iterator<Item = io::Sequence> + Send>,
     window_size: usize,
     k: usize,
     kmer_generator: Kmers,
