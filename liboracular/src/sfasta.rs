@@ -284,7 +284,7 @@ fn open_file(filename: String) -> Box<dyn Read + Send> {
 }
 
 /// Indexes an SFASTA file
-fn index(filename: &str) -> String {
+pub fn index(filename: &str) -> String {
 
     // TODO: Run a sanity check on the file first... Make sure it's valid
     // sfasta

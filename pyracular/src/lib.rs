@@ -983,6 +983,12 @@ fn convert_fasta_to_sfasta(input: String, output: String) {
 }
 
 #[pyfunction]
+fn index_sfasta(input: String) -> String {
+    return sfasta::index(&input);
+}
+
+
+#[pyfunction]
 fn get_headers_from_sfasta(input: String) -> Vec<String>
 {
     sfasta::get_headers_from_sfasta(input)
