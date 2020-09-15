@@ -1011,6 +1011,7 @@ fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(convert_fasta_to_sfasta))?;
     m.add_wrapped(wrap_pyfunction!(get_headers_from_sfasta))?;
     m.add_wrapped(wrap_pyfunction!(test_sfasta))?;
+    m.add_wrapped(wrap_pyfunction!(index_sfasta))?;
 
     m.add_class::<FastaKmersShuffle>()?; // This one really isn't used anymore, I think
 
