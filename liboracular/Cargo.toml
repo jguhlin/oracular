@@ -21,7 +21,7 @@ bytecount = "0.6.0"
 flate2 = { version = "1.0.17", features = ["zlib"] }
 twox-hash = "1.5.0"
 stdinout = "0.4.1"
-static_assertions = "1.0.0"
+static_assertions = "1.1.0"
 t1ha = "0.1"
 ndarray = "0.13"
 ndarray-rand = "0.11"

@@ -18,3 +18,5 @@ work/*
 *.log
 *.sfasta
 .vstags
+test_data/*sfasta
+*.sfai

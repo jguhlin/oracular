@@ -1,10 +1,13 @@
 use std::io::prelude::*;
-use std::io::BufWriter;
 
 use std::convert::From;
 
-use std::fs::File;
-use std::io::{BufReader, Read, BufRead};
+use std::fs::{File, metadata};
+use std::io::{BufReader, Read, BufRead, BufWriter, Write, SeekFrom};
+use std::path::Path;
+
+use std::collections::HashMap;
+use twox_hash::RandomXxHashBuilder64;
 
 use serde::{Serialize, Deserialize};
 
@@ -280,6 +283,43 @@ fn open_file(filename: String) -> Box<dyn Read + Send> {
     Box::new(reader)
 }
 
+/// Indexes an SFASTA file
+fn index(filename: &str) -> String {
+
+    // TODO: Run a sanity check on the file first... Make sure it's valid
+    // sfasta
+
+    let filesize = metadata(&filename).expect("Unable to open file").len();
+    let starting_size = std::cmp::max((filesize / 10000) as usize, 1024);
+
+    let mut idx: HashMap<String, u64, RandomXxHashBuilder64> = Default::default();
+    idx.reserve(starting_size);
+
+    let fh = match File::open(&filename) {
+        Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
+        Ok(file) => file,
+    };
+
+    let fh = BufReader::with_capacity(32 * 1024 * 1024, fh);
+    let mut fh = BufReader::with_capacity(32 * 1024 * 1024, fh);
+    let mut pos = fh.seek(SeekFrom::Current(0)).expect("Unable to work with seek API");
+
+    while let Ok(entry) = bincode::deserialize_from::<_, EntryCompressed>(&mut fh) {
+        idx.insert(entry.id.clone(), pos);
+        pos = fh.seek(SeekFrom::Current(0)).expect("Unable to work with seek API");
+    }
+
+    let filenamepath = Path::new(&filename);
+    let filename = Path::new(filenamepath.file_name().unwrap()).file_stem().unwrap().to_str().unwrap().to_owned() + ".sfai";
+    let output_filename = filenamepath.parent().unwrap().to_str().unwrap().to_owned() + "/" + &filename;
+
+    let out_file = snap::write::FrameEncoder::new(File::create(output_filename.clone()).expect("Unable to write to file"));
+    let mut out_fh = BufWriter::with_capacity(4 * 1024 * 1024, out_file);
+    bincode::serialize_into(&mut out_fh, &idx).expect("Unable to write index");
+
+    return output_filename
+}
+
 /*
 fn open_file_with_progress_bar(filename: String) -> (Box<dyn Read>, ProgressBar)
 {
@@ -320,8 +360,15 @@ mod tests {
     use super::*;
 
     #[test]
-    pub fn convert_fasta_to_sfasta() {
-//        convert_fasta_file("test_data/test.fna".to_string(), 
-//                           "test_data/test.sfasta".to_string());
+    pub fn convert_fasta_to_sfasta_and_index() {
+        let input_filename = "test_data/test_multiple.fna";
+        let output_filename = "test_data/test_sfasta_convert_and_index.sfasta";
+
+
+        convert_fasta_file(input_filename.to_string(), 
+                           output_filename.to_string());
+
+        let idx_filename = index(output_filename);
+        assert!(idx_filename == "test_data/test_sfasta_convert_and_index.sfai");
     }
 }

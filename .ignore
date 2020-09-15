@@ -3,3 +3,5 @@
 test_multiple.sfasta
 test.sfasta
 test_data/*
+test_data/test_sfasta.sfasta
+*.sfai
