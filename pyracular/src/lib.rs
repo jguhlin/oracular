@@ -675,7 +675,7 @@ impl CTFasta {
                 //                pyentry.set_item("target", entry.target);
                 // Convert contexts into PyList
                 //                let contexts = PyList::new(py,
-                // entry.contexts);                
+                // entry.contexts);
                 // pyentry.set_item("contexts", contexts);
 
                 //                batchvec.push(pyentry);
@@ -863,7 +863,7 @@ impl FastaKmersShuffle {
                 //                pyentry.set_item("target", entry.target);
                 // Convert contexts into PyList
                 //                let contexts = PyList::new(py,
-                // entry.contexts);                
+                // entry.contexts);
                 // pyentry.set_item("contexts", contexts);
 
                 //                batchvec.push(pyentry);

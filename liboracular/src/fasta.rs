@@ -231,9 +231,8 @@ fn ctfasta_worker_thread(
                 let kmers: Vec<&[u8]> = seq.chunks_exact(kmer_size).collect();
 
                 for item in kmers.iter().take(window_size) {
-                    contexts.push(
-                        String::from_utf8(item.to_vec()).expect("Invalid UTF-8 Encoding"),
-                    );
+                    contexts
+                        .push(String::from_utf8(item.to_vec()).expect("Invalid UTF-8 Encoding"));
                 }
 
                 for z in 0..window_size {
@@ -392,9 +391,8 @@ fn fasta_kmers_worker_thread(
                 let kmers: Vec<&[u8]> = seq.chunks_exact(kmer_size).collect();
 
                 for item in kmers.iter().take(sample_size) {
-                    kmers_out.push(
-                        String::from_utf8(item.to_vec()).expect("Invalid UTF-8 Encoding"),
-                    );
+                    kmers_out
+                        .push(String::from_utf8(item.to_vec()).expect("Invalid UTF-8 Encoding"));
                 }
 
                 let seq = SequenceKmers {

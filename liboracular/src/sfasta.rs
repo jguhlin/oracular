@@ -7,8 +7,8 @@ use std::io::{BufRead, BufReader, BufWriter, Read, SeekFrom, Write};
 use std::path::Path;
 use std::time::Instant;
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::io;
 
