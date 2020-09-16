@@ -8,7 +8,9 @@ members = [
 [profile.release]
 opt-level = 3
 lto = true
-# debug = true # Eventually remove this.... but good to valgrind
+panic = "abort"
+codegen-units = 1
+#debug = true # Eventually remove this.... but good to valgrind
 
 [profile.dev]
 # opt-level = 3 # Memory allocation is too slow otherwise...

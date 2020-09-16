@@ -16,9 +16,10 @@ extern crate bincode;
 extern crate lazy_static;
 extern crate itertools;
 extern crate linked_hash_set;
+extern crate bumpalo;
 
 // #[macro_use]
-extern crate static_assertions;
+extern crate static_assertions; // I don't think this is being used anymore...
 
 mod utils;
 pub mod threads;

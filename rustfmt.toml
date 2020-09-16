@@ -1,0 +1,4 @@
+max_width = 140
+comment_width = 140
+wrap_comments = true
+edition = 2018

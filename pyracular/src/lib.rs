@@ -349,18 +349,6 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
                 let DiscriminatorMasked { kmers, truth, id: _} = x;
                 let kmers: Vec<Vec<u8>> = kmers.iter().map(|x| convert_string_to_array(mypyself.k, x)).collect();
 
-/*                // TODO: I think this is fixed.  Leaving it in for now!
-                if kmers[0].len() == 0 {
-        		    println!("----");
-                    println!("{:#?}", mypyself.rc);
-	                println!("{:#?}", mypyself.offset);
-                    println!("{:#?}", id);
-                    println!("{:#?}", truth);
-                    println!("{:#?}", kmers);
-                    println!("Out of kmers -- Shouldn't get here...");
-                    return Ok(None)
-                }*/
-
                 let gil = Python::acquire_gil();
                 let py = gil.python();
                 let pyout = PyDict::new(py);

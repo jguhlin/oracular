@@ -179,7 +179,8 @@ mod tests {
         let sequences = Box::new(sfasta::Sequences::new("test_data/test_multiple.sfasta".to_string()));
         let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
         sequences.next();
-        assert!(sequences.coords == [(38,65)]);
+        println!("{:#?}", sequences.coords);
+        assert!(sequences.coords == [(38,79), (98, 124)]);
 
         sequences.next().unwrap();
         sequences.next().unwrap();
@@ -188,10 +189,10 @@ mod tests {
         let x = sequences.next().unwrap();
 
         println!("{:#?}", x);
-        assert!(x.id == "test3");
-        assert!(x.seq == [65, 67, 84, 71, 65, 67, 84, 71, 65, 67, 84, 71, 65, 67, 84, 71, 65, 67, 84]);
-        assert!(x.location == 0);
-        assert!(x.end == 19);
+        assert!(x.id == "test2");
+        assert!(x.seq[0..5] == [78, 65, 67, 84, 71]);
+        assert!(x.location == 105);
+        assert!(x.end == 153);
     }
 
     #[test]
@@ -200,7 +201,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Couldn't open test_data/empty.fna.sfasta: The system cannot find the file specified. (os error 2)")]
+    #[should_panic(expected = "Couldn't open test_data/empty.fna.sfasta")]
     pub fn test_3n_splitter_empty() {
         let sequences = Box::new(sfasta::Sequences::new("test_data/empty.fna".to_string()));
         let _ = Box::new(io::SequenceSplitter3N::new(sequences));

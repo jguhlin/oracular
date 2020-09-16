@@ -5,13 +5,20 @@ use std::convert::From;
 use std::fs::{File, metadata};
 use std::io::{BufReader, Read, BufRead, BufWriter, Write, SeekFrom};
 use std::path::Path;
+use std::time::Instant;
 
 use std::collections::HashMap;
 use twox_hash::RandomXxHashBuilder64;
 
 use serde::{Serialize, Deserialize};
+use bumpalo::{Bump};
 
 use crate::io;
+
+// TODO: Set a const for BufReader buffer size
+//       Make it a global const, but also maybe make it configurable?
+//       Reason being that network FS will benefit from larger buffers
+// TODO: Also make BufWriter bufsize global, but ok to leave larger.
 
 /// Represents an entry from an SFASTA file
 #[derive(PartialEq, Serialize, Deserialize, Debug)]
@@ -27,7 +34,14 @@ pub struct Entry {
 #[derive(PartialEq, Serialize, Deserialize)]
 pub struct EntryCompressed {
     pub id:  String,
-    pub compressed_seq: Vec<u8>,
+    pub compressed_seq: Vec<u8>, 
+}
+
+/// Destroys EntryCompressed struct and returns owned id as String
+impl EntryCompressed {
+    pub fn take_id(self) -> String {
+        return self.id;
+    }
 }
 
 /// Iterator to return io::Sequences
@@ -130,11 +144,11 @@ pub fn convert_fasta_file(filename: String, output: String,)
     let output_filename = check_extension(output);
 
     let out_file = File::create(output_filename.clone()).expect("Unable to write to file");
-    let mut out_fh = BufWriter::with_capacity(64 * 1024 * 1024, out_file);
+    let mut out_fh = BufWriter::with_capacity(4 * 1024 * 1024, out_file);
 
     let mut buffer: Vec<u8> = Vec::with_capacity(1024);
     let mut id: String = String::from("INVALID_ID_FIRST_ENTRY_YOU_SHOULD_NOT_SEE_THIS");
-    let mut seqbuffer: Vec<u8> = Vec::with_capacity(64 * 1024 * 1024);
+    let mut seqbuffer: Vec<u8> = Vec::with_capacity(32 * 1024 * 1024);
     let mut seqlen: usize = 0;
 
     let file = match File::open(&filename) {
@@ -150,7 +164,7 @@ pub fn convert_fasta_file(filename: String, output: String,)
         Box::new(file)
     };
 
-    let mut reader = BufReader::with_capacity(32 * 1024 * 1024, fasta);
+    let mut reader = BufReader::with_capacity(512 * 1024, fasta);
     while let Ok(bytes_read) = reader.read_until(b'\n', &mut buffer) {
 
         if bytes_read == 0 { 
@@ -196,7 +210,7 @@ pub fn convert_fasta_file(filename: String, output: String,)
         Ok(file) => file,
     };
 
-    let mut reader = BufReader::with_capacity(32 * 1024 * 1024, file);
+    let mut reader = BufReader::with_capacity(512 * 1024, file);
 
     let mut saved_count: usize = 0;
 
@@ -223,7 +237,7 @@ pub fn get_headers_from_sfasta(filename: String) -> Vec<String>
         Ok(file) => file,
     };
 
-    let mut reader = BufReader::with_capacity(32 * 1024 * 1024, file);
+    let mut reader = BufReader::with_capacity(512 * 1024, file);
 
     let mut ids: Vec<String> = Vec::with_capacity(2048);
 
@@ -243,7 +257,7 @@ pub fn test_sfasta(filename: String)
         Ok(file) => file,
     };
 
-    let mut reader = BufReader::with_capacity(32 * 1024 * 1024, file);
+    let mut reader = BufReader::with_capacity(512 * 1024, file);
 
     let mut seqnum: usize = 0;
 
@@ -273,12 +287,11 @@ fn open_file(filename: String) -> Box<dyn Read + Send> {
     let filename = check_extension(filename);
 
     let file = match File::open(&filename) {
-        Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
+        Err(why) => panic!("Couldn't open {}", filename),
         Ok(file) => file,
     };
 
-    let file = BufReader::with_capacity(32 * 1024 * 1024, file);
-    let reader = BufReader::with_capacity(32 * 1024 * 1024, file);
+    let reader = BufReader::with_capacity(512 * 1024, file);
 
     Box::new(reader)
 }
@@ -290,28 +303,52 @@ pub fn index(filename: &str) -> String {
     // sfasta
 
     let filesize = metadata(&filename).expect("Unable to open file").len();
-    let starting_size = std::cmp::max((filesize / 10000) as usize, 1024);
+    let starting_size = std::cmp::max((filesize / 1000) as usize, 1024);
+    println!("Starting Size: {}", starting_size);
 
-    let mut idx: HashMap<String, u64, RandomXxHashBuilder64> = Default::default();
-    idx.reserve(starting_size);
+//    let mut idx: HashMap<String, u64, RandomXxHashBuilder64> = Default::default();
+//    idx.reserve(starting_size);
+
+    let mut ids = Vec::with_capacity(starting_size);
+    let mut locations = Vec::with_capacity(starting_size);
 
     let fh = match File::open(&filename) {
         Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
         Ok(file) => file,
     };
 
-    let fh = BufReader::with_capacity(32 * 1024 * 1024, fh);
-    let mut fh = BufReader::with_capacity(32 * 1024 * 1024, fh);
+    let mut fh = BufReader::with_capacity(512 * 1024, fh);
     let mut pos = fh.seek(SeekFrom::Current(0)).expect("Unable to work with seek API");
+    let mut i = 0;
+    let mut now = Instant::now();
+//    let mut bump = Bump::new();
+//    let mut maxalloc: usize = 0;
 
     while let Ok(entry) = bincode::deserialize_from::<_, EntryCompressed>(&mut fh) {
-        idx.insert(entry.id.clone(), pos);
+        i = i + 1;
+        if i % 100_000 == 0 {
+          println!("100k at {} ms.", now.elapsed().as_millis()); //Maxalloc {} bytes", now.elapsed().as_secs(), maxalloc);
+          println!("{}/{} {}", pos, filesize, (pos as f32/filesize as f32) as f32);
+          now = Instant::now();
+        }
+
+        ids.push(entry.take_id());
+        locations.push(pos);
+//        idx.insert(entry.id.clone(), pos);
         pos = fh.seek(SeekFrom::Current(0)).expect("Unable to work with seek API");
+//        maxalloc = std::cmp::max(maxalloc, bump.allocated_bytes());
+//        bump.reset();
     }
+    println!("Finished with {} steps", i);
+
+    let mut idx: HashMap<String, u64> = ids.into_iter().zip(locations).collect();
+//    idx 
 
     let filenamepath = Path::new(&filename);
     let filename = Path::new(filenamepath.file_name().unwrap()).file_stem().unwrap().to_str().unwrap().to_owned() + ".sfai";
     let output_filename = filenamepath.parent().unwrap().to_str().unwrap().to_owned() + "/" + &filename;
+
+    println!("Saving to file: {}", output_filename);
 
     let out_file = snap::write::FrameEncoder::new(File::create(output_filename.clone()).expect("Unable to write to file"));
     let mut out_fh = BufWriter::with_capacity(4 * 1024 * 1024, out_file);
