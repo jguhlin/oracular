@@ -30,6 +30,7 @@ use std::thread::JoinHandle;
 // use std::fs::File;
 // use std::io::BufReader;
 
+// TODO: Should be literals to concatenate...
 #[inline(always)]
 fn convert_string_to_array(k: usize, s: &[u8]) -> Vec<u8> {
     let mut out: Vec<u8> = vec![0; k * 5];

@@ -318,7 +318,7 @@ pub fn index(filename: &str) -> String {
     // sfasta
 
     let filesize = metadata(&filename).expect("Unable to open file").len();
-    let starting_size = std::cmp::max((filesize / 1000) as usize, 1024);
+    let starting_size = std::cmp::max((filesize / 500) as usize, 1024);
     println!("Starting Size: {}", starting_size);
 
     //    let mut idx: HashMap<String, u64, RandomXxHashBuilder64> =
@@ -363,7 +363,6 @@ pub fn index(filename: &str) -> String {
         //        maxalloc = std::cmp::max(maxalloc, bump.allocated_bytes());
         //        bump.reset();
     }
-    println!("Finished with {} steps", i);
 
     let idx: HashMap<String, u64> = ids.into_iter().zip(locations).collect();
 
@@ -376,7 +375,7 @@ pub fn index(filename: &str) -> String {
         .to_owned()
         + ".sfai";
     let output_filename =
-        filenamepath.parent().unwrap().to_str().unwrap().to_owned() + "/" + &filename;
+        filenamepath.parent().unwrap().to_str().unwrap().to_owned() + &filename;
 
     println!("Saving to file: {}", output_filename);
 
