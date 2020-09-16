@@ -69,8 +69,8 @@ pub fn parse_ctfasta_target_contexts(
     for _ in 0..num_threads {
         let seq_queue = Arc::clone(&seq_queue);
         let unshuffled_queue = Arc::clone(&unshuffled_queue);
-        let kmer_size = kmer_size.clone();
-        let window_size = window_size.clone();
+        let kmer_size = kmer_size;
+        let window_size = window_size;
         let jobs = Arc::clone(&jobs);
 
         let child = match Builder::new()
@@ -134,7 +134,7 @@ fn shuffle_and_batch(
         if let Ok(command) = unshuffled_queue.pop() {
             // We are finished, end the thread...
             if let ThreadCommand::Terminate = command {
-                while received.len() > 0 {
+                while !received.is_empty() {
                     received.shuffle(&mut thread_rng()); // Give it a "good" shuffle
 
                     let this_batch_size = if received.len() > batch_size {
@@ -230,9 +230,9 @@ fn ctfasta_worker_thread(
 
                 let kmers: Vec<&[u8]> = seq.chunks_exact(kmer_size).collect();
 
-                for z in 0..window_size {
+                for item in kmers.iter().take(window_size) {
                     contexts.push(
-                        String::from_utf8(kmers[z].to_vec()).expect("Invalid UTF-8 Encoding"),
+                        String::from_utf8(item.to_vec()).expect("Invalid UTF-8 Encoding"),
                     );
                 }
 
@@ -301,7 +301,7 @@ pub fn parse_fasta_kmers_shuffle(
     for _ in 0..num_threads {
         let seq_queue = Arc::clone(&seq_queue);
         let unshuffled_queue = Arc::clone(&unshuffled_queue);
-        let kmer_size = kmer_size.clone();
+        let kmer_size = kmer_size;
         let jobs = Arc::clone(&jobs);
 
         let child = match Builder::new()
@@ -391,9 +391,9 @@ fn fasta_kmers_worker_thread(
 
                 let kmers: Vec<&[u8]> = seq.chunks_exact(kmer_size).collect();
 
-                for z in 0..sample_size {
+                for item in kmers.iter().take(sample_size) {
                     kmers_out.push(
-                        String::from_utf8(kmers[z].to_vec()).expect("Invalid UTF-8 Encoding"),
+                        String::from_utf8(item.to_vec()).expect("Invalid UTF-8 Encoding"),
                     );
                 }
 
@@ -434,7 +434,7 @@ fn shuffle_and_batch_kmers(
         if let Ok(command) = unshuffled_queue.pop() {
             // We are finished, end the thread...
             if let ThreadCommand::Terminate = command {
-                while received.len() > 0 {
+                while !received.is_empty() {
                     received.shuffle(&mut thread_rng()); // Give it a "good" shuffle
 
                     let this_batch_size = if received.len() > batch_size {

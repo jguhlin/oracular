@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
 use twox_hash::XxHash64;
 
-use rust_lapper::{Interval, Lapper};
+use rust_lapper::Lapper;
 
 // Landmark Interval Mapper
 

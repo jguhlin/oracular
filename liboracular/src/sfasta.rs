@@ -8,9 +8,6 @@ use std::path::Path;
 use std::time::Instant;
 
 use std::collections::HashMap;
-use twox_hash::RandomXxHashBuilder64;
-
-use bumpalo::Bump;
 use serde::{Deserialize, Serialize};
 
 use crate::io;
@@ -40,7 +37,7 @@ pub struct EntryCompressed {
 /// Destroys EntryCompressed struct and returns owned id as String
 impl EntryCompressed {
     pub fn take_id(self) -> String {
-        return self.id;
+        self.id
     }
 }
 
@@ -306,7 +303,7 @@ fn open_file(filename: String) -> Box<dyn Read + Send> {
     let filename = check_extension(filename);
 
     let file = match File::open(&filename) {
-        Err(why) => panic!("Couldn't open {}", filename),
+        Err(_) => panic!("Couldn't open {}", filename),
         Ok(file) => file,
     };
 
@@ -345,7 +342,7 @@ pub fn index(filename: &str) -> String {
     //    let mut maxalloc: usize = 0;
 
     while let Ok(entry) = bincode::deserialize_from::<_, EntryCompressed>(&mut fh) {
-        i = i + 1;
+        i += 1;
         if i % 100_000 == 0 {
             println!("100k at {} ms.", now.elapsed().as_millis()); //Maxalloc {} bytes", now.elapsed().as_secs(), maxalloc);
             println!(
@@ -368,8 +365,7 @@ pub fn index(filename: &str) -> String {
     }
     println!("Finished with {} steps", i);
 
-    let mut idx: HashMap<String, u64> = ids.into_iter().zip(locations).collect();
-    //    idx
+    let idx: HashMap<String, u64> = ids.into_iter().zip(locations).collect();
 
     let filenamepath = Path::new(&filename);
     let filename = Path::new(filenamepath.file_name().unwrap())
@@ -390,7 +386,7 @@ pub fn index(filename: &str) -> String {
     let mut out_fh = BufWriter::with_capacity(4 * 1024 * 1024, out_file);
     bincode::serialize_into(&mut out_fh, &idx).expect("Unable to write index");
 
-    return output_filename;
+    output_filename
 }
 
 /*

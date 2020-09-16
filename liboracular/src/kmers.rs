@@ -8,8 +8,6 @@ use crate::io;
 use crate::sfasta;
 use crate::utils;
 
-use std::sync::{Arc, RwLock};
-
 type Kmer = Vec<u8>;
 type Coords = (usize, usize);
 
@@ -111,7 +109,7 @@ impl Iterator for DiscriminatorMaskedGenerator {
             None => return None,
         };
 
-        let KmerWindow { mut kmers, id, rc } = next_item;
+        let KmerWindow { mut kmers, id, rc: _ } = next_item;
 
         // TODO: Make switchable, so we can train protein sequences
         // ~2% chance of an N

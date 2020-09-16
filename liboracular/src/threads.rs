@@ -183,7 +183,7 @@ pub fn sequence_generator(
                             jobs.fetch_add(1 as usize);
                             let wp = ThreadCommand::Work(Sequence {
                                 rawseq: seqbuffer[..seqlen].to_vec(),
-                                id: id,
+                                id,
                             });
                             seqbuffer.clear();
 
@@ -206,7 +206,7 @@ pub fn sequence_generator(
                                 jobs.fetch_add(1 as usize);
                                 let wp = ThreadCommand::Work(Sequence {
                                     rawseq: seqbuffer[..seqlen].to_vec(),
-                                    id: id,
+                                    id,
                                 });
                                 seqbuffer.clear();
                                 seqlen = 0;

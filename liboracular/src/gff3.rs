@@ -91,7 +91,7 @@ pub fn parse_gff3_file(filename: String) -> (Vec<Gff3Entry>, LinkedHashSet<Strin
 
 pub fn start_stop_sort(start: usize, stop: usize) -> (usize, usize) {
     let mut v = vec![start, stop];
-    v.sort();
+    v.sort_unstable();
     (v[0], v[1])
 }
 

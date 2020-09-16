@@ -988,7 +988,7 @@ impl FastaKmersGenerator {
             window_size,
             rc: false,
             sliding,
-            start_rc: start_rc,
+            start_rc,
         }
     }
 }
@@ -1000,7 +1000,7 @@ fn convert_fasta_to_sfasta(input: String, output: String) {
 
 #[pyfunction]
 fn index_sfasta(input: String) -> String {
-    return sfasta::index(&input);
+    sfasta::index(&input)
 }
 
 #[pyfunction]
