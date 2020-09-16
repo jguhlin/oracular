@@ -1,12 +1,12 @@
-use rand::Rng;
 use rand::prelude::*;
+use rand::Rng;
 use std::fmt;
 
+use crate::gff3;
+use crate::intervals;
 use crate::io;
 use crate::sfasta;
 use crate::utils;
-use crate::gff3;
-use crate::intervals;
 
 use std::sync::{Arc, RwLock};
 
@@ -20,7 +20,9 @@ pub struct KmerCoords {
 
 impl fmt::Display for KmerCoords {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {}-{}", 
+        write!(
+            f,
+            "{}: {}-{}",
             std::str::from_utf8(&self.kmer).expect("Unable to convert Kmer to Str"),
             self.coords.0,
             self.coords.1,
@@ -30,17 +32,18 @@ impl fmt::Display for KmerCoords {
 
 impl fmt::Debug for KmerCoords {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, 
-            "{}: {}-{}", 
+        write!(
+            f,
+            "{}: {}-{}",
             std::str::from_utf8(&self.kmer).expect("Unable to convert Kmer to Str"),
             self.coords.0,
             self.coords.1,
         )
     }
-} 
+}
 
 impl std::cmp::PartialEq<&[u8]> for KmerCoords {
-    fn eq (&self, other: &&[u8]) -> bool {
+    fn eq(&self, other: &&[u8]) -> bool {
         self.kmer == *other
     }
 }
@@ -50,8 +53,8 @@ pub struct KmerWindow {
     pub kmers: Vec<Kmer>,
     pub id: String,
     pub rc: bool,
-//    pub taxons: Vec<usize>,
-//    pub taxon: usize,
+    /*    pub taxons: Vec<usize>,
+     *    pub taxon: usize, */
 }
 
 pub struct KmerWindowGenerator {
@@ -71,9 +74,9 @@ pub struct KmerWindowGenerator {
 pub struct DiscriminatorMasked {
     pub kmers: Vec<Vec<u8>>,
     pub id: String,
-    pub truth: Vec<u8>, // TODO: Should this be bool? 
-                        // Maybe it's not because doesn't work with python? 
-                        // Or because tf works best with 0 and 1?
+    pub truth: Vec<u8>, /* TODO: Should this be bool?
+                         * Maybe it's not because doesn't work with python?
+                         * Or because tf works best with 0 and 1? */
 }
 
 pub struct DiscriminatorMaskedGenerator {
@@ -85,10 +88,10 @@ pub struct DiscriminatorMaskedGenerator {
 
 impl DiscriminatorMaskedGenerator {
     pub fn new(
-        replacement_pct: f32, 
+        replacement_pct: f32,
         k: usize,
-        generator: KmerWindowGenerator) -> DiscriminatorMaskedGenerator 
-    {
+        generator: KmerWindowGenerator,
+    ) -> DiscriminatorMaskedGenerator {
         // let rng = Arc::new(RwLock::new(rand::thread_rng()));
 
         DiscriminatorMaskedGenerator {
@@ -105,14 +108,14 @@ impl Iterator for DiscriminatorMaskedGenerator {
     fn next(&mut self) -> Option<DiscriminatorMasked> {
         let next_item = match self.kmer_window_generator.next() {
             Some(x) => x,
-            None    => return None
+            None => return None,
         };
 
         let KmerWindow { mut kmers, id, rc } = next_item;
 
         // TODO: Make switchable, so we can train protein sequences
         // ~2% chance of an N
-        let choices = [(b'A', 48), (b'C', 48), (b'T', 48), (b'G', 48), (b'N', 4)]; 
+        let choices = [(b'A', 48), (b'C', 48), (b'T', 48), (b'G', 48), (b'N', 4)];
 
         let mut truth: Vec<u8> = Vec::with_capacity(kmers.len());
 
@@ -137,35 +140,41 @@ impl Iterator for DiscriminatorMaskedGenerator {
 }
 
 impl KmerWindowGenerator {
-    pub fn new(filename: String,
-                k: usize,
-                window_size: usize,
-                offset: usize,
-                rc: bool,
-            ) -> KmerWindowGenerator {
+    pub fn new(
+        filename: String,
+        k: usize,
+        window_size: usize,
+        offset: usize,
+        rc: bool,
+    ) -> KmerWindowGenerator {
         let sequences = Box::new(sfasta::Sequences::new(filename));
         let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
         let mut curseq = match sequences.next() {
             Some(x) => x,
-            None    => panic!("File is empty or invalid format!")
+            None => panic!("File is empty or invalid format!"),
         };
 
         if rc {
-            let io::Sequence { id, mut seq, location, end } = curseq;
+            let io::Sequence {
+                id,
+                mut seq,
+                location,
+                end,
+            } = curseq;
 
             utils::complement_nucleotides(&mut seq);
             seq.reverse();
 
             // TODO: How to deal with rc?
 
-            curseq = io::Sequence { 
-                id, 
+            curseq = io::Sequence {
+                id,
                 seq,
                 location,
                 end,
             };
         }
-        
+
         let kmer_generator = Kmers::new(curseq.seq.clone(), k, offset, rc);
         // TODO: Should be able to handle between min_seq and max_seq
         // So instead of only 20 or 30 kmers at a time, get 10 - 100 (prefer more)
@@ -176,7 +185,7 @@ impl KmerWindowGenerator {
             window_size,
             k,
             kmer_generator,
-            needed_sequence, 
+            needed_sequence,
             curseq,
             offset,
             rc,
@@ -188,21 +197,27 @@ impl Iterator for KmerWindowGenerator {
     type Item = KmerWindow;
 
     fn next(&mut self) -> Option<KmerWindow> {
-        // While instead of if, because if we get a too short sequence we should skip it...
+        // While instead of if, because if we get a too short sequence we should skip
+        // it...
         while (self.kmer_generator.len - self.kmer_generator.curpos) <= self.needed_sequence {
             let mut curseq: io::Sequence = match self.sequences.next() {
                 Some(x) => x,
-                None    => return None  // That's it... no more!
+                None => return None, // That's it... no more!
             };
-            
+
             if self.rc {
-                let io::Sequence { id, mut seq, location, end } = curseq;
-    
+                let io::Sequence {
+                    id,
+                    mut seq,
+                    location,
+                    end,
+                } = curseq;
+
                 utils::complement_nucleotides(&mut seq);
                 seq.reverse();
-    
-                curseq = io::Sequence { 
-                    id, 
+
+                curseq = io::Sequence {
+                    id,
                     seq,
                     location,
                     end,
@@ -211,7 +226,7 @@ impl Iterator for KmerWindowGenerator {
 
             self.curseq = curseq.clone();
             let kmer_generator = Kmers::new(curseq.seq.clone(), self.k, self.offset, self.rc);
-	        self.kmer_generator = kmer_generator;
+            self.kmer_generator = kmer_generator;
         }
 
         let mut kmers: Vec<Vec<u8>> = Vec::with_capacity(self.window_size);
@@ -225,14 +240,14 @@ impl Iterator for KmerWindowGenerator {
                     } else {
                         panic!("Invalid KMER");
                     }
-                },
-                None    => return None
+                }
+                None => return None,
             };
         }
 
-        Some(KmerWindow { 
-            kmers, 
-            id: self.curseq.id.clone(), 
+        Some(KmerWindow {
+            kmers,
+            id: self.curseq.id.clone(),
             rc: self.rc,
         })
     }
@@ -258,33 +273,39 @@ pub struct KmerCoordsWindowIter {
 }
 
 impl KmerCoordsWindowIter {
-    pub fn new(filename: String,
-                k: usize,
-                window_size: usize,
-                offset: usize,
-                rc: bool,
-            ) -> KmerCoordsWindowIter {
+    pub fn new(
+        filename: String,
+        k: usize,
+        window_size: usize,
+        offset: usize,
+        rc: bool,
+    ) -> KmerCoordsWindowIter {
         let sequences = Box::new(sfasta::Sequences::new(filename));
         let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
         let mut curseq = match sequences.next() {
             Some(x) => x,
-            None    => panic!("File is empty or invalid format!")
+            None => panic!("File is empty or invalid format!"),
         };
 
         if rc {
-            let io::Sequence { id, mut seq, location, end } = curseq;
+            let io::Sequence {
+                id,
+                mut seq,
+                location,
+                end,
+            } = curseq;
 
             utils::complement_nucleotides(&mut seq);
             seq.reverse();
 
-            curseq = io::Sequence { 
-                id, 
+            curseq = io::Sequence {
+                id,
                 seq,
                 location,
                 end,
             };
         }
-        
+
         let kmer_generator = Kmers::new(curseq.seq.clone(), k, offset, rc);
         let needed_sequence = k * window_size;
 
@@ -293,7 +314,7 @@ impl KmerCoordsWindowIter {
             window_size,
             k,
             kmer_generator,
-            needed_sequence, 
+            needed_sequence,
             curseq,
             offset,
             rc,
@@ -305,21 +326,27 @@ impl Iterator for KmerCoordsWindowIter {
     type Item = KmerCoordsWindow;
 
     fn next(&mut self) -> Option<KmerCoordsWindow> {
-        // While instead of if, because if we get a too short sequence we should skip it...
+        // While instead of if, because if we get a too short sequence we should skip
+        // it...
         while (self.kmer_generator.len - self.kmer_generator.curpos) <= self.needed_sequence {
             let mut curseq: io::Sequence = match self.sequences.next() {
                 Some(x) => x,
-                None    => return None  // That's it... no more!
+                None => return None, // That's it... no more!
             };
-            
+
             if self.rc {
-                let io::Sequence { id, mut seq, location, end } = curseq;
-    
+                let io::Sequence {
+                    id,
+                    mut seq,
+                    location,
+                    end,
+                } = curseq;
+
                 utils::complement_nucleotides(&mut seq);
                 seq.reverse();
-    
-                curseq = io::Sequence { 
-                    id, 
+
+                curseq = io::Sequence {
+                    id,
                     seq,
                     location,
                     end,
@@ -327,12 +354,8 @@ impl Iterator for KmerCoordsWindowIter {
             }
 
             self.curseq = curseq.clone();
-            let kmer_generator = Kmers::new(
-                                    curseq.seq.clone(), 
-                                    self.k, 
-                                    self.offset,
-                                    self.rc);
-	        self.kmer_generator = kmer_generator;
+            let kmer_generator = Kmers::new(curseq.seq.clone(), self.k, self.offset, self.rc);
+            self.kmer_generator = kmer_generator;
         }
 
         let mut kmers: Vec<Vec<u8>> = Vec::with_capacity(self.window_size);
@@ -346,26 +369,26 @@ impl Iterator for KmerCoordsWindowIter {
                     } else {
                         panic!("Invalid KMER");
                     }
-                },
-                None    => return None
+                }
+                None => return None,
             };
         }
 
-/*        if self.rc {
+        /*        if self.rc {
             coords = coords.iter().map(
-                |(x, y)| 
+                |(x, y)|
                 (self.curseq.location+self.curseq.end-y,
                  self.curseq.location+self.curseq.end-x-1,)).collect();
         } else { */
-            coords = coords.iter().map(
-                        |(x, y)| 
-                        (x+self.curseq.location,
-                         y+self.curseq.location,)).collect();
+        coords = coords
+            .iter()
+            .map(|(x, y)| (x + self.curseq.location, y + self.curseq.location))
+            .collect();
         //}
 
-        Some(KmerCoordsWindow { 
-            kmers, 
-            id: self.curseq.id.clone(), 
+        Some(KmerCoordsWindow {
+            kmers,
+            id: self.curseq.id.clone(),
             coords,
             rc: self.rc,
         })
@@ -375,23 +398,23 @@ impl Iterator for KmerCoordsWindowIter {
 pub struct Kmers {
     seq: Vec<u8>,
     k: usize,
-    offset: usize, 
+    offset: usize,
     curpos: usize,
     len: usize,
     rc: bool,
 }
 
 impl Kmers {
-    pub fn new(
-        seq: Vec<u8>,
-        k: usize, 
-        offset: usize,
-        rc: bool,
-    ) -> Kmers {
+    pub fn new(seq: Vec<u8>, k: usize, offset: usize, rc: bool) -> Kmers {
         let len = seq.len();
-       
-        Kmers { 
-            seq, k, offset, len, curpos: 0, rc
+
+        Kmers {
+            seq,
+            k,
+            offset,
+            len,
+            curpos: 0,
+            rc,
         }
     }
 }
@@ -416,10 +439,7 @@ impl Iterator for Kmers {
                 coords = (start, end - 1)
             }
 
-            Some((
-                self.seq[start..end].to_vec(),
-                coords
-            ))
+            Some((self.seq[start..end].to_vec(), coords))
         }
     }
 }
@@ -443,11 +463,7 @@ pub struct Gff3KmersIter {
 }
 
 impl Gff3KmersIter {
-    pub fn new(
-        gff3file: String,
-        generator: KmerCoordsWindowIter,
-        k: usize) 
-    -> Gff3KmersIter {
+    pub fn new(gff3file: String, generator: KmerCoordsWindowIter, k: usize) -> Gff3KmersIter {
         let (intervals, types) = gff3::get_gff3_intervals(gff3file);
 
         Gff3KmersIter {
@@ -465,22 +481,24 @@ impl Iterator for Gff3KmersIter {
     fn next(&mut self) -> Option<Gff3Kmers> {
         let next_item = match self.kmercoords_window_iter.next() {
             Some(x) => x,
-            None    => return None
+            None => return None,
         };
 
-        let KmerCoordsWindow { kmers, id, coords, rc } = next_item;
+        let KmerCoordsWindow {
+            kmers,
+            id,
+            coords,
+            rc,
+        } = next_item;
 
         let mut classifications = Vec::new();
 
         let blank: Vec<u8> = vec![0; self.types.len()];
 
         for (n, _) in kmers.iter().enumerate() {
-            let found = 
-              match self.intervals
-                        .landmarks
-                        .get(&id) {
+            let found = match self.intervals.landmarks.get(&id) {
                 Some(x) => Some(x.find(coords[n].0 as u32, coords[n].1 as u32)),
-                None    => None
+                None => None,
             };
 
             let mut kmer_classification = blank.clone();
@@ -492,8 +510,8 @@ impl Iterator for Gff3KmersIter {
 
                     let len = upper - lower;
                     if len as f32 > (self.k as f32 * 0.6) {
-
-                        // Intervals are a set of [0 0 0 0 1 1 1 1 1] etc... for when classes are false or true...
+                        // Intervals are a set of [0 0 0 0 1 1 1 1 1] etc... for when classes are
+                        // false or true...
                         for (i, m) in (*x).val.iter().enumerate() {
                             if *m == 1 {
                                 kmer_classification[i] = 1;
@@ -506,7 +524,13 @@ impl Iterator for Gff3KmersIter {
             classifications.push(kmer_classification);
         }
 
-        Some(Gff3Kmers { kmers, id, classifications, coords, rc })
+        Some(Gff3Kmers {
+            kmers,
+            id,
+            classifications,
+            coords,
+            rc,
+        })
     }
 }
 
@@ -518,28 +542,34 @@ impl Iterator for Gff3KmersIter {
     pub truth: Vec<u8>,
 } */
 
-
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::fs::File;
     use std::io::prelude::*;
-    use super::*;
 
     #[test]
     pub fn test_kmers_iter() {
         let mut kmers = Kmers::new(b"ACTGACTGACTGACTG".to_vec(), 3, 0, false);
 
         let k1 = kmers.next().expect("Unable to get Kmer");
-        assert!("ACT".to_string() == std::str::from_utf8(&k1.0).expect("Unable to convert from Vec<u8>"));
-        
+        assert!(
+            "ACT".to_string()
+                == std::str::from_utf8(&k1.0).expect("Unable to convert from Vec<u8>")
+        );
+
         let k2 = kmers.next().expect("Unable to get Kmer");
-        assert!("GAC".to_string() == std::str::from_utf8(&k2.0).expect("Unable to convert from Vec<u8>"));
-        assert!((3,5) == k2.1);
+        assert!(
+            "GAC".to_string()
+                == std::str::from_utf8(&k2.0).expect("Unable to convert from Vec<u8>")
+        );
+        assert!((3, 5) == k2.1);
     }
 
     #[test]
     pub fn test_kmer_window_generator() {
-        let mut kmers = KmerWindowGenerator::new("test_data/test.sfasta".to_string(), 3, 3, 0, false);
+        let mut kmers =
+            KmerWindowGenerator::new("test_data/test.sfasta".to_string(), 3, 3, 0, false);
         let first = kmers.next().expect("Unable to get KmerWindow");
 
         assert!(first.kmers[0] == b"ACT");
@@ -555,8 +585,11 @@ mod tests {
         let mut kmers = Kmers::new(b"ACTGACTGACTGACTG".to_vec(), 3, 0, true);
 
         let k1 = kmers.next().expect("Unable to get Kmer");
-        assert!(k1.1 == (13,15));
-        assert!("ACT".to_string() == std::str::from_utf8(&k1.0).expect("Unable to convert from Vec<u8>"));
+        assert!(k1.1 == (13, 15));
+        assert!(
+            "ACT".to_string()
+                == std::str::from_utf8(&k1.0).expect("Unable to convert from Vec<u8>")
+        );
 
         let mut kmers = Kmers::new(b"ACTGACTGACTGACTG".to_vec(), 3, 0, true);
         let coords: Vec<_> = kmers.map(|x| x.1).collect();
@@ -566,27 +599,28 @@ mod tests {
 
     #[test]
     pub fn test_kmer_coords_window_generator() {
-        let mut kmers = KmerCoordsWindowIter::new("test_data/test.sfasta".to_string(), 3, 3, 0, false);
+        let mut kmers =
+            KmerCoordsWindowIter::new("test_data/test.sfasta".to_string(), 3, 3, 0, false);
         let first = kmers.next().expect("Unable to get KmerWindow");
 
-        assert!(first.coords == [(0,2),(3,5),(6,8)]);
+        assert!(first.coords == [(0, 2), (3, 5), (6, 8)]);
         assert!(first.kmers[0] == b"ACT");
 
-        let mut kmers = KmerCoordsWindowIter::new("test_data/test.sfasta".to_string(), 3, 3, 0, false);
+        let mut kmers =
+            KmerCoordsWindowIter::new("test_data/test.sfasta".to_string(), 3, 3, 0, false);
 
         let mut skipped = kmers.skip(2).next().expect("Unable to skip ahead");
         assert!(skipped.kmers[0] == b"NAC");
         // println!("{:#?}", skipped.coords);
-        assert!(skipped.coords == [(38,40),(41,43),(44,46)]);
+        assert!(skipped.coords == [(38, 40), (41, 43), (44, 46)]);
 
         // Have to get the right coords for RC
-        let mut kmers = KmerCoordsWindowIter::new(
-                            "test_data/test.sfasta".to_string(), 
-                            8, 2, 0, true);
+        let mut kmers =
+            KmerCoordsWindowIter::new("test_data/test.sfasta".to_string(), 8, 2, 0, true);
 
         let coords: Vec<_> = kmers.map(|x| x.coords).collect();
         println!("{:#?}", coords);
-        assert!(coords[0] == [(11,18), (3, 10)]);
-        assert!(coords[1] == [(55,62), (47, 54)]);
+        assert!(coords[0] == [(11, 18), (3, 10)]);
+        assert!(coords[1] == [(55, 62), (47, 54)]);
     }
 }

@@ -1,30 +1,38 @@
-pub fn get_good_sequence_coords (seq: &[u8]) -> Vec<(usize, usize)> {
+pub fn get_good_sequence_coords(seq: &[u8]) -> Vec<(usize, usize)> {
     let mut start: Option<usize> = None;
     let mut end: usize;
     let mut cur: usize = 0;
     let mut start_coords;
     let mut end_coords;
     let mut coords: Vec<(usize, usize)> = Vec::with_capacity(4096);
-    //let results = seq.windows(3).enumerate().filter(|(_y, x)| x != &[78, 78, 78]).map(|(y, _x)| y);
+    //let results = seq.windows(3).enumerate().filter(|(_y, x)| x != &[78, 78,
+    // 78]).map(|(y, _x)| y);
 
     // Do we need to filter the sequence at all?
     if bytecount::count(&seq, b'N') < 3 {
-        coords.push( (0, seq.len()) );
-        return coords
+        coords.push((0, seq.len()));
+        return coords;
     }
 
-    let results = seq.windows(3).enumerate().filter(|(_y, x)| bytecount::count(&x, b'N') < 3).map(|(y, _x)| y);
+    let results = seq
+        .windows(3)
+        .enumerate()
+        .filter(|(_y, x)| bytecount::count(&x, b'N') < 3)
+        .map(|(y, _x)| y);
     for pos in results {
         match start {
-            None    => { start = Some(pos); cur = pos; }
-            Some(_x) => ()
+            None => {
+                start = Some(pos);
+                cur = pos;
+            }
+            Some(_x) => (),
         };
 
         if pos - cur > 1 {
             end = cur;
             start_coords = start.unwrap();
             end_coords = end;
-            coords.push( (start_coords, end_coords) );
+            coords.push((start_coords, end_coords));
             start = None;
         } else {
             cur = pos;
@@ -37,7 +45,7 @@ pub fn get_good_sequence_coords (seq: &[u8]) -> Vec<(usize, usize)> {
         start_coords = start.unwrap();
         end_coords = end;
         if end_coords - start_coords > 1 {
-            coords.push( (start_coords, end_coords) );
+            coords.push((start_coords, end_coords));
         }
     }
 
@@ -52,17 +60,17 @@ pub fn capitalize_nucleotides(slice: &mut [u8]) {
     for nucl in slice.iter_mut() {
         // *x = _convert_nucl(*x);
         match &nucl {
-            65  => continue,  // A -> A
-            97  => *nucl = 65,  // a -> A
-            67  => continue,  // C -> C
-            99  => *nucl = 67,  // c -> C
+            65 => continue,    // A -> A
+            97 => *nucl = 65,  // a -> A
+            67 => continue,    // C -> C
+            99 => *nucl = 67,  // c -> C
             116 => *nucl = 84, // t -> T
-            84  => continue,  // T -> T
+            84 => continue,    // T -> T
             103 => *nucl = 71, // g -> G
-            71  => continue,  // G -> G
-            78  => continue,  // N -> N
+            71 => continue,    // G -> G
+            78 => continue,    // N -> N
             // 110 => *nucl = 78, // n -> N
-            _   => *nucl = 78,   // Everything else -> N
+            _ => *nucl = 78, // Everything else -> N
         }
     }
 }
@@ -96,29 +104,29 @@ pub fn complement_nucleotides(slice: &mut [u8]) {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::fs::File;
     use std::io::prelude::*;
-    use super::*;
 
     #[test]
     pub fn test_get_good_sequence_coords() {
-
         let coords = get_good_sequence_coords(b"AAAAAAAAAAAAAAAAAAAANNNAAAAAAAAAAAAAAAAAAAAAAAA");
         println!("{:#?}", coords);
         assert!(coords == [(0, 19), (22, 44)]);
 
-        let coords = get_good_sequence_coords(b"AAAAAAAAAAAAAAAAAAAANNNAAAAAAAAAAAAAAAAAAAAAAAANNN");
+        let coords =
+            get_good_sequence_coords(b"AAAAAAAAAAAAAAAAAAAANNNAAAAAAAAAAAAAAAAAAAAAAAANNN");
         println!("{:#?}", coords);
         assert!(coords == [(0, 19), (22, 46)]);
 
-        let coords = get_good_sequence_coords(b"NNNAAAAAAAAAAAAAAAAAAAANNNAAAAAAAAAAAAAAAAAAAAAAAANNN");
+        let coords =
+            get_good_sequence_coords(b"NNNAAAAAAAAAAAAAAAAAAAANNNAAAAAAAAAAAAAAAAAAAAAAAANNN");
         println!("{:#?}", coords);
         assert!(coords == [(1, 22), (25, 49)]);
 
         let coords = get_good_sequence_coords(b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
         println!("{:#?}", coords);
         assert!(coords == [(0, 44)]);
-
     }
 
     #[test]
@@ -136,5 +144,4 @@ mod tests {
         capitalize_nucleotides(&mut seq);
         assert!(seq == b"AGTCN");
     }
-
 }

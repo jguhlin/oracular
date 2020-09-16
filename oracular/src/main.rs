@@ -1,16 +1,16 @@
-extern crate num_traits;
 extern crate flate2;
 extern crate indicatif;
+extern crate num_traits;
 // extern crate rayon;
+extern crate bincode;
 extern crate crossbeam;
 extern crate fnv;
-extern crate wyhash;
-extern crate thincollections;
-extern crate num_cpus;
 extern crate liboracular;
+extern crate num_cpus;
 extern crate serde;
 extern crate snap;
-extern crate bincode;
+extern crate thincollections;
+extern crate wyhash;
 
 // extern crate mimalloc;
 // use mimalloc::MiMalloc;
@@ -27,11 +27,10 @@ extern crate clap;
 use clap::App;
 
 fn main() {
-
     let yaml = load_yaml!("cli.yaml");
     let _matches = App::from_yaml(yaml).get_matches();
 
-/*     if let Some(matches) = matches.subcommand_matches("generate-embeddings") {
+    /*     if let Some(matches) = matches.subcommand_matches("generate-embeddings") {
         generate_embeddings(matches);
     } else
     if let Some(matches) = matches.subcommand_matches("query") {
@@ -40,4 +39,3 @@ fn main() {
 
     println!("I don't do anything right now");
 }
-

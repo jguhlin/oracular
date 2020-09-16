@@ -4,7 +4,7 @@ use std::io::{BufReader, Read};
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use std::collections::VecDeque;
 
@@ -12,14 +12,14 @@ use crate::io;
 
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug)]
 pub struct Sequence {
-    pub seq:      Vec<u8>,
-    pub id:       String,
+    pub seq: Vec<u8>,
+    pub id: String,
     pub location: usize,
-    pub end:      usize
+    pub end: usize,
 }
 
 pub struct Sequences {
-    reader: Box<dyn Read + Send>
+    reader: Box<dyn Read + Send>,
 }
 
 pub struct SequenceSplitter3N {
@@ -29,27 +29,27 @@ pub struct SequenceSplitter3N {
 }
 
 impl SequenceSplitter3N {
-    pub fn new(mut sequences: Box<dyn Iterator<Item = io::Sequence> + Send>) 
-    -> SequenceSplitter3N {
-
+    pub fn new(mut sequences: Box<dyn Iterator<Item = io::Sequence> + Send>) -> SequenceSplitter3N {
         let curseq = match sequences.next() {
             Some(x) => x,
-            None    => panic!("File is empty!"),
+            None => panic!("File is empty!"),
         };
 
-        let coords: VecDeque<(usize, usize)>; 
-        coords = crate::utils::get_good_sequence_coords(&curseq.seq).into_iter().collect();
+        let coords: VecDeque<(usize, usize)>;
+        coords = crate::utils::get_good_sequence_coords(&curseq.seq)
+            .into_iter()
+            .collect();
 
-        SequenceSplitter3N { 
-            sequences, 
+        SequenceSplitter3N {
+            sequences,
             curseq,
             coords,
         }
     }
 }
 
-// TODO: This is the right place to do this, but I feel it's happening somewhere else
-// and wasting CPU cycles...
+// TODO: This is the right place to do this, but I feel it's happening somewhere
+// else and wasting CPU cycles...
 impl Sequence {
     pub fn make_uppercase(&mut self) {
         self.seq.make_ascii_uppercase();
@@ -63,24 +63,24 @@ impl Iterator for SequenceSplitter3N {
     fn next(&mut self) -> Option<Sequence> {
         let coords = match self.coords.pop_front() {
             Some(x) => x,
-            None    => { 
-
+            None => {
                 let mut x = None;
                 while x == None {
-
                     let curseq = match self.sequences.next() {
                         Some(x) => x,
-                        None    => return None,
+                        None => return None,
                     };
 
-                    let coords: VecDeque<(usize, usize)>; 
-                    coords = crate::utils::get_good_sequence_coords(&curseq.seq).into_iter().collect();
+                    let coords: VecDeque<(usize, usize)>;
+                    coords = crate::utils::get_good_sequence_coords(&curseq.seq)
+                        .into_iter()
+                        .collect();
 
                     self.curseq = curseq;
                     self.coords = coords;
                     x = match self.coords.pop_front() {
                         Some(x) => Some(x),
-                        None    => None
+                        None => None,
                     }
                 }
 
@@ -88,26 +88,27 @@ impl Iterator for SequenceSplitter3N {
             }
         };
 
-        Some(Sequence { 
-            id:       self.curseq.id.clone(),
-            seq:      self.curseq.seq[coords.0..coords.1].to_vec(),
+        Some(Sequence {
+            id: self.curseq.id.clone(),
+            seq: self.curseq.seq[coords.0..coords.1].to_vec(),
             location: coords.0 as usize,
-            end:      coords.1 as usize,
+            end: coords.1 as usize,
         })
     }
 }
 
-fn _open_file_with_progress_bar(filename: String) -> (Box<dyn Read>, ProgressBar)
-{
+fn _open_file_with_progress_bar(filename: String) -> (Box<dyn Read>, ProgressBar) {
     let file = match File::open(&filename) {
         Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
         Ok(file) => file,
     };
 
     let pb = ProgressBar::new(file.metadata().unwrap().len());
-    pb.set_style(ProgressStyle::default_bar()
-                    .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>5}/{len:5} {eta_precise} {msg}")
-                    .progress_chars("█▇▆▅▄▃▂▁  "));
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>5}/{len:5} {eta_precise} {msg}")
+            .progress_chars("█▇▆▅▄▃▂▁  "),
+    );
 
     let file = BufReader::with_capacity(64 * 1024 * 1024, pb.wrap_read(file));
 
@@ -123,8 +124,7 @@ fn _open_file_with_progress_bar(filename: String) -> (Box<dyn Read>, ProgressBar
     (Box::new(reader), pb)
 }
 
-fn open_file(filename: String) -> Box<dyn Read + Send>
-{
+fn open_file(filename: String) -> Box<dyn Read + Send> {
     let file = match File::open(&filename) {
         Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
         Ok(file) => file,
@@ -149,8 +149,8 @@ impl Iterator for Sequences {
 
     fn next(&mut self) -> Option<Sequence> {
         let seq: Sequence = match bincode::deserialize_from(&mut self.reader) {
-            Ok(x)   => x,
-            Err(_)  => return None
+            Ok(x) => x,
+            Err(_) => return None,
         };
         Some(seq)
     }
@@ -158,16 +158,18 @@ impl Iterator for Sequences {
 
 impl Sequences {
     pub fn new(filename: String) -> Sequences {
-        Sequences { reader: open_file(filename) }
+        Sequences {
+            reader: open_file(filename),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::sfasta;
     use std::fs::File;
     use std::io::prelude::*;
-    use crate::sfasta;
-    use super::*;
 
     #[test]
     pub fn test_3n_splitter() {
@@ -175,12 +177,17 @@ mod tests {
         let sequences = Box::new(io::SequenceSplitter3N::new(sequences));
         assert!(sequences.coords == [(0, 19), (38, 63)]);
 
-        sfasta::convert_fasta_file("test_data/test_multiple.fna".to_string(), "test_data/test_multiple.sfasta".to_string());
-        let sequences = Box::new(sfasta::Sequences::new("test_data/test_multiple.sfasta".to_string()));
+        sfasta::convert_fasta_file(
+            "test_data/test_multiple.fna".to_string(),
+            "test_data/test_multiple.sfasta".to_string(),
+        );
+        let sequences = Box::new(sfasta::Sequences::new(
+            "test_data/test_multiple.sfasta".to_string(),
+        ));
         let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
         sequences.next();
         println!("{:#?}", sequences.coords);
-        assert!(sequences.coords == [(38,79), (98, 124)]);
+        assert!(sequences.coords == [(38, 79), (98, 124)]);
 
         sequences.next().unwrap();
         sequences.next().unwrap();
@@ -207,5 +214,3 @@ mod tests {
         let _ = Box::new(io::SequenceSplitter3N::new(sequences));
     }
 }
-
-
