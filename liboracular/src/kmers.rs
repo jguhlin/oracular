@@ -547,8 +547,6 @@ impl Iterator for Gff3KmersIter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
-    use std::io::prelude::*;
 
     #[test]
     pub fn test_kmers_iter() {
@@ -556,13 +554,13 @@ mod tests {
 
         let k1 = kmers.next().expect("Unable to get Kmer");
         assert!(
-            "ACT".to_string()
+            "ACT"
                 == std::str::from_utf8(&k1.0).expect("Unable to convert from Vec<u8>")
         );
 
         let k2 = kmers.next().expect("Unable to get Kmer");
         assert!(
-            "GAC".to_string()
+            "GAC"
                 == std::str::from_utf8(&k2.0).expect("Unable to convert from Vec<u8>")
         );
         assert!((3, 5) == k2.1);
@@ -570,6 +568,7 @@ mod tests {
 
     #[test]
     pub fn test_kmer_window_generator() {
+        crate::sfasta::convert_fasta_file("test_data/test.fna", "test_data/test.sfasta");
         let mut kmers =
             KmerWindowGenerator::new("test_data/test.sfasta".to_string(), 3, 3, 0, false);
         let first = kmers.next().expect("Unable to get KmerWindow");
@@ -621,8 +620,9 @@ mod tests {
             KmerCoordsWindowIter::new("test_data/test.sfasta".to_string(), 8, 2, 0, true);
 
         let coords: Vec<_> = kmers.map(|x| x.coords).collect();
-        println!("{:#?}", coords);
+        println!("{:#?}", coords[0]);
+        println!("{:#?}", coords[1]);
         assert!(coords[0] == [(11, 18), (3, 10)]);
-        assert!(coords[1] == [(55, 62), (47, 54)]);
+        assert!(coords[1] == [(78, 85), (70, 77)]);
     }
 }

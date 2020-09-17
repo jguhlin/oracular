@@ -996,7 +996,7 @@ impl FastaKmersGenerator {
 
 #[pyfunction]
 fn convert_fasta_to_sfasta(input: String, output: String) {
-    sfasta::convert_fasta_file(input, output);
+    sfasta::convert_fasta_file(&input, &output);
 }
 
 #[pyfunction]

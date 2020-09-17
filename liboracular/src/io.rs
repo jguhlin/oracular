@@ -168,26 +168,24 @@ impl Sequences {
 mod tests {
     use super::*;
     use crate::sfasta;
-    use std::fs::File;
-    use std::io::prelude::*;
 
     #[test]
     pub fn test_3n_splitter() {
         let sequences = Box::new(sfasta::Sequences::new("test_data/test.sfasta".to_string()));
         let sequences = Box::new(io::SequenceSplitter3N::new(sequences));
-        assert!(sequences.coords == [(0, 19), (38, 63)]);
+        assert!(sequences.coords[0] == (0, 19));
 
         sfasta::convert_fasta_file(
-            "test_data/test_multiple.fna".to_string(),
-            "test_data/test_multiple.sfasta".to_string(),
+            "test_data/test_multiple.fna",
+            "test_data/test_multiple.sfasta",
         );
         let sequences = Box::new(sfasta::Sequences::new(
             "test_data/test_multiple.sfasta".to_string(),
         ));
         let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
         sequences.next();
-        println!("{:#?}", sequences.coords);
-        assert!(sequences.coords == [(38, 79), (98, 124)]);
+        println!("Coords: {:#?}", sequences.coords[0]);
+        assert!(sequences.coords[0] == (38, 79));
 
         sequences.next().unwrap();
         sequences.next().unwrap();
@@ -195,7 +193,7 @@ mod tests {
         sequences.next().unwrap();
         let x = sequences.next().unwrap();
 
-        println!("{:#?}", x);
+        // println!("{:#?}", x);
         assert!(x.id == "test2");
         assert!(x.seq[0..5] == [78, 65, 67, 84, 71]);
         assert!(x.location == 105);

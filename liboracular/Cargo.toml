@@ -1,6 +1,6 @@
 [package]
 name = "liboracular"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Joseph Guhlin <joseph.guhlin@gmail.com>"]
 edition = "2018"
 
@@ -32,3 +32,4 @@ rust-lapper = "0.4.4"
 itertools = "0.9.0"
 linked_hash_set = "0.1.3"
 bumpalo = { version = "3.4.0", features = ["collections", "boxed"] }
+zstd = "0.5.3"

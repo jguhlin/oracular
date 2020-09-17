@@ -17,6 +17,7 @@ extern crate ndarray;
 extern crate rand;
 extern crate snap;
 extern crate t1ha;
+extern crate zstd;
 
 // #[macro_use]
 extern crate static_assertions; // I don't think this is being used anymore...
