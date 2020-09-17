@@ -260,20 +260,26 @@ pub fn build_zstd_dict(filename: &str) -> Vec<u8> {
     let mut sample_sizes: Vec<usize> = Vec::with_capacity(1024);
     let mut maxsize: usize = 0;
     let mut total_len: usize = 0;
+    let mut cur_len: usize = 0;
 
     while let Ok(bytes_read) = reader.read_until(b'\n', &mut buffer) {
         if bytes_read == 0 || total_len >= 64 * 1024 * 1024 {
+            maxsize = std::cmp::max(maxsize, cur_len);
+            sample_sizes.push(cur_len);
             break;
         }
 
         match buffer[0] {
             // 62 is a > meaning we have a new sequence id.
-            62 => (),
+            62 => {
+                maxsize = std::cmp::max(maxsize, cur_len);
+                sample_sizes.push(cur_len);
+                cur_len = 0;
+            },
             _ => {
                 let slice_end = bytes_read.saturating_sub(1);
                 sample_data.extend_from_slice(&buffer[0..slice_end]);
-                sample_sizes.push(slice_end);
-                maxsize = std::cmp::max(maxsize, slice_end);
+                cur_len += slice_end;
                 total_len += slice_end;
             }
         }
