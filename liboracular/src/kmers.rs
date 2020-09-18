@@ -562,9 +562,9 @@ mod tests {
 
     #[test]
     pub fn test_kmer_window_generator() {
-        crate::sfasta::convert_fasta_file("test_data/test.fna", "test_data/test.sfasta");
+        crate::sfasta::convert_fasta_file("test_data/test.fna", "test_data/test_kmer_coords_window_generator.sfasta");
         let mut kmers =
-            KmerWindowGenerator::new("test_data/test.sfasta".to_string(), 3, 3, 0, false);
+            KmerWindowGenerator::new("test_data/test_kmer_coords_window_generator.sfasta".to_string(), 3, 3, 0, false);
         let first = kmers.next().expect("Unable to get KmerWindow");
 
         assert!(first.kmers[0] == b"ACT");

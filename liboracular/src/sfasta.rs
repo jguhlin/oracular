@@ -336,7 +336,7 @@ pub fn convert_fasta_file(filename: &str, output: &str)
 
     let output_filename = check_extension(output);
 
-    let out_file = File::create(output_filename).expect("Unable to write to file");
+    let out_file = File::create(output_filename.clone()).expect("Unable to write to file");
     let mut out_fh = BufWriter::with_capacity(4 * 1024 * 1024, out_file);
 
     let mut buffer: Vec<u8> = Vec::with_capacity(1024);
@@ -429,7 +429,7 @@ pub fn convert_fasta_file(filename: &str, output: &str)
 
     drop(out_fh);
 
-    create_index(filename, ids, locations);
+    create_index(&output_filename, ids, locations);
 }
 
 /// Get all IDs from an SFASTA file
@@ -556,7 +556,8 @@ fn get_index_filename(filename: &str) -> String {
 
 fn load_index(filename: &str) -> Option<HashMap<String, u64>> {
     let idx_filename = get_index_filename(filename);
-    if !Path::new("does_not_exist.txt").exists() {
+    if !Path::new(&idx_filename).exists() {
+        println!("IdxFile does not exist!");
         return None
     }
 
