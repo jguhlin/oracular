@@ -71,7 +71,7 @@ fn parse_phase(x: &str) -> Option<u8> {
     }
 }
 
-pub fn parse_gff3_file(filename: String) -> (Vec<Gff3Entry>, LinkedHashSet<String>) {
+pub fn parse_gff3_file(filename: &str) -> (Vec<Gff3Entry>, LinkedHashSet<String>) {
     let file = File::open(filename).expect("Unable to open file");
     let reader = BufReader::new(file);
     let lines = reader.lines();
@@ -95,8 +95,7 @@ pub fn start_stop_sort(start: usize, stop: usize) -> (usize, usize) {
     (v[0], v[1])
 }
 
-pub fn get_gff3_intervals(filename: String) -> (intervals::IntervalMap<Vec<u8>>, Vec<String>) {
-    // TODO!: Return Type
+pub fn get_gff3_intervals(filename: &str) -> (intervals::IntervalMap<Vec<u8>>, Vec<String>) {
     let (entries, types) = parse_gff3_file(filename);
 
     let types: Vec<String> = types.into_iter().collect();
@@ -106,6 +105,7 @@ pub fn get_gff3_intervals(filename: String) -> (intervals::IntervalMap<Vec<u8>>,
 
     let types_len = types.len(); // Calculate only once...
 
+    // Create a one-hot map for each type found in the GFF file
     for (x, t) in types.iter().enumerate() {
         let mut b: Vec<u8> = vec![0; types_len];
         b[x] = 1;
@@ -129,7 +129,7 @@ pub fn get_gff3_intervals(filename: String) -> (intervals::IntervalMap<Vec<u8>>,
                 .expect("Missing type!")
                 .clone(),
         });
-        let lapper = Lapper::new(data.collect()); // ::<Vec<Interval<Vec<bool>>>>());
+        let lapper = Lapper::new(data.collect());
         intervals.landmarks.insert(landmark.to_string(), lapper);
     }
 
@@ -138,9 +138,10 @@ pub fn get_gff3_intervals(filename: String) -> (intervals::IntervalMap<Vec<u8>>,
 
 pub fn parse_gff3_line(line: &str) -> Option<Gff3Entry> {
     if line.starts_with('#') {
+        // Line is a comment...
         return None;
-    } // Line is a comment...
-    let x: Vec<&str> = line.splitn(9, '\t').collect();
+    }
+    let x: Vec<&str> = line.split('\t').collect();
     assert!(
         x.len() == 9,
         "GFF3 has invalid entity count: found {} expected 9",
@@ -152,22 +153,22 @@ pub fn parse_gff3_line(line: &str) -> Option<Gff3Entry> {
         x[4].parse().expect("Unable to parse end for entry"),
     );
 
-    let feature_type = x[2].to_string();
+    let feature_type = x[2].to_string().to_lowercase();
     // Filter out regions (Such as 1..end being a "chromosome")
     // to_lowercase because formatting for GFF3 files is iffy
-    if feature_type.to_lowercase() == "region" {
+    if feature_type == "region" {
         return None;
     }
-    if feature_type.to_lowercase() == "chromosome" {
+    if feature_type == "chromosome" {
         return None;
     }
-    if feature_type.to_lowercase() == "scaffold" {
+    if feature_type == "scaffold" {
         return None;
     }
-    if feature_type.to_lowercase() == "contig" {
+    if feature_type == "contig" {
         return None;
     }
-    // Probably more, only "region" is valid GFF3 if I remember correctly
+    // Probably will need more...
 
     let strand = parse_strand(x[6]);
     let feature_type_strand = match strand {
@@ -237,8 +238,74 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
+    pub fn test_gff3_too_many_entries() {
+        parse_gff3_line(
+            "NC_004354.4	RefSeq	exon	124370	125409	.	-	.	ID=exon .   .   .   .   .   .\t.\t.\t",
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    pub fn test_gff3_not_enough_entries() {
+        parse_gff3_line("NC_004354.4	RefSeq	exon	124370	125409");
+    }
+
+    #[test]
+    pub fn test_gff3_nones() {
+        assert!(parse_gff3_line(
+            "NC_004354.4	RefSeq	ChRoMOsOme	124370	125409	.	-	.	ID=exon .   .   .   .   .   ."
+        )
+        .is_none());
+        assert!(parse_gff3_line(
+            "NC_004354.4	RefSeq	chromosome	124370	125409	.	-	.	ID=exon .   .   .   .   .   ."
+        )
+        .is_none());
+        assert!(parse_gff3_line(
+            "NC_004354.4	RefSeq	CHROMOSOME	124370	125409	.	-	.	ID=exon .   .   .   .   .   ."
+        )
+        .is_none());
+        assert!(parse_gff3_line(
+            "NC_004354.4	RefSeq	Chromosome	124370	125409	.	-	.	ID=exon .   .   .   .   .   ."
+        )
+        .is_none());
+        assert!(parse_gff3_line(
+            "NC_004354.4	RefSeq	Region	124370	125409	.	-	.	ID=exon .   .   .   .   .   ."
+        )
+        .is_none());
+        assert!(parse_gff3_line(
+            "NC_004354.4	RefSeq	scaffold	124370	125409	.	-	.	ID=exon .   .   .   .   .   ."
+        )
+        .is_none());
+        assert!(parse_gff3_line(
+            "NC_004354.4	RefSeq	contig	124370	125409	.	-	.	ID=exon .   .   .   .   .   ."
+        )
+        .is_none());
+    }
+
+    #[test]
+    pub fn test_gff3_feature_types() {
+        let x =
+            parse_gff3_line("NC_004354.4	RefSeq	exon	124370	125409	.	-	.	ID=exon .   .   .   .   .   .");
+        assert!(x.unwrap().feature_type_strand.ends_with("_Minus"));
+
+        let x =
+            parse_gff3_line("NC_004354.4	RefSeq	exon	124370	125409	.	+	.	ID=exon .   .   .   .   .   .");
+        assert!(x.unwrap().feature_type_strand.ends_with("_Plus"));
+
+        let x =
+            parse_gff3_line("NC_004354.4	RefSeq	exon	124370	125409	.	.	.	ID=exon .   .   .   .   .   .");
+        assert!(x.unwrap().feature_type_strand == "exon");
+    }
+
+    #[test]
+    pub fn test_strand_impl() {
+        assert!(Strand::Minus != Strand::Plus);
+    }
+
+    #[test]
     pub fn test_gff3_to_intervals() {
-        let (intervals, _) = get_gff3_intervals("test_data/Dmel_head30.gff3".to_string());
+        let (intervals, _) = get_gff3_intervals("test_data/Dmel_head30.gff3");
 
         let first_landmark = intervals.landmarks.keys().next().unwrap();
 

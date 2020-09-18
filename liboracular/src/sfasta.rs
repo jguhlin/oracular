@@ -7,6 +7,9 @@ use std::io::{BufRead, BufReader, BufWriter, Read, SeekFrom, Write};
 use std::path::Path;
 use std::time::Instant;
 
+use rand::prelude::*;
+use rand_chacha::ChaCha20Rng;
+
 use serde::{Deserialize, Serialize};
 
 use crate::io;
@@ -27,6 +30,12 @@ pub enum CompressionType {
     GZIP, // Please don't use this -- IMPLEMENT
     NAF,  // Not yet supported -- IMPLEMENT
     NONE, // No Compression -- IMPLEMENT
+}
+
+#[derive(PartialEq)]
+pub enum SeqMode {
+    Linear,
+    Random,
 }
 
 #[derive(PartialEq, Serialize, Deserialize, Debug)]
@@ -65,12 +74,16 @@ impl Entry {
         //let mut writer = snap::write::FrameEncoder::new(compressed_seq);
 
         // ZSTD Line
-        let mut writer =
-            if dict.is_some() {
-                zstd::stream::Encoder::with_dictionary(compressed_seq, compression_level, &dict.as_ref().unwrap()).unwrap()
-            } else {
-                zstd::stream::Encoder::new(compressed_seq, compression_level).unwrap()
-            };
+        let mut writer = if dict.is_some() {
+            zstd::stream::Encoder::with_dictionary(
+                compressed_seq,
+                compression_level,
+                &dict.as_ref().unwrap(),
+            )
+            .unwrap()
+        } else {
+            zstd::stream::Encoder::new(compressed_seq, compression_level).unwrap()
+        };
         writer
             .write_all(&seq)
             .expect("Unable to write to vector...");
@@ -118,12 +131,16 @@ impl EntryCompressed {
         } = self;
         // SNAPPY Compatability line
         //let mut seq_reader = snap::read::FrameDecoder::new(&item.compressed_seq[..]);
-        
+
         let mut seq: Vec<u8> = Vec::with_capacity(len as usize);
 
         // ZSTD Lines
         if dict.is_some() {
-            let mut seq_reader = zstd::stream::read::Decoder::with_dictionary(&compressed_seq[..], dict.as_ref().unwrap()).unwrap();
+            let mut seq_reader = zstd::stream::read::Decoder::with_dictionary(
+                &compressed_seq[..],
+                dict.as_ref().unwrap(),
+            )
+            .unwrap();
             seq_reader
                 .read_to_end(&mut seq)
                 .expect("Unable to read compressed sequence");
@@ -133,7 +150,7 @@ impl EntryCompressed {
                 .read_to_end(&mut seq)
                 .expect("Unable to read compressed sequence");
         }
-        
+
         Entry {
             id,
             seq,
@@ -162,14 +179,16 @@ pub struct Sequences {
     header: Header,
     reader: Box<dyn ReadAndSeek + Send>,
     pub idx: Option<HashMap<String, u64>>,
+    access: SeqMode,
+    random_list: Option<Vec<u64>>,
 }
 
 // TODO: We need to cache DecoderDictionary at some point...
 impl Sequences {
     /// Given a filename, returns a Sequences variable.
     /// Can be used as an iterator.
-    pub fn new(filename: String) -> Sequences {
-        let (mut reader, idx) = open_file(&filename);
+    pub fn new(filename: &str) -> Sequences {
+        let (mut reader, idx) = open_file(filename);
         let header: Header = match bincode::deserialize_from(&mut reader) {
             Ok(x) => x,
             Err(_) => panic!("Header missing or malformed in SFASTA file"),
@@ -179,6 +198,23 @@ impl Sequences {
             header,
             reader,
             idx,
+            access: SeqMode::Linear,
+            random_list: None,
+        }
+    }
+
+    pub fn set_mode(&mut self,  access: SeqMode) {
+        self.access = access;
+
+        if self.access == SeqMode::Random {
+            assert!(self.idx.is_some());
+            let idx = self.idx.as_ref().unwrap();
+            let mut locs: Vec<u64> = idx.values().map(|x| *x as u64).collect();
+            let mut rng = ChaCha20Rng::seed_from_u64(42);
+            locs.shuffle(&mut rng);
+            self.random_list = Some(locs);
+        } else {
+            self.random_list = None;
         }
     }
 }
@@ -190,6 +226,19 @@ impl Iterator for Sequences {
 
     /// Get the next SFASTA entry as io::Sequence type
     fn next(&mut self) -> Option<io::Sequence> {
+
+        if self.access == SeqMode::Random {
+            assert!(self.random_list.is_some());
+            let mut rl = self.random_list.as_mut().unwrap();
+            let next_loc = rl.pop();
+            if next_loc.is_none() { // Out of data...
+                return None
+            }
+            self.reader
+                .seek(SeekFrom::Start(next_loc.unwrap()))
+                .expect("Unable to work with seek API");
+        }
+
         let ec: EntryCompressed = match bincode::deserialize_from(&mut self.reader) {
             Ok(x) => x,
             Err(_) => return None, // panic!("Error at SFASTA::Sequences::next: {}", y)
@@ -208,8 +257,7 @@ impl Iterator for Sequences {
 // sfasta is:
 // bincode encoded
 //   fasta ID
-//   snappy compressed sequence
-// TODO: Add some form of indexing?
+//   zstd compressed sequence
 
 // TODO: Remove this code since we have the trait now...
 /// Should remove...
@@ -222,7 +270,7 @@ fn generate_sfasta_compressed_entry(
     dict: &Option<Vec<u8>>,
 ) -> EntryCompressed {
     let len: u64 =
-        u64::try_from(seq.len()).expect("Unlikely as it is, sequence length exceed u64...");
+        u64::try_from(seq.len()).expect("Unlikely as it is, sequence length exceeds u64::MAX...");
     let entry = Entry {
         id,
         seq,
@@ -250,7 +298,9 @@ fn open_file(filename: &str) -> (Box<dyn ReadAndSeek + Send>, Option<HashMap<Str
 
 /// Opens files, including compressed files (gzip or snappy)
 fn generic_open_file(filename: &str) -> (usize, bool, Box<dyn Read + Send>) {
-    let filesize = metadata(filename).expect(&format!("Unable to open file: {}", filename)).len();
+    let filesize = metadata(filename)
+        .expect(&format!("Unable to open file: {}", filename))
+        .len();
 
     let file = match File::open(filename) {
         Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
@@ -262,7 +312,8 @@ fn generic_open_file(filename: &str) -> (usize, bool, Box<dyn Read + Send>) {
     let fasta: Box<dyn Read + Send> = if filename.ends_with("gz") {
         compressed = true;
         Box::new(flate2::read::GzDecoder::new(file))
-    } else if filename.ends_with("snappy") || filename.ends_with("sz") || filename.ends_with("sfai") {
+    } else if filename.ends_with("snappy") || filename.ends_with("sz") || filename.ends_with("sfai")
+    {
         compressed = true;
         Box::new(snap::read::FrameDecoder::new(file))
     } else {
@@ -320,8 +371,10 @@ pub fn build_zstd_dict(filename: &str) -> Option<Vec<u8>> {
     if total_len <= 1024 * 256 || sample_sizes.len() <= 7 {
         None
     } else {
-        Some(zstd::dict::from_continuous(&sample_data, &sample_sizes, maxsize)
-            .expect("Unable to generate zstd dict"))
+        Some(
+            zstd::dict::from_continuous(&sample_data, &sample_sizes, maxsize)
+                .expect("Unable to generate zstd dict"),
+        )
     }
 }
 
@@ -558,7 +611,7 @@ fn load_index(filename: &str) -> Option<HashMap<String, u64>> {
     let idx_filename = get_index_filename(filename);
     if !Path::new(&idx_filename).exists() {
         println!("IdxFile does not exist!");
-        return None
+        return None;
     }
 
     let (_, _, mut idxfh) = generic_open_file(&idx_filename);
@@ -585,7 +638,7 @@ fn create_index(filename: &str, ids: Vec<String>, locations: Vec<u64>) -> String
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{SeekFrom};
+    use std::io::SeekFrom;
 
     #[test]
     pub fn convert_fasta_to_sfasta_and_index() {
@@ -612,11 +665,26 @@ mod tests {
         let idx = idx.unwrap();
         let i: Vec<&u64> = idx.values().skip(2).take(1).collect();
 
-        reader.seek(SeekFrom::Start(*i[0]))
+        reader
+            .seek(SeekFrom::Start(*i[0]))
             .expect("Unable to work with seek API");
         let ec: EntryCompressed = match bincode::deserialize_from(&mut reader) {
             Ok(x) => x,
-            Err(_) => panic!("Unable to read indexed SFASTA after jumping")
+            Err(_) => panic!("Unable to read indexed SFASTA after jumping"),
         };
     }
+
+    #[test]
+    pub fn test_random_mode() {
+        let input_filename = "test_data/test_multiple.fna";
+        let output_filename = "test_data/test_random.sfasta";
+
+        convert_fasta_file(input_filename, output_filename);
+
+        let mut sequences = Sequences::new(output_filename);
+        sequences.set_mode(SeqMode::Random);
+        sequences.next();
+    }
+
+
 }

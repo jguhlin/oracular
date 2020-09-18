@@ -12,6 +12,7 @@ serde = { version = "1.0.106", features = ["derive"] }
 rand = "0.7.3"
 rand_core = "0.5"
 rand_xorshift = "0.2"
+rand_chacha = "0.2.2"
 indicatif = "0.15.0"
 crossbeam = "0.7.3"
 thincollections = "0.5.3"
@@ -33,3 +34,4 @@ itertools = "0.9.0"
 linked_hash_set = "0.1.3"
 bumpalo = { version = "3.4.0", features = ["collections", "boxed"] }
 zstd = "0.5.3"
+

@@ -51,8 +51,6 @@ pub struct KmerWindow {
     pub kmers: Vec<Kmer>,
     pub id: String,
     pub rc: bool,
-    /*    pub taxons: Vec<usize>,
-     *    pub taxon: usize, */
 }
 
 pub struct KmerWindowGenerator {
@@ -66,15 +64,11 @@ pub struct KmerWindowGenerator {
     rc: bool,
 }
 
-// Loosely based off of ELECTRA model
-// https://github.com/google-research/electra
 #[derive(Debug, PartialEq)]
 pub struct DiscriminatorMasked {
     pub kmers: Vec<Vec<u8>>,
     pub id: String,
-    pub truth: Vec<u8>, /* TODO: Should this be bool?
-                         * Maybe it's not because doesn't work with python?
-                         * Or because tf works best with 0 and 1? */
+    pub truth: Vec<u8>,
 }
 
 pub struct DiscriminatorMaskedGenerator {
@@ -143,7 +137,7 @@ impl Iterator for DiscriminatorMaskedGenerator {
 
 impl KmerWindowGenerator {
     pub fn new(
-        filename: String,
+        filename: &str,
         k: usize,
         window_size: usize,
         offset: usize,
@@ -240,7 +234,7 @@ impl Iterator for KmerWindowGenerator {
                         kmers.push(x);
                         coords.push(c);
                     } else {
-                        panic!("Invalid KMER");
+                        panic!("Invalid Kmer");
                     }
                 }
                 None => return None,
@@ -276,7 +270,7 @@ pub struct KmerCoordsWindowIter {
 
 impl KmerCoordsWindowIter {
     pub fn new(
-        filename: String,
+        filename: &str,
         k: usize,
         window_size: usize,
         offset: usize,
@@ -461,11 +455,10 @@ pub struct Gff3KmersIter {
     intervals: intervals::IntervalMap<Vec<u8>>,
     pub types: Vec<String>,
     pub k: usize,
-    // TODO: Put alphabet here so we can train proteins as well...
 }
 
 impl Gff3KmersIter {
-    pub fn new(gff3file: String, generator: KmerCoordsWindowIter, k: usize) -> Gff3KmersIter {
+    pub fn new(gff3file: &str, generator: KmerCoordsWindowIter, k: usize) -> Gff3KmersIter {
         let (intervals, types) = gff3::get_gff3_intervals(gff3file);
 
         Gff3KmersIter {
@@ -511,7 +504,7 @@ impl Iterator for Gff3KmersIter {
                     let upper: u32 = std::cmp::min(x.stop as u32, coords[n].1 as u32);
 
                     let len = upper - lower;
-                    if len as f32 > (self.k as f32 * 0.6) {
+                    if len as f32 > (self.k as f32 * 0.8) { // TODO: Make overlap (0.8) configurable...
                         // Intervals are a set of [0 0 0 0 1 1 1 1 1] etc... for when classes are
                         // false or true...
                         for (i, m) in (*x).val.iter().enumerate() {
@@ -536,14 +529,6 @@ impl Iterator for Gff3KmersIter {
     }
 }
 
-/*pub struct DiscriminatorMaskedA2T {
-    pub kmers: Vec<Vec<u8>>,
-    pub id: String,
-    pub taxons: Vec<usize>,
-    pub taxon: usize,
-    pub truth: Vec<u8>,
-} */
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -562,14 +547,22 @@ mod tests {
 
     #[test]
     pub fn test_kmer_window_generator() {
-        crate::sfasta::convert_fasta_file("test_data/test.fna", "test_data/test_kmer_coords_window_generator.sfasta");
-        let mut kmers =
-            KmerWindowGenerator::new("test_data/test_kmer_coords_window_generator.sfasta".to_string(), 3, 3, 0, false);
+        crate::sfasta::convert_fasta_file(
+            "test_data/test.fna",
+            "test_data/test_kmer_coords_window_generator.sfasta",
+        );
+        let mut kmers = KmerWindowGenerator::new(
+            "test_data/test_kmer_coords_window_generator.sfasta",
+            3,
+            3,
+            0,
+            false,
+        );
         let first = kmers.next().expect("Unable to get KmerWindow");
 
         assert!(first.kmers[0] == b"ACT");
 
-        let kmers = KmerWindowGenerator::new("test_data/test.sfasta".to_string(), 3, 3, 0, false);
+        let kmers = KmerWindowGenerator::new("test_data/test.sfasta", 3, 3, 0, false);
 
         let skipped = kmers.skip(2).next().expect("Unable to skip ahead");
         assert!(skipped.kmers[0] == b"NAC");
@@ -586,7 +579,7 @@ mod tests {
                 == std::str::from_utf8(&k1.0).expect("Unable to convert from Vec<u8>")
         );
 
-        let mut kmers = Kmers::new(b"ACTGACTGACTGACTG".to_vec(), 3, 0, true);
+        let kmers = Kmers::new(b"ACTGACTGACTGACTG".to_vec(), 3, 0, true);
         let coords: Vec<_> = kmers.map(|x| x.1).collect();
 
         println!("{:#?}", coords);
@@ -595,23 +588,23 @@ mod tests {
     #[test]
     pub fn test_kmer_coords_window_generator() {
         let mut kmers =
-            KmerCoordsWindowIter::new("test_data/test.sfasta".to_string(), 3, 3, 0, false);
+            KmerCoordsWindowIter::new("test_data/test.sfasta", 3, 3, 0, false);
         let first = kmers.next().expect("Unable to get KmerWindow");
 
         assert!(first.coords == [(0, 2), (3, 5), (6, 8)]);
         assert!(first.kmers[0] == b"ACT");
 
-        let mut kmers =
-            KmerCoordsWindowIter::new("test_data/test.sfasta".to_string(), 3, 3, 0, false);
+        let kmers =
+            KmerCoordsWindowIter::new("test_data/test.sfasta", 3, 3, 0, false);
 
-        let mut skipped = kmers.skip(2).next().expect("Unable to skip ahead");
+        let skipped = kmers.skip(2).next().expect("Unable to skip ahead");
         assert!(skipped.kmers[0] == b"NAC");
         // println!("{:#?}", skipped.coords);
         assert!(skipped.coords == [(38, 40), (41, 43), (44, 46)]);
 
         // Have to get the right coords for RC
-        let mut kmers =
-            KmerCoordsWindowIter::new("test_data/test.sfasta".to_string(), 8, 2, 0, true);
+        let kmers =
+            KmerCoordsWindowIter::new("test_data/test.sfasta", 8, 2, 0, true);
 
         let coords: Vec<_> = kmers.map(|x| x.coords).collect();
         println!("{:#?}", coords[0]);

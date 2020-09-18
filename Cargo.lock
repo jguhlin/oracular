@@ -394,6 +394,7 @@ dependencies = [
  "ndarray-rand",
  "once_cell",
  "rand",
+ "rand_chacha",
  "rand_core",
  "rand_xorshift",
  "rust-lapper",

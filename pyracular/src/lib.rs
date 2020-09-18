@@ -89,7 +89,7 @@ impl PyIterProtocol for Gff3KmerGenerator {
                         }
 
                         let kmercoords_window_iter = KmerCoordsWindowIter::new(
-                            mypyself.filename.clone(),
+                            &mypyself.filename,
                             mypyself.k,
                             mypyself.window_size,
                             mypyself.offset,
@@ -97,7 +97,7 @@ impl PyIterProtocol for Gff3KmerGenerator {
                         );
 
                         let iter = Gff3KmersIter::new(
-                            mypyself.gff3filename.clone(),
+                            &mypyself.gff3filename,
                             kmercoords_window_iter,
                             mypyself.k,
                         );
@@ -147,9 +147,9 @@ impl Gff3KmerGenerator {
     fn new(k: usize, filename: String, window_size: usize, gff3filename: String) -> Self {
         // Create KmerWindowGenerator
         let kmercoords_window_iter =
-            KmerCoordsWindowIter::new(filename.clone(), k, window_size, 0, false);
+            KmerCoordsWindowIter::new(&filename, k, window_size, 0, false);
 
-        let iter = Gff3KmersIter::new(gff3filename.clone(), kmercoords_window_iter, k);
+        let iter = Gff3KmersIter::new(&gff3filename, kmercoords_window_iter, k);
         let types = iter.types.clone();
 
         Gff3KmerGenerator {
@@ -212,7 +212,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
                         }
 
                         let kmer_window_generator = KmerWindowGenerator::new(
-                            mypyself.filename.clone(),
+                            &mypyself.filename,
                             mypyself.k,
                             mypyself.window_size,
                             mypyself.offset,
@@ -267,7 +267,7 @@ impl DiscriminatorMaskedGeneratorWrapper {
     ) -> Self {
         // Create KmerWindowGenerator
         let kmer_window_generator =
-            KmerWindowGenerator::new(filename.clone(), k, window_size, 0, false);
+            KmerWindowGenerator::new(&filename, k, window_size, 0, false);
 
         let discriminator_masked_generator =
             DiscriminatorMaskedGenerator::new(replacement_pct, k, kmer_window_generator);
@@ -329,7 +329,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
                         // println!("New Offset: {} {}", mypyself.offset, mypyself.rc);
 
                         let kmer_window_generator = KmerWindowGenerator::new(
-                            mypyself.filename.clone(),
+                            &mypyself.filename,
                             mypyself.k,
                             mypyself.window_size,
                             mypyself.offset,
@@ -380,7 +380,7 @@ impl DiscriminatorMaskedGeneratorWrapperNB {
     fn new(k: usize, filename: String, window_size: usize, replacement_pct: f32) -> Self {
         // Create KmerWindowGenerator
         let kmer_window_generator =
-            KmerWindowGenerator::new(filename.clone(), k, window_size, 0, false);
+            KmerWindowGenerator::new(&filename, k, window_size, 0, false);
 
         let discriminator_masked_generator =
             DiscriminatorMaskedGenerator::new(replacement_pct, k, kmer_window_generator);

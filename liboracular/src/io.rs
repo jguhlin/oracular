@@ -1,14 +1,15 @@
 use std::fs::File;
 use std::io::{BufReader, Read};
 
-use indicatif::ProgressBar;
-use indicatif::ProgressStyle;
-
 use serde::{Deserialize, Serialize};
 
 use std::collections::VecDeque;
 
 use crate::io;
+
+pub struct Sequences {
+    reader: Box<dyn Read + Send>,
+}
 
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug)]
 pub struct Sequence {
@@ -16,10 +17,6 @@ pub struct Sequence {
     pub id: String,
     pub location: usize,
     pub end: usize,
-}
-
-pub struct Sequences {
-    reader: Box<dyn Read + Send>,
 }
 
 pub struct SequenceSplitter3N {
@@ -144,14 +141,14 @@ mod tests {
 
     #[test]
     pub fn test_sequences() {
-        let mut sequences = Box::new(sfasta::Sequences::new("test_data/test.sfasta".to_string()));
+        let mut sequences = Box::new(sfasta::Sequences::new("test_data/test.sfasta"));
         let sequence = sequences.next().unwrap();
         assert!(sequence.id == "test");
         assert!(sequence.end == 669);
         assert!(sequence.location == 0);
         assert!(sequence.seq.len() == 669);
     }
-/*
+    /*
     #[test]
     pub fn test_regular_fasta_file() {
         let mut sequences = Sequences::new("test_data/test.fna".to_string());
@@ -163,19 +160,19 @@ mod tests {
 
 
 
-        
+
     }*/
 
     #[test]
     #[should_panic]
     pub fn test_empty() {
-        let sequences = Box::new(sfasta::Sequences::new("test_data/empty.sfasta".to_string()));
+        let sequences = Box::new(sfasta::Sequences::new("test_data/empty.sfasta"));
         Box::new(io::SequenceSplitter3N::new(sequences));
     }
 
     #[test]
     pub fn test_3n_splitter() {
-        let sequences = Box::new(sfasta::Sequences::new("test_data/test.sfasta".to_string()));
+        let sequences = Box::new(sfasta::Sequences::new("test_data/test.sfasta"));
         let sequences = Box::new(io::SequenceSplitter3N::new(sequences));
         assert!(sequences.coords[0] == (0, 19));
 
@@ -184,7 +181,7 @@ mod tests {
             "test_data/test_multiple.sfasta",
         );
         let sequences = Box::new(sfasta::Sequences::new(
-            "test_data/test_multiple.sfasta".to_string(),
+            "test_data/test_multiple.sfasta",
         ));
         let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
         sequences.next();
@@ -212,7 +209,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Couldn't open test_data/empty.fna.sfasta")]
     pub fn test_3n_splitter_empty() {
-        let sequences = Box::new(sfasta::Sequences::new("test_data/empty.fna".to_string()));
+        let sequences = Box::new(sfasta::Sequences::new("test_data/empty.fna"));
         let _ = Box::new(io::SequenceSplitter3N::new(sequences));
     }
 }
