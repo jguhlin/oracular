@@ -553,16 +553,10 @@ mod tests {
         let mut kmers = Kmers::new(b"ACTGACTGACTGACTG".to_vec(), 3, 0, false);
 
         let k1 = kmers.next().expect("Unable to get Kmer");
-        assert!(
-            "ACT"
-                == std::str::from_utf8(&k1.0).expect("Unable to convert from Vec<u8>")
-        );
+        assert!("ACT" == std::str::from_utf8(&k1.0).expect("Unable to convert from Vec<u8>"));
 
         let k2 = kmers.next().expect("Unable to get Kmer");
-        assert!(
-            "GAC"
-                == std::str::from_utf8(&k2.0).expect("Unable to convert from Vec<u8>")
-        );
+        assert!("GAC" == std::str::from_utf8(&k2.0).expect("Unable to convert from Vec<u8>"));
         assert!((3, 5) == k2.1);
     }
 
