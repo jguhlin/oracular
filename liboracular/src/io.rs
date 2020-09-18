@@ -97,33 +97,6 @@ impl Iterator for SequenceSplitter3N {
     }
 }
 
-fn _open_file_with_progress_bar(filename: String) -> (Box<dyn Read>, ProgressBar) {
-    let file = match File::open(&filename) {
-        Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
-        Ok(file) => file,
-    };
-
-    let pb = ProgressBar::new(file.metadata().unwrap().len());
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>5}/{len:5} {eta_precise} {msg}")
-            .progress_chars("█▇▆▅▄▃▂▁  "),
-    );
-
-    let file = BufReader::with_capacity(64 * 1024 * 1024, pb.wrap_read(file));
-
-    let fasta: Box<dyn Read> = if filename.ends_with("gz") {
-        Box::new(flate2::read::GzDecoder::new(file))
-    } else if filename.ends_with("snappy") || filename.ends_with("sz") {
-        Box::new(snap::read::FrameDecoder::new(file))
-    } else {
-        Box::new(file)
-    };
-
-    let reader = BufReader::with_capacity(32 * 1024 * 1024, fasta);
-    (Box::new(reader), pb)
-}
-
 fn open_file(filename: String) -> Box<dyn Read + Send> {
     let file = match File::open(&filename) {
         Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
