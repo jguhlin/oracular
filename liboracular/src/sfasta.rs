@@ -7,6 +7,8 @@ use std::io::{BufRead, BufReader, BufWriter, Read, SeekFrom, Write};
 use std::path::Path;
 use std::time::Instant;
 
+use crate::utils::generic_open_file;
+
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 
@@ -203,7 +205,7 @@ impl Sequences {
         }
     }
 
-    pub fn set_mode(&mut self,  access: SeqMode) {
+    pub fn set_mode(&mut self, access: SeqMode) {
         self.access = access;
 
         if self.access == SeqMode::Random {
@@ -226,14 +228,11 @@ impl Iterator for Sequences {
 
     /// Get the next SFASTA entry as io::Sequence type
     fn next(&mut self) -> Option<io::Sequence> {
-
         if self.access == SeqMode::Random {
             assert!(self.random_list.is_some());
-            let mut rl = self.random_list.as_mut().unwrap();
+            let rl = self.random_list.as_mut().unwrap();
             let next_loc = rl.pop();
-            if next_loc.is_none() { // Out of data...
-                return None
-            }
+            next_loc?;
             self.reader
                 .seek(SeekFrom::Start(next_loc.unwrap()))
                 .expect("Unable to work with seek API");
@@ -296,33 +295,6 @@ fn open_file(filename: &str) -> (Box<dyn ReadAndSeek + Send>, Option<HashMap<Str
     (Box::new(reader), load_index(&filename))
 }
 
-/// Opens files, including compressed files (gzip or snappy)
-fn generic_open_file(filename: &str) -> (usize, bool, Box<dyn Read + Send>) {
-    let filesize = metadata(filename)
-        .expect(&format!("Unable to open file: {}", filename))
-        .len();
-
-    let file = match File::open(filename) {
-        Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
-        Ok(file) => file,
-    };
-
-    let mut compressed: bool = false;
-
-    let fasta: Box<dyn Read + Send> = if filename.ends_with("gz") {
-        compressed = true;
-        Box::new(flate2::read::GzDecoder::new(file))
-    } else if filename.ends_with("snappy") || filename.ends_with("sz") || filename.ends_with("sfai")
-    {
-        compressed = true;
-        Box::new(snap::read::FrameDecoder::new(file))
-    } else {
-        Box::new(file)
-    };
-
-    (filesize as usize, compressed, fasta)
-}
-
 /// Build a ZSTD dictionary
 pub fn build_zstd_dict(filename: &str) -> Option<Vec<u8>> {
     let (_, _, fasta) = generic_open_file(filename);
@@ -381,6 +353,7 @@ pub fn build_zstd_dict(filename: &str) -> Option<Vec<u8>> {
 /// Converts a FASTA file to an SFASTA file...
 pub fn convert_fasta_file(filename: &str, output: &str)
 // TODO: Add progress bar option
+// TODO: Make multithreaded for very large datasets (>= 1Gbp or 5Gbp or something)
 //
 // Convert file to bincode/snappy for faster processing
 // Stores accession/taxon information inside the Sequence struct
@@ -650,7 +623,7 @@ mod tests {
         let idx_filename = index(output_filename);
         assert!(idx_filename == "test_data/test_sfasta_convert_and_index.sfai");
 
-        let idx = load_index(output_filename);
+        load_index(output_filename);
     }
 
     #[test]
@@ -668,7 +641,7 @@ mod tests {
         reader
             .seek(SeekFrom::Start(*i[0]))
             .expect("Unable to work with seek API");
-        let ec: EntryCompressed = match bincode::deserialize_from(&mut reader) {
+        match bincode::deserialize_from::<_, EntryCompressed>(&mut reader) {
             Ok(x) => x,
             Err(_) => panic!("Unable to read indexed SFASTA after jumping"),
         };
@@ -685,6 +658,4 @@ mod tests {
         sequences.set_mode(SeqMode::Random);
         sequences.next();
     }
-
-
 }

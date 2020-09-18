@@ -4,23 +4,19 @@ extern crate rayon;
 // Rust-y stuff is "iter" Python is "Generator"
 
 use liboracular::kmers::{
-    DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3Kmers, Gff3KmersIter, KmerCoordsWindow,
+    DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3Kmers, Gff3KmersIter,
     KmerCoordsWindowIter, KmerWindowGenerator,
 };
 use liboracular::sfasta;
 
 use pyo3::prelude::*;
 // use pyo3::wrap_pyfunction;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::PyDict;
 use pyo3::PyIterProtocol;
 
 // use pyo3::wrap_pyfunction;
 
-use crossbeam::queue::{ArrayQueue, PopError};
-use crossbeam::utils::Backoff;
 use pyo3::wrap_pyfunction;
-use std::sync::{Arc, RwLock};
-use std::thread::JoinHandle;
 
 // use std::fs::File;
 // use std::io::BufReader;
@@ -57,6 +53,7 @@ struct Gff3KmerGenerator {
     gff3filename: String,
     rc: bool,
     types: Vec<String>,
+    rand: bool,
 }
 
 #[pyproto]
@@ -94,6 +91,7 @@ impl PyIterProtocol for Gff3KmerGenerator {
                             mypyself.window_size,
                             mypyself.offset,
                             mypyself.rc,
+                            mypyself.rand,
                         );
 
                         let iter = Gff3KmersIter::new(
@@ -144,10 +142,16 @@ impl PyIterProtocol for Gff3KmerGenerator {
 #[pymethods]
 impl Gff3KmerGenerator {
     #[new]
-    fn new(k: usize, filename: String, window_size: usize, gff3filename: String) -> Self {
+    fn new(
+        k: usize,
+        filename: String,
+        window_size: usize,
+        gff3filename: String,
+        rand: bool,
+    ) -> Self {
         // Create KmerWindowGenerator
         let kmercoords_window_iter =
-            KmerCoordsWindowIter::new(&filename, k, window_size, 0, false);
+            KmerCoordsWindowIter::new(&filename, k, window_size, 0, false, rand);
 
         let iter = Gff3KmersIter::new(&gff3filename, kmercoords_window_iter, k);
         let types = iter.types.clone();
@@ -161,6 +165,7 @@ impl Gff3KmerGenerator {
             window_size,
             types,
             rc: false,
+            rand,
         }
     }
 
@@ -181,6 +186,7 @@ struct DiscriminatorMaskedGeneratorWrapper {
     filename: String,
     replacement_pct: f32,
     rc: bool,
+    rand: bool,
 }
 
 #[pyproto]
@@ -217,6 +223,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
                             mypyself.window_size,
                             mypyself.offset,
                             mypyself.rc,
+                            mypyself.rand,
                         );
 
                         let discriminator_masked_generator = DiscriminatorMaskedGenerator::new(
@@ -264,10 +271,11 @@ impl DiscriminatorMaskedGeneratorWrapper {
         window_size: usize,
         batch_size: usize,
         replacement_pct: f32,
+        rand: bool,
     ) -> Self {
         // Create KmerWindowGenerator
         let kmer_window_generator =
-            KmerWindowGenerator::new(&filename, k, window_size, 0, false);
+            KmerWindowGenerator::new(&filename, k, window_size, 0, false, rand);
 
         let discriminator_masked_generator =
             DiscriminatorMaskedGenerator::new(replacement_pct, k, kmer_window_generator);
@@ -281,6 +289,7 @@ impl DiscriminatorMaskedGeneratorWrapper {
             window_size,
             replacement_pct,
             rc: false,
+            rand,
         }
     }
 }
@@ -334,6 +343,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
                             mypyself.window_size,
                             mypyself.offset,
                             mypyself.rc,
+                            true,
                         );
 
                         let discriminator_masked_generator = DiscriminatorMaskedGenerator::new(
@@ -380,7 +390,7 @@ impl DiscriminatorMaskedGeneratorWrapperNB {
     fn new(k: usize, filename: String, window_size: usize, replacement_pct: f32) -> Self {
         // Create KmerWindowGenerator
         let kmer_window_generator =
-            KmerWindowGenerator::new(&filename, k, window_size, 0, false);
+            KmerWindowGenerator::new(&filename, k, window_size, 0, false, true);
 
         let discriminator_masked_generator =
             DiscriminatorMaskedGenerator::new(replacement_pct, k, kmer_window_generator);

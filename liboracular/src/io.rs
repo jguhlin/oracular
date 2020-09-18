@@ -180,9 +180,7 @@ mod tests {
             "test_data/test_multiple.fna",
             "test_data/test_multiple.sfasta",
         );
-        let sequences = Box::new(sfasta::Sequences::new(
-            "test_data/test_multiple.sfasta",
-        ));
+        let sequences = Box::new(sfasta::Sequences::new("test_data/test_multiple.sfasta"));
         let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
         sequences.next();
         println!("Coords: {:#?}", sequences.coords[0]);

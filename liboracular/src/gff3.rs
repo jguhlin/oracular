@@ -196,7 +196,6 @@ pub fn parse_gff3_line(line: &str) -> Option<Gff3Entry> {
 mod tests {
     use super::*;
     use std::fs::File;
-    use std::io::prelude::*;
 
     #[test]
     pub fn test_parse_score() {

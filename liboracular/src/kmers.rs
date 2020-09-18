@@ -142,8 +142,13 @@ impl KmerWindowGenerator {
         window_size: usize,
         offset: usize,
         rc: bool,
+        rand: bool, // Mostly for debugging, but also for synteny plots and such...
     ) -> KmerWindowGenerator {
-        let sequences = Box::new(sfasta::Sequences::new(filename));
+        let mut sequences = Box::new(sfasta::Sequences::new(filename));
+        if rand {
+            sequences.set_mode(sfasta::SeqMode::Random);
+        }
+
         let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
         let mut curseq = match sequences.next() {
             Some(x) => x,
@@ -275,8 +280,13 @@ impl KmerCoordsWindowIter {
         window_size: usize,
         offset: usize,
         rc: bool,
+        rand: bool,
     ) -> KmerCoordsWindowIter {
-        let sequences = Box::new(sfasta::Sequences::new(filename));
+        let mut sequences = Box::new(sfasta::Sequences::new(filename));
+        if rand {
+            sequences.set_mode(sfasta::SeqMode::Random);
+        }
+
         let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
         let mut curseq = match sequences.next() {
             Some(x) => x,
@@ -504,7 +514,8 @@ impl Iterator for Gff3KmersIter {
                     let upper: u32 = std::cmp::min(x.stop as u32, coords[n].1 as u32);
 
                     let len = upper - lower;
-                    if len as f32 > (self.k as f32 * 0.8) { // TODO: Make overlap (0.8) configurable...
+                    if len as f32 > (self.k as f32 * 0.8) {
+                        // TODO: Make overlap (0.8) configurable...
                         // Intervals are a set of [0 0 0 0 1 1 1 1 1] etc... for when classes are
                         // false or true...
                         for (i, m) in (*x).val.iter().enumerate() {
@@ -557,14 +568,15 @@ mod tests {
             3,
             0,
             false,
+            false,
         );
         let first = kmers.next().expect("Unable to get KmerWindow");
 
         assert!(first.kmers[0] == b"ACT");
 
-        let kmers = KmerWindowGenerator::new("test_data/test.sfasta", 3, 3, 0, false);
+        let mut kmers = KmerWindowGenerator::new("test_data/test.sfasta", 3, 3, 0, false, false);
 
-        let skipped = kmers.skip(2).next().expect("Unable to skip ahead");
+        let skipped = kmers.nth(2).expect("Unable to skip ahead");
         assert!(skipped.kmers[0] == b"NAC");
     }
 
@@ -574,10 +586,7 @@ mod tests {
 
         let k1 = kmers.next().expect("Unable to get Kmer");
         assert!(k1.1 == (13, 15));
-        assert!(
-            "ACT".to_string()
-                == std::str::from_utf8(&k1.0).expect("Unable to convert from Vec<u8>")
-        );
+        assert!("ACT" == std::str::from_utf8(&k1.0).expect("Unable to convert from Vec<u8>"));
 
         let kmers = Kmers::new(b"ACTGACTGACTGACTG".to_vec(), 3, 0, true);
         let coords: Vec<_> = kmers.map(|x| x.1).collect();
@@ -587,24 +596,22 @@ mod tests {
 
     #[test]
     pub fn test_kmer_coords_window_generator() {
-        let mut kmers =
-            KmerCoordsWindowIter::new("test_data/test.sfasta", 3, 3, 0, false);
+        let mut kmers = KmerCoordsWindowIter::new("test_data/test.sfasta", 3, 3, 0, false, false);
         let first = kmers.next().expect("Unable to get KmerWindow");
 
         assert!(first.coords == [(0, 2), (3, 5), (6, 8)]);
         assert!(first.kmers[0] == b"ACT");
 
-        let kmers =
-            KmerCoordsWindowIter::new("test_data/test.sfasta", 3, 3, 0, false);
+        let mut kmers = KmerCoordsWindowIter::new("test_data/test.sfasta", 3, 3, 0, false, false);
 
-        let skipped = kmers.skip(2).next().expect("Unable to skip ahead");
+        let skipped = kmers.nth(2).expect("Unable to skip ahead");
+        // println!("{:#?}", skipped.kmers[0]);
         assert!(skipped.kmers[0] == b"NAC");
         // println!("{:#?}", skipped.coords);
         assert!(skipped.coords == [(38, 40), (41, 43), (44, 46)]);
 
         // Have to get the right coords for RC
-        let kmers =
-            KmerCoordsWindowIter::new("test_data/test.sfasta", 8, 2, 0, true);
+        let kmers = KmerCoordsWindowIter::new("test_data/test.sfasta", 8, 2, 0, true, false);
 
         let coords: Vec<_> = kmers.map(|x| x.coords).collect();
         println!("{:#?}", coords[0]);
