@@ -352,8 +352,9 @@ pub fn build_zstd_dict(filename: &str) -> Option<Vec<u8>> {
 
 /// Converts a FASTA file to an SFASTA file...
 pub fn convert_fasta_file(filename: &str, output: &str)
-// TODO: Add progress bar option
+// TODO: Convert to use FASTA iterator
 // TODO: Make multithreaded for very large datasets (>= 1Gbp or 5Gbp or something)
+// TODO: Add progress bar option ... or not..
 //
 // Convert file to bincode/snappy for faster processing
 // Stores accession/taxon information inside the Sequence struct

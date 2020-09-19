@@ -1,8 +1,9 @@
 // TODO: Move FASTA handling code here...
 // To make uniform...
 
-use std::io::{BufRead, BufReader};
 use crate::utils::generic_open_file;
+use std::convert::TryInto;
+use std::io::{BufRead, BufReader};
 
 pub struct Sequence {
     pub seq: Vec<u8>,
@@ -15,11 +16,12 @@ pub struct Fasta {
     seqbuffer: Vec<u8>,
     next_seqid: Option<String>,
     seqlen: usize,
+    pub filesize: u64,
 }
 
 impl Fasta {
     pub fn new(filename: &str) -> Fasta {
-        let (_, _, fh) = generic_open_file(filename);
+        let (filesize, _, fh) = generic_open_file(filename);
         let reader = Box::new(BufReader::with_capacity(512 * 1024, fh));
 
         Fasta {
@@ -27,7 +29,8 @@ impl Fasta {
             buffer: Vec::with_capacity(1024),
             seqbuffer: Vec::with_capacity(32 * 1024 * 1024),
             next_seqid: None,
-            seqlen: 0
+            seqlen: 0,
+            filesize: filesize.try_into().expect("Unable to convert to u64"),
         }
     }
 }
@@ -40,7 +43,10 @@ impl Iterator for Fasta {
             if bytes_read == 0 {
                 if self.seqlen > 0 {
                     self.seqlen = 0;
-                    let seq = Sequence { seq: self.seqbuffer[..self.seqlen].to_vec(), id: self.next_seqid.clone().unwrap() };
+                    let seq = Sequence {
+                        seq: self.seqbuffer[..self.seqlen].to_vec(),
+                        id: self.next_seqid.clone().unwrap(),
+                    };
                     return Some(seq);
                 } else {
                     return None;
@@ -58,12 +64,15 @@ impl Iterator for Fasta {
 
                         if self.seqlen > 0 {
                             assert!(id.is_some());
-                            let seq = Sequence { seq: self.seqbuffer[..self.seqlen].to_vec(), id: id.unwrap() };
+                            let seq = Sequence {
+                                seq: self.seqbuffer[..self.seqlen].to_vec(),
+                                id: id.unwrap(),
+                            };
                             self.seqbuffer.clear();
                             self.seqlen = 0;
                             return Some(seq);
                         }
-                    },
+                    }
                     _ => {
                         let slice_end = bytes_read.saturating_sub(1);
                         self.seqbuffer.extend_from_slice(&self.buffer[0..slice_end]);
@@ -105,6 +114,4 @@ mod tests {
         let seq_ids: Vec<String> = fasta.map(|x| x.id).collect();
         assert!(seq_ids.len() == 1);
     }
-
-
 }

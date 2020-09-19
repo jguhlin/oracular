@@ -397,6 +397,7 @@ dependencies = [
  "rand_chacha",
  "rand_core",
  "rand_xorshift",
+ "rayon",
  "rust-lapper",
  "serde",
  "snap",

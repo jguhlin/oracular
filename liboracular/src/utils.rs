@@ -1,6 +1,6 @@
 /// Opens files, including compressed files (gzip or snappy)
 use std::fs::{metadata, File};
-use std::io::{Read};
+use std::io::Read;
 
 pub fn generic_open_file(filename: &str) -> (usize, bool, Box<dyn Read + Send>) {
     let filesize = metadata(filename)
