@@ -131,7 +131,7 @@ fn stats(matches: &ArgMatches) {
     println!("Header ID: {}", seqs.header.id.as_ref().unwrap());
     println!("Header Comment: {:#?}", seqs.header.comment);
     println!("Header Citation: {:#?}", seqs.header.citation);
-    println!("Header Zstd Dict: {:#?}", seqs.header.dict);
+    // println!("Header Zstd Dict: {:#?}", seqs.header.dict);
 
     let ids: Vec<(String, usize, u64)> = seqs
         .take(5)
