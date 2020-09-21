@@ -16,6 +16,7 @@ use std::fs::{metadata, File};
 use std::io::prelude::*;
 use std::io::{BufRead, BufReader, BufWriter, Read, SeekFrom, Write};
 use std::path::Path;
+use std::sync::Arc;
 
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle, ProgressIterator, HumanBytes};
 
@@ -78,12 +79,13 @@ fn split(matches: &ArgMatches) {
 
     pb.set_style(
         ProgressStyle::default_bar()
-            .template("{spinner:.green} [{bar:40.cyan/blue}] {eta}")
+            .template("{spinner:.green} [{bar:40.cyan/blue}] {eta} {msg}")
             .progress_chars("█▛▌▖  ")
             .tick_chars("ACTGN"),
     );
 
-    let mut seqs = seqs.progress_with(pb);
+
+    let mut seqs = seqs.progress_with(pb.clone());
 
     if !length_mode {
         // Can't do this without an index!
@@ -106,6 +108,10 @@ fn split(matches: &ArgMatches) {
                 bincode::serialize_into(&mut out_valid, &entry).expect("Unable to write to bincode output");
                 validation += entry.len;
             }
+
+            pb.set_message(&format!("Training Seq/SeqLen: {} Validation SeqLen: {}", training, validation));
+
+
         }
 
         println!("Training Seq Length: {}\tValidation Seq Length:{}", training, validation);
