@@ -12,16 +12,11 @@ extern crate indicatif;
 
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
-use std::fs::{metadata, File};
-use std::io::prelude::*;
-use std::io::{BufRead, BufReader, BufWriter, Read, SeekFrom, Write};
-use std::path::Path;
-use std::sync::Arc;
+use std::fs::{File};
+use std::io::{BufWriter};
 
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle, ProgressIterator, HumanBytes};
+use indicatif::{ProgressBar, ProgressStyle, ProgressIterator, HumanBytes};
 
-
-#[macro_use]
 extern crate clap;
 use clap::{load_yaml, App, ArgMatches};
 
@@ -48,11 +43,11 @@ fn split(matches: &ArgMatches) {
 
     let out_train =
         File::create(output_prefix.to_string() + "_train.sfasta").expect("Unable to write to file");
-    let mut out_train = BufWriter::with_capacity(4 * 1024 * 1024, out_train);
+    let mut out_train = BufWriter::with_capacity(1024 * 1024, out_train);
 
     let out_valid = File::create(output_prefix.to_string() + "_validation.sfasta")
         .expect("Unable to write to file");
-    let mut out_valid = BufWriter::with_capacity(4 * 1024 * 1024, out_valid);
+    let mut out_valid = BufWriter::with_capacity(1024 * 1024, out_valid);
 
     let mut seqs = sfasta::Sequences::new(&sfasta_filename);
     seqs.set_mode(sfasta::SeqMode::Random);
@@ -61,7 +56,6 @@ fn split(matches: &ArgMatches) {
     let mut total_len = 0;
     let mut training = 0;
     let mut validation = 0;
-    let mut training_goal;
     // let mut validation_goal = 0;
 
     // Both get a copy of the header
@@ -98,7 +92,7 @@ fn split(matches: &ArgMatches) {
     } else {
         for entry in seqs {
             total_len += entry.len;
-            training_goal = (total_len as f32 * training_split) as usize;
+            let training_goal = (total_len as f32 * training_split) as usize;
             // validation_goal = (total_len as f32 * (1.0 - training_split)) as usize;
             let tchance = (training_goal as f32 - training as f32) / entry.len as f32;
             if rng.gen::<f32>() < tchance {

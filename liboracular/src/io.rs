@@ -56,7 +56,6 @@ impl Sequence {
 impl Iterator for SequenceSplitter3N {
     type Item = Sequence;
 
-    #[inline]
     fn next(&mut self) -> Option<Sequence> {
         let coords = match self.coords.pop_front() {
             Some(x) => x,

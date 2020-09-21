@@ -1021,6 +1021,7 @@ dependencies = [
  "rand_chacha",
  "rand_core",
  "serde",
+ "thread_io",
 ]
 
 [[package]]
@@ -1145,6 +1146,15 @@ name = "thincollections"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b01816415080bff551717565adfcd5502469ce118170d1a469cdf9563ddafd41"
+
+[[package]]
+name = "thread_io"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4426e74c1e478ac52e2d4e053ab34b1f3202f1c247d02f759c63be27475a191"
+dependencies = [
+ "crossbeam",
+]
 
 [[package]]
 name = "twox-hash"

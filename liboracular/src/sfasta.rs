@@ -14,6 +14,8 @@ use rand_chacha::ChaCha20Rng;
 
 use serde::{Deserialize, Serialize};
 
+use twox_hash::RandomXxHashBuilder64;
+
 use crate::io;
 
 // SuperTrait
@@ -124,9 +126,7 @@ impl EntryCompressed {
     pub fn take_id(self) -> String {
         self.id
     }
-}
 
-impl EntryCompressed {
     pub fn decompress(self, dict: &Option<Vec<u8>>) -> Entry {
         let EntryCompressed {
             id,
@@ -184,7 +184,7 @@ impl From<Entry> for io::Sequence {
 pub struct CompressedSequences {
     pub header: Header,
     reader: Box<dyn ReadAndSeek + Send>,
-    pub idx: Option<HashMap<String, u64>>,
+    pub idx: Option<HashMap<String, u64, RandomXxHashBuilder64>>,
     access: SeqMode,
     random_list: Option<Vec<u64>>,
 }
@@ -193,7 +193,7 @@ pub struct CompressedSequences {
 pub struct Sequences {
     pub header: Header,
     reader: Box<dyn ReadAndSeek + Send>,
-    pub idx: Option<HashMap<String, u64>>,
+    pub idx: Option<HashMap<String, u64, RandomXxHashBuilder64>>,
     access: SeqMode,
     random_list: Option<Vec<u64>>,
 }
@@ -340,7 +340,7 @@ fn generate_sfasta_compressed_entry(
 
 /// Opens an SFASTA file and an index and returns a Box<dyn Read>,
 /// HashMap<String, usize> type
-pub fn open_file(filename: &str) -> (Box<dyn ReadAndSeek + Send>, Option<HashMap<String, u64>>) {
+pub fn open_file(filename: &str) -> (Box<dyn ReadAndSeek + Send>, Option<HashMap<String, u64, RandomXxHashBuilder64>>) {
     let filename = check_extension(filename);
 
     let file = match File::open(Path::new(&filename)) {
@@ -422,7 +422,7 @@ pub fn convert_fasta_file(filename: &str, output: &str)
     let output_filename = check_extension(output);
 
     let out_file = File::create(output_filename.clone()).expect("Unable to write to file");
-    let mut out_fh = BufWriter::with_capacity(4 * 1024 * 1024, out_file);
+    let mut out_fh = BufWriter::with_capacity(1024 * 1024, out_file);
 
     let mut buffer: Vec<u8> = Vec::with_capacity(1024);
     let mut id: String = String::from("INVALID_ID_FIRST_ENTRY_YOU_SHOULD_NOT_SEE_THIS");
@@ -558,7 +558,6 @@ pub fn test_sfasta(filename: String) {
 }
 
 /// Checks that the file extension ends in .sfasta or adds it if necessary
-#[inline(always)]
 fn check_extension(filename: &str) -> String {
     if !filename.ends_with(".sfasta") {
         format!("{}.sfasta", filename)
@@ -639,7 +638,7 @@ fn get_index_filename(filename: &str) -> String {
     path + &filename
 }
 
-fn load_index(filename: &str) -> Option<HashMap<String, u64>> {
+fn load_index(filename: &str) -> Option<HashMap<String, u64, RandomXxHashBuilder64>> {
     let idx_filename = get_index_filename(filename);
     if !Path::new(&idx_filename).exists() {
         println!("IdxFile does not exist!");
@@ -647,7 +646,8 @@ fn load_index(filename: &str) -> Option<HashMap<String, u64>> {
     }
 
     let (_, _, mut idxfh) = generic_open_file(&idx_filename);
-    let idx: HashMap<String, u64>;
+    // let idx: HashMap<String, u64>;
+    let idx: HashMap<String, u64, RandomXxHashBuilder64>;
     idx = bincode::deserialize_from(&mut idxfh).expect("Unable to open Index file");
     Some(idx)
 }
@@ -661,7 +661,7 @@ fn create_index(filename: &str, ids: Vec<String>, locations: Vec<u64>) -> String
         File::create(output_filename.clone()).expect("Unable to write to file"),
     );
 
-    let mut out_fh = BufWriter::with_capacity(4 * 1024 * 1024, out_file);
+    let mut out_fh = BufWriter::with_capacity(1024 * 1024, out_file);
     bincode::serialize_into(&mut out_fh, &idx).expect("Unable to write index");
 
     output_filename

@@ -428,7 +428,6 @@ impl Kmers {
 impl Iterator for Kmers {
     type Item = (Vec<u8>, Coords);
 
-    #[inline]
     fn next(&mut self) -> Option<(Vec<u8>, Coords)> {
         if (self.offset + self.curpos + self.k) >= self.len {
             None

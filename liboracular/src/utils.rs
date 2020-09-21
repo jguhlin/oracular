@@ -84,7 +84,6 @@ pub fn get_good_sequence_coords(seq: &[u8]) -> Vec<(usize, usize)> {
 
 // Copied from opinionated lib...
 // Mutability here because we change everything to uppercase
-#[inline]
 pub fn capitalize_nucleotides(slice: &mut [u8]) {
     // Convert to uppercase (using, what is hopefully a fast op)
     for nucl in slice.iter_mut() {
@@ -105,7 +104,6 @@ pub fn capitalize_nucleotides(slice: &mut [u8]) {
     }
 }
 
-#[inline(always)]
 fn _complement_nucl(nucl: u8) -> u8 {
     // Should all be capitalized by now...
     // N -> 78
@@ -125,7 +123,6 @@ fn _complement_nucl(nucl: u8) -> u8 {
 
 // Mutability here because we change everything to uppercase
 /// Complement nucleotides -- Reverse is easy enough with Rust internals
-#[inline(always)]
 pub fn complement_nucleotides(slice: &mut [u8]) {
     for x in slice.iter_mut() {
         *x = _complement_nucl(*x);
