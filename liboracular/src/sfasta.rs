@@ -45,6 +45,7 @@ pub struct Header {
     pub id: Option<String>,
     pub comment: Option<String>,
     pub citation: Option<String>,
+    #[serde(with = "serde_bytes")]
     pub dict: Option<Vec<u8>>,
 }
 
@@ -52,6 +53,7 @@ pub struct Header {
 #[derive(PartialEq, Serialize, Deserialize, Debug)]
 pub struct Entry {
     pub id: String,
+    #[serde(with = "serde_bytes")]
     pub seq: Vec<u8>,
     pub comment: Option<String>,
     pub len: u64,
@@ -110,6 +112,7 @@ impl Entry {
 pub struct EntryCompressed {
     pub id: String,
     pub compression_type: CompressionType,
+    #[serde(with = "serde_bytes")]
     pub compressed_seq: Vec<u8>,
     pub comment: Option<String>,
     pub len: u64,

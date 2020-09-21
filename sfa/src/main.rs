@@ -56,12 +56,12 @@ fn split(matches: &ArgMatches) {
 
     let mut seqs = sfasta::Sequences::new(&sfasta_filename);
     seqs.set_mode(sfasta::SeqMode::Random);
-    let mut seqs = seqs.into_compressed_sequences();
+    let seqs = seqs.into_compressed_sequences();
 
     let mut total_len = 0;
     let mut training = 0;
     let mut validation = 0;
-    let mut training_goal = 0;
+    let mut training_goal;
     // let mut validation_goal = 0;
 
     // Both get a copy of the header
