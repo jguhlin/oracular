@@ -79,7 +79,7 @@ fn split(matches: &ArgMatches) {
 
     pb.set_style(
         ProgressStyle::default_bar()
-            .template("{spinner:.green} [{bar:40.cyan/blue}] {eta} {msg}")
+            .template("{spinner:.green} [{bar:40.cyan/blue}] {eta_precise} {msg}")
             .progress_chars("█▛▌▖  ")
             .tick_chars("ACTGN"),
     );
