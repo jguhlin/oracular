@@ -30,6 +30,10 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("split") {
         split(&matches);
     }
+    if let Some(matches) = matches.subcommand_matches("index") {
+        index(&matches);
+    }
+
 }
 
 fn split(matches: &ArgMatches) {
@@ -151,4 +155,10 @@ fn stats(matches: &ArgMatches) {
     let len = if seq.len < 500 { seq.len as usize } else { 500 };
     println!("{}", std::str::from_utf8(&seq.seq[0..len]).unwrap());
     println!("{} {}", seq.len, ec.compressed_seq.len());
+}
+
+fn index(matches: &ArgMatches) {
+    let sfasta_filename = matches.value_of("input").unwrap();
+    sfasta::index(sfasta_filename);
+
 }

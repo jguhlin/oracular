@@ -10,6 +10,12 @@ subcommands:
                 about: Input SFASTA file
                 index: 1
                 required: true
+    - index:
+        about: Create an SFASTA index
+        args:
+            - input:
+                index: 1
+                required: true
     - split:
         about: Split an SFASTA sample. Useful for generating training and validation sets.
         version: "0.0.1"

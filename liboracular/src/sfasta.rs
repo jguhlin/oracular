@@ -593,6 +593,11 @@ pub fn index(filename: &str) -> String {
     let mut now = Instant::now();
     //    let mut bump = Bump::new();
     //    let mut maxalloc: usize = 0;
+    
+    let header: Header = match bincode::deserialize_from(&mut fh) {
+        Ok(x) => x,
+        Err(_) => panic!("Header missing or malformed in SFASTA file"),
+    };
 
     while let Ok(entry) = bincode::deserialize_from::<_, EntryCompressed>(&mut fh) {
         i += 1;
