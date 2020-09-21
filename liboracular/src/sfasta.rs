@@ -112,6 +112,7 @@ impl Entry {
 pub struct EntryCompressed {
     pub id: String,
     pub compression_type: CompressionType,
+
     #[serde(with = "serde_bytes")]
     pub compressed_seq: Vec<u8>,
     pub comment: Option<String>,
