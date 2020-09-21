@@ -1,4 +1,10 @@
+extern crate mimalloc;
 extern crate rayon;
+
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 // NOTE: New naming convention
 // Rust-y stuff is "iter" Python is "Generator"

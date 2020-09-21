@@ -20,3 +20,5 @@ twox-hash = "1.5.0"
 liboracular = { path = "../liboracular/" }
 crossbeam = "0.7.3"
 rayon = "1.3.0"
+mimalloc = { version = "*", default-features = false }
+

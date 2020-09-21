@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::io;
 
 // SuperTrait
-trait ReadAndSeek: Read + Seek + Send {}
+pub trait ReadAndSeek: Read + Seek + Send {}
 impl<T: Read + Seek + Send> ReadAndSeek for T {}
 
 // TODO: Spin this out as a separate library...
@@ -25,7 +25,7 @@ impl<T: Read + Seek + Send> ReadAndSeek for T {}
 //       Make it a global const, but also maybe make it configurable?
 //       Reason being that network FS will benefit from larger buffers
 // TODO: Also make BufWriter bufsize global, but ok to leave larger.
-#[derive(PartialEq, Serialize, Deserialize, Debug)]
+#[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub enum CompressionType {
     ZSTD,
     SNAPPY,
@@ -106,7 +106,7 @@ impl Entry {
 /// compressed. Decompression does not occur unless EntryCompressed is converted
 /// to an Entry. This allows faster searching of SFASTA files without spending
 /// CPU cycles on decompression prematurely.
-#[derive(PartialEq, Serialize, Deserialize)]
+#[derive(PartialEq, Serialize, Deserialize, Clone)]
 pub struct EntryCompressed {
     pub id: String,
     pub compression_type: CompressionType,
@@ -123,7 +123,7 @@ impl EntryCompressed {
 }
 
 impl EntryCompressed {
-    fn decompress(self, dict: &Option<Vec<u8>>) -> Entry {
+    pub fn decompress(self, dict: &Option<Vec<u8>>) -> Entry {
         let EntryCompressed {
             id,
             compression_type,
@@ -176,9 +176,18 @@ impl From<Entry> for io::Sequence {
     }
 }
 
+/// Iterator to return sfasta::EntryCompressed
+pub struct CompressedSequences {
+    pub header: Header,
+    reader: Box<dyn ReadAndSeek + Send>,
+    pub idx: Option<HashMap<String, u64>>,
+    access: SeqMode,
+    random_list: Option<Vec<u64>>,
+}
+
 /// Iterator to return io::Sequences
 pub struct Sequences {
-    header: Header,
+    pub header: Header,
     reader: Box<dyn ReadAndSeek + Send>,
     pub idx: Option<HashMap<String, u64>>,
     access: SeqMode,
@@ -219,6 +228,25 @@ impl Sequences {
             self.random_list = None;
         }
     }
+
+    // Convert to iterator that only returns EntryCompressed...
+    pub fn into_compressed_sequences(self) -> CompressedSequences {
+        let Sequences {
+            header,
+            reader,
+            idx,
+            access,
+            random_list,
+        } = self;
+
+        CompressedSequences {
+            header,
+            reader,
+            idx,
+            access,
+            random_list,
+        }
+    }
 }
 
 // TODO: Create the option to pass back lowercase stuff too..
@@ -253,6 +281,32 @@ impl Iterator for Sequences {
     }
 }
 
+impl Iterator for CompressedSequences {
+    type Item = EntryCompressed;
+
+    /// Get the next SFASTA entry as an EntryCompressed struct
+    fn next(&mut self) -> Option<EntryCompressed> {
+        if self.access == SeqMode::Random {
+            assert!(self.random_list.is_some());
+            let rl = self.random_list.as_mut().unwrap();
+            let next_loc = rl.pop();
+            next_loc?;
+            self.reader
+                .seek(SeekFrom::Start(next_loc.unwrap()))
+                .expect("Unable to work with seek API");
+        }
+
+        let ec: EntryCompressed = match bincode::deserialize_from(&mut self.reader) {
+            Ok(x) => x,
+            Err(_) => return None, // panic!("Error at SFASTA::Sequences::next: {}", y)
+        };
+
+        // Have to convert from EntryCompressed to Entry, this handles that middle
+        // conversion.
+        Some(ec)
+    }
+}
+
 // sfasta is:
 // bincode encoded
 //   fasta ID
@@ -282,7 +336,7 @@ fn generate_sfasta_compressed_entry(
 
 /// Opens an SFASTA file and an index and returns a Box<dyn Read>,
 /// HashMap<String, usize> type
-fn open_file(filename: &str) -> (Box<dyn ReadAndSeek + Send>, Option<HashMap<String, u64>>) {
+pub fn open_file(filename: &str) -> (Box<dyn ReadAndSeek + Send>, Option<HashMap<String, u64>>) {
     let filename = check_extension(filename);
 
     let file = match File::open(Path::new(&filename)) {
