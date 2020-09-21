@@ -109,7 +109,7 @@ fn split(matches: &ArgMatches) {
                 validation += entry.len;
             }
 
-            pb.set_message(&format!("Training Seq/SeqLen: {} Validation SeqLen: {}", training, validation));
+            pb.set_message(&format!("Training Len: {} Validation Len: {}", HumanBytes(training), HumanBytes(validation)));
 
 
         }
