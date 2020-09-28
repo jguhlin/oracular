@@ -11,13 +11,13 @@ extern crate once_cell;
 extern crate rand;
 extern crate rayon;
 extern crate serde;
+extern crate serde_bytes;
 extern crate snap;
 extern crate t1ha;
 extern crate thincollections;
 extern crate twox_hash;
 extern crate wyhash;
 extern crate zstd;
-extern crate serde_bytes;
 
 // #[macro_use]
 extern crate static_assertions; // I don't think this is being used anymore...

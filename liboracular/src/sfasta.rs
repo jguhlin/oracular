@@ -340,7 +340,12 @@ fn generate_sfasta_compressed_entry(
 
 /// Opens an SFASTA file and an index and returns a Box<dyn Read>,
 /// HashMap<String, usize> type
-pub fn open_file(filename: &str) -> (Box<dyn ReadAndSeek + Send>, Option<HashMap<String, u64, RandomXxHashBuilder64>>) {
+pub fn open_file(
+    filename: &str,
+) -> (
+    Box<dyn ReadAndSeek + Send>,
+    Option<HashMap<String, u64, RandomXxHashBuilder64>>,
+) {
     let filename = check_extension(filename);
 
     let file = match File::open(Path::new(&filename)) {
@@ -593,7 +598,7 @@ pub fn index(filename: &str) -> String {
     let mut now = Instant::now();
     //    let mut bump = Bump::new();
     //    let mut maxalloc: usize = 0;
-    
+
     let header: Header = match bincode::deserialize_from(&mut fh) {
         Ok(x) => x,
         Err(_) => panic!("Header missing or malformed in SFASTA file"),

@@ -433,6 +433,119 @@ fn test_sfasta(input: String) {
     sfasta::test_sfasta(input);
 }
 
+// ** Fasta Kmer Generator
+#[pyclass]
+struct FastaKmersGenerator {
+    iter: Box<dyn Iterator<Item = KmerCoordsWindow> + Send>,
+    k: usize,
+    offset: usize,
+    window_size: usize,
+    filename: String,
+    rc: bool,
+    sliding: bool,
+    start_rc: bool,
+}
+
+#[pyproto]
+impl PyIterProtocol for FastaKmersGenerator {
+    fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        Ok(mypyself.into_py(py))
+    }
+
+    fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
+        let mut finished = false;
+        let mut item = None;
+
+        while !finished {
+            item = match mypyself.iter.next() {
+                Some(x) => {
+                    finished = true;
+                    Some(x)
+                }
+                None => {
+                    mypyself.offset += 1;
+                    if (mypyself.k == mypyself.offset && mypyself.rc) || !mypyself.sliding {
+                        return Ok(None);
+                    } else {
+                        if mypyself.k == mypyself.offset {
+                            mypyself.rc = true;
+                            mypyself.offset = 0;
+                        }
+
+                        let iter = KmerCoordsWindowIter::new(
+                            mypyself.filename.clone(),
+                            mypyself.k,
+                            mypyself.window_size,
+                            mypyself.offset,
+                            mypyself.rc,
+                        );
+
+                        mypyself.iter = Box::new(iter);
+                        continue;
+                    }
+                }
+            };
+        }
+
+        match item {
+            Some(x) => {
+                let KmerCoordsWindow {
+                    kmers,
+                    coords,
+                    id,
+                    rc,
+                } = x;
+                let kmers: Vec<Vec<u8>> = kmers
+                    .iter()
+                    .map(|x| convert_string_to_array(mypyself.k, x))
+                    .collect();
+
+                let gil = Python::acquire_gil();
+                let py = gil.python();
+                let pyout = PyDict::new(py);
+                // let pyout = PyTuple::new(py, [kmers, truth]);
+                pyout.set_item("kmers", kmers).expect("Py Error");
+                pyout.set_item("coords", coords).expect("Py Error");
+                pyout.set_item("ids", id).expect("Py Error");
+                pyout.set_item("rc", rc).expect("Py Error");
+                Ok(Some(pyout.to_object(py)))
+            }
+            None => Ok(None),
+        }
+    }
+}
+
+#[pymethods]
+impl FastaKmersGenerator {
+    /// Create a new FastaKmersGenerator
+    /// Arguments:
+    ///     k: kmer size, integer (usize)
+    ///     filename: String, location of .fasta, .sfata file
+    ///     window_size: How many kmers to produce per iteration
+    ///     sliding: Sliding window or just a once-over?
+    ///     start_rc: Start on the reverse strand? WARNING: Only use this when
+    /// not doing sliding windows...
+    #[new]
+    fn new(k: usize, filename: String, window_size: usize, sliding: bool, start_rc: bool) -> Self {
+        // Create KmerWindowGenerator
+        let iter = KmerCoordsWindowIter::new(filename.clone(), k, window_size, 0, start_rc);
+
+        FastaKmersGenerator {
+            iter: Box::new(iter),
+            k,
+            offset: 0,
+            filename,
+            window_size,
+            rc: false,
+            sliding,
+            start_rc,
+        }
+    }
+}
+
+
 /// Provides functions for python dealing with Kmers from fasta and sfasta
 /// files...
 #[pymodule]
@@ -440,6 +553,7 @@ fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<DiscriminatorMaskedGeneratorWrapper>()?;
     m.add_class::<DiscriminatorMaskedGeneratorWrapperNB>()?;
     m.add_class::<Gff3KmerGenerator>()?;
+    m.add_class::<FastaKmersGenerator>()?;
     m.add_wrapped(wrap_pyfunction!(convert_fasta_to_sfasta))?;
     m.add_wrapped(wrap_pyfunction!(get_headers_from_sfasta))?;
     m.add_wrapped(wrap_pyfunction!(test_sfasta))?;

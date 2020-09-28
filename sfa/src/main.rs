@@ -6,16 +6,16 @@ use mimalloc::MiMalloc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
+extern crate indicatif;
 extern crate rand;
 extern crate rand_chacha;
-extern crate indicatif;
 
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
-use std::fs::{File};
-use std::io::{BufWriter};
+use std::fs::File;
+use std::io::BufWriter;
 
-use indicatif::{ProgressBar, ProgressStyle, ProgressIterator, HumanBytes};
+use indicatif::{HumanBytes, ProgressBar, ProgressIterator, ProgressStyle};
 
 extern crate clap;
 use clap::{load_yaml, App, ArgMatches};
@@ -33,7 +33,6 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("index") {
         index(&matches);
     }
-
 }
 
 fn split(matches: &ArgMatches) {
@@ -82,15 +81,18 @@ fn split(matches: &ArgMatches) {
             .tick_chars("ACTGN"),
     );
 
-
     let mut seqs = seqs.progress_with(pb.clone());
 
     if !length_mode {
         // Can't do this without an index!
 
         let npct = (n as f32 * training_split) as usize;
-        seqs.by_ref().take(npct).for_each(|s| bincode::serialize_into(&mut out_train, &s).expect("Unable to write to bincode output"));
-        seqs.take(n - npct).for_each(|s| bincode::serialize_into(&mut out_valid, &s).expect("Unable to write to bincode output"));
+        seqs.by_ref().take(npct).for_each(|s| {
+            bincode::serialize_into(&mut out_train, &s).expect("Unable to write to bincode output")
+        });
+        seqs.take(n - npct).for_each(|s| {
+            bincode::serialize_into(&mut out_valid, &s).expect("Unable to write to bincode output")
+        });
 
         println!("Training: {}\tValidation: {}", npct, n - npct);
     } else {
@@ -100,19 +102,26 @@ fn split(matches: &ArgMatches) {
             // validation_goal = (total_len as f32 * (1.0 - training_split)) as usize;
             let tchance = (training_goal as f32 - training as f32) / entry.len as f32;
             if rng.gen::<f32>() < tchance {
-                bincode::serialize_into(&mut out_train, &entry).expect("Unable to write to bincode output");
+                bincode::serialize_into(&mut out_train, &entry)
+                    .expect("Unable to write to bincode output");
                 training += entry.len;
             } else {
-                bincode::serialize_into(&mut out_valid, &entry).expect("Unable to write to bincode output");
+                bincode::serialize_into(&mut out_valid, &entry)
+                    .expect("Unable to write to bincode output");
                 validation += entry.len;
             }
 
-            pb.set_message(&format!("Training Len: {} Validation Len: {}", HumanBytes(training), HumanBytes(validation)));
-
-
+            pb.set_message(&format!(
+                "Training Len: {} Validation Len: {}",
+                HumanBytes(training),
+                HumanBytes(validation)
+            ));
         }
 
-        println!("Training Seq Length: {}\tValidation Seq Length:{}", training, validation);
+        println!(
+            "Training Seq Length: {}\tValidation Seq Length:{}",
+            training, validation
+        );
     }
 
     // Drop (to close the files properly)
@@ -160,5 +169,4 @@ fn stats(matches: &ArgMatches) {
 fn index(matches: &ArgMatches) {
     let sfasta_filename = matches.value_of("input").unwrap();
     sfasta::index(sfasta_filename);
-
 }
