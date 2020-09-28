@@ -11,7 +11,7 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 use liboracular::kmers::{
     DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3Kmers, Gff3KmersIter,
-    KmerCoordsWindowIter, KmerWindowGenerator,
+    KmerCoordsWindowIter, KmerWindowGenerator, KmerCoordsWindow
 };
 use liboracular::sfasta;
 
@@ -475,11 +475,12 @@ impl PyIterProtocol for FastaKmersGenerator {
                         }
 
                         let iter = KmerCoordsWindowIter::new(
-                            mypyself.filename.clone(),
+                            &mypyself.filename,
                             mypyself.k,
                             mypyself.window_size,
                             mypyself.offset,
                             mypyself.rc,
+                            false,
                         );
 
                         mypyself.iter = Box::new(iter);
@@ -530,7 +531,7 @@ impl FastaKmersGenerator {
     #[new]
     fn new(k: usize, filename: String, window_size: usize, sliding: bool, start_rc: bool) -> Self {
         // Create KmerWindowGenerator
-        let iter = KmerCoordsWindowIter::new(filename.clone(), k, window_size, 0, start_rc);
+        let iter = KmerCoordsWindowIter::new(&filename.clone(), k, window_size, 0, start_rc, false);
 
         FastaKmersGenerator {
             iter: Box::new(iter),
