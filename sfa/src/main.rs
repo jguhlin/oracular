@@ -14,6 +14,7 @@ use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use std::fs::File;
 use std::io::BufWriter;
+use std::path::Path;
 
 use indicatif::{HumanBytes, ProgressBar, ProgressIterator, ProgressStyle};
 
@@ -24,6 +25,9 @@ fn main() {
     let yaml = load_yaml!("cli.yaml");
     let matches = App::from(yaml).get_matches();
 
+    if let Some(matches) = matches.subcommand_matches("convert") {
+        convert(&matches);
+    }
     if let Some(matches) = matches.subcommand_matches("stats") {
         stats(&matches);
     }
@@ -34,6 +38,15 @@ fn main() {
         index(&matches);
     }
 }
+
+fn convert(matches: &ArgMatches) {
+    let fasta_filename = matches.value_of("input").unwrap();
+    let path = Path::new(fasta_filename);
+    sfasta::convert_fasta_file(&fasta_filename, &path.file_stem().unwrap().to_str().unwrap());
+
+}
+
+
 
 fn split(matches: &ArgMatches) {
     let sfasta_filename = matches.value_of("input").unwrap();
