@@ -328,6 +328,10 @@ impl MaskedKmersGenerator {
             queue,
         }
     }
+
+    fn len(mypyself: PyRef<Self>) -> usize {
+        mypyself.queue.len()
+    }
 }
 
 #[pyproto]
