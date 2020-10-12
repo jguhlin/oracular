@@ -4,9 +4,9 @@ extern crate mimalloc;
 use crossbeam::queue::ArrayQueue;
 use crossbeam::utils::Backoff;
 use mimalloc::MiMalloc;
+use std::sync::atomic::Ordering;
 use std::thread;
 use std::thread::{park, JoinHandle};
-use std::sync::atomic::Ordering;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -195,7 +195,7 @@ struct MaskedKmersGenerator {
     wrapper: JoinHandle<()>,
     shutdown: Arc<AtomicBool>,
     exhausted: Arc<AtomicBool>,
-    queue: Arc<ArrayQueue<BatchSubmission>>,
+    queue: Arc<ArrayQueue<WindowSubmission>>,
 }
 
 type KmerStr = String;
@@ -213,7 +213,7 @@ type BatchKmers = Vec<WindowKmers>;
 type BatchIds = Vec<WindowIds>;
 type BatchTruths = Vec<WindowTruths>;
 
-type BatchSubmission = (BatchKmers, BatchIds, BatchTruths);
+type WindowSubmission = (WindowKmers, WindowIds, WindowTruths);
 
 #[pymethods]
 impl MaskedKmersGenerator {
@@ -222,7 +222,6 @@ impl MaskedKmersGenerator {
         k: usize,
         filename: String,
         window_size: usize,
-        batch_size: usize,
         replacement_pct: f32,
         rand: bool,
         queue_size: usize,
@@ -251,11 +250,15 @@ impl MaskedKmersGenerator {
             let mut rc = false;
 
             loop {
-                let mut batch_kmers: Vec<Vec<Vec<u8>>> = Vec::with_capacity(batch_size);
-                let mut batch_id: Vec<String> = Vec::with_capacity(batch_size);
-                let mut batch_truth: Vec<Vec<u8>> = Vec::with_capacity(batch_size);
+                let mut finished = false;
 
-                while batch_kmers.len() < batch_size {
+                while !finished {
+
+                    let mut window_kmers: Vec<Vec<u8>>;
+                    let mut window_id: String;
+                    let mut window_truth: Vec<u8>;
+    
+
                     let item = match iter.next() {
                         Some(x) => x,
                         None => {
@@ -298,21 +301,22 @@ impl MaskedKmersGenerator {
                         .iter()
                         .map(|x| convert_string_to_array(k, x))
                         .collect();
-                    batch_kmers.push(kmers);
-                    batch_id.push(id);
-                    batch_truth.push(truth);
-                }
+                    window_kmers = kmers;
+                    window_id = id;
+                    window_truth = truth;
 
-                // Batch is now the correct size..
-                let mut batch = (batch_kmers, batch_id, batch_truth);
-                while let Err(x) = queue_handle.push(batch) {
-                    if shutdown_c.load(Ordering::Relaxed) {
-                        // Mark as exhausted too then.
-                        exhausted_c.store(true, Ordering::SeqCst);
-                        return; // We are done, something triggered a shutdown...
+                    let mut batch = (window_kmers, window_id, window_truth);
+                    while let Err(x) = queue_handle.push(batch) {
+                        if shutdown_c.load(Ordering::Relaxed) {
+                            // Mark as exhausted too then.
+                            exhausted_c.store(true, Ordering::SeqCst);
+                            return; // We are done, something triggered a
+                                    // shutdown...
+                        }
+                        batch = x;
+                        park(); // Queue is full, park the thread...
                     }
-                    batch = x;
-                    park(); // Queue is full, park the thread...
+    
                 }
             }
         });
@@ -335,8 +339,10 @@ impl PyIterProtocol for MaskedKmersGenerator {
     }
 
     fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
-
-        if mypyself.queue.len() == 0 && (mypyself.exhausted.load(Ordering::Relaxed) || mypyself.shutdown.load(Ordering::Relaxed)) {
+        if mypyself.queue.len() == 0
+            && (mypyself.exhausted.load(Ordering::Relaxed)
+                || mypyself.shutdown.load(Ordering::Relaxed))
+        {
             return Ok(None);
         }
 
@@ -351,13 +357,14 @@ impl PyIterProtocol for MaskedKmersGenerator {
             backoff.snooze();
 
             // Check for exhaustion (or shutdown)...
-            if mypyself.exhausted.load(Ordering::Relaxed) || mypyself.shutdown.load(Ordering::Relaxed) {
+            if mypyself.exhausted.load(Ordering::Relaxed)
+                || mypyself.shutdown.load(Ordering::Relaxed)
+            {
                 return Ok(None);
             }
 
             result = mypyself.queue.pop();
         }
-
 
         let result = result.unwrap();
         let gil = Python::acquire_gil();
