@@ -1,13 +1,15 @@
-extern crate mimalloc;
 extern crate crossbeam;
+extern crate mimalloc;
 
-use mimalloc::MiMalloc;
 use crossbeam::queue::ArrayQueue;
 use crossbeam::utils::Backoff;
+use mimalloc::MiMalloc;
 use std::thread;
+use std::thread::{park, JoinHandle};
+use std::sync::atomic::Ordering;
 
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -16,8 +18,8 @@ static GLOBAL: MiMalloc = MiMalloc;
 // Rust-y stuff is "iter" Python is "Generator"
 
 use liboracular::kmers::{
-    DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3Kmers, Gff3KmersIter,
-    KmerCoordsWindowIter, KmerWindowGenerator, KmerCoordsWindow
+    DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3Kmers, Gff3KmersIter, KmerCoordsWindow,
+    KmerCoordsWindowIter, KmerWindowGenerator,
 };
 use liboracular::sfasta;
 
@@ -191,18 +193,27 @@ impl Gff3KmerGenerator {
 #[pyclass]
 struct MaskedKmersGenerator {
     wrapper: JoinHandle<()>,
-    batch_size: usize,
-    k: usize,
-    offset: usize,
-    window_size: usize,
-    filename: String,
-    replacement_pct: f32,
-    rc: bool,
-    rand: bool,
-    queue_size: usize,
-    shutdown: AtomicBool,
-    queue: Arc<ArrayQueue<>>,
+    shutdown: Arc<AtomicBool>,
+    exhausted: Arc<AtomicBool>,
+    queue: Arc<ArrayQueue<BatchSubmission>>,
 }
+
+type KmerStr = String;
+type Kmer = Vec<u8>;
+type Id = String;
+type Truth = u8;
+
+type WindowKmerStrs = Vec<KmerStr>;
+type WindowKmers = Vec<Kmer>;
+type WindowIds = Id;
+type WindowTruths = Vec<Truth>;
+
+type BatchKmerStrs = Vec<WindowKmerStrs>;
+type BatchKmers = Vec<WindowKmers>;
+type BatchIds = Vec<WindowIds>;
+type BatchTruths = Vec<WindowTruths>;
+
+type BatchSubmission = (BatchKmers, BatchIds, BatchTruths);
 
 #[pymethods]
 impl MaskedKmersGenerator {
@@ -214,8 +225,8 @@ impl MaskedKmersGenerator {
         batch_size: usize,
         replacement_pct: f32,
         rand: bool,
+        queue_size: usize,
     ) -> Self {
-
         let queue = Arc::new(ArrayQueue::new(queue_size));
 
         // Create KmerWindowGenerator
@@ -225,31 +236,147 @@ impl MaskedKmersGenerator {
         let discriminator_masked_generator =
             DiscriminatorMaskedGenerator::new(replacement_pct, k, kmer_window_generator);
 
-        let wrapper = DiscriminatorMaskedGeneratorWrapper {
-            iter: Box::new(discriminator_masked_generator),
-            batch_size,
-            k,
-            offset: 0,
-            filename,
-            window_size,
-            replacement_pct,
-            rc: false,
-            rand,
-        };
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let exhausted = Arc::new(AtomicBool::new(false));
 
-        let queue_handle = Arc::clone(queue_handle);
-        let handle = thread::spawn(move|| {
+        let iter = Box::new(discriminator_masked_generator);
 
+        let shutdown_c = Arc::clone(&shutdown);
+        let exhausted_c = Arc::clone(&exhausted);
 
-            
+        let queue_handle = Arc::clone(&queue);
+        let handle = thread::spawn(move || {
+            let mut iter: Box<dyn Iterator<Item = DiscriminatorMasked> + Send> = iter;
+            let mut offset = 0;
+            let mut rc = false;
+
+            loop {
+                let mut batch_kmers: Vec<Vec<Vec<u8>>> = Vec::with_capacity(batch_size);
+                let mut batch_id: Vec<String> = Vec::with_capacity(batch_size);
+                let mut batch_truth: Vec<Vec<u8>> = Vec::with_capacity(batch_size);
+
+                while batch_kmers.len() < batch_size {
+                    let item = match iter.next() {
+                        Some(x) => x,
+                        None => {
+                            offset += 1;
+
+                            if (k == offset) && rc {
+                                exhausted_c.store(true, Ordering::SeqCst);
+                                shutdown_c.store(true, Ordering::SeqCst);
+                                return;
+                            } else {
+                                if k == offset {
+                                    rc = true;
+                                    offset = 0;
+                                }
+
+                                let kmer_window_generator = KmerWindowGenerator::new(
+                                    &filename,
+                                    k,
+                                    window_size,
+                                    offset,
+                                    rc,
+                                    rand,
+                                );
+
+                                let discriminator_masked_generator =
+                                    DiscriminatorMaskedGenerator::new(
+                                        replacement_pct,
+                                        k,
+                                        kmer_window_generator,
+                                    );
+
+                                iter = Box::new(discriminator_masked_generator);
+                                continue;
+                            }
+                        }
+                    };
+
+                    let DiscriminatorMasked { kmers, id, truth } = item;
+                    let kmers = kmers
+                        .iter()
+                        .map(|x| convert_string_to_array(k, x))
+                        .collect();
+                    batch_kmers.push(kmers);
+                    batch_id.push(id);
+                    batch_truth.push(truth);
+                }
+
+                // Batch is now the correct size..
+                let mut batch = (batch_kmers, batch_id, batch_truth);
+                while let Err(x) = queue_handle.push(batch) {
+                    if shutdown_c.load(Ordering::Relaxed) {
+                        // Mark as exhausted too then.
+                        exhausted_c.store(true, Ordering::SeqCst);
+                        return; // We are done, something triggered a shutdown...
+                    }
+                    batch = x;
+                    park(); // Queue is full, park the thread...
+                }
+            }
         });
 
-
-
-
+        MaskedKmersGenerator {
+            wrapper: handle,
+            shutdown,
+            exhausted,
+            queue,
+        }
     }
 }
 
+#[pyproto]
+impl PyIterProtocol for MaskedKmersGenerator {
+    fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        Ok(mypyself.into_py(py))
+    }
+
+    fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
+
+        if mypyself.queue.len() == 0 && (mypyself.exhausted.load(Ordering::Relaxed) || mypyself.shutdown.load(Ordering::Relaxed)) {
+            return Ok(None);
+        }
+
+        // Unpark the thread...
+        mypyself.wrapper.thread().unpark();
+
+        let mut result = mypyself.queue.pop();
+        let backoff = Backoff::new();
+
+        while result == None {
+            mypyself.wrapper.thread().unpark();
+            backoff.snooze();
+
+            // Check for exhaustion (or shutdown)...
+            if mypyself.exhausted.load(Ordering::Relaxed) || mypyself.shutdown.load(Ordering::Relaxed) {
+                return Ok(None);
+            }
+
+            result = mypyself.queue.pop();
+        }
+
+
+        let result = result.unwrap();
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        let pyout = PyDict::new(py);
+        pyout
+            .set_item("kmers", result.0)
+            .expect("Error with Python");
+        pyout.set_item("id", result.1).expect("Error with Python");
+        pyout
+            .set_item("truth", result.2)
+            .expect("Error with Python");
+
+        // One last unparking...
+        mypyself.wrapper.thread().unpark();
+
+        Ok(Some(pyout.to_object(py)))
+    }
+}
 
 // ** Discriminator Masked Generator Wrapper
 #[pyclass]
@@ -616,11 +743,11 @@ impl FastaKmersGenerator {
     }
 }
 
-
 /// Provides functions for python dealing with Kmers from fasta and sfasta
 /// files...
 #[pymodule]
 fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_class::<MaskedKmersGenerator>()?;
     m.add_class::<DiscriminatorMaskedGeneratorWrapper>()?;
     m.add_class::<DiscriminatorMaskedGeneratorWrapperNB>()?;
     m.add_class::<Gff3KmerGenerator>()?;

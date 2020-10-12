@@ -42,11 +42,11 @@ fn main() {
 fn convert(matches: &ArgMatches) {
     let fasta_filename = matches.value_of("input").unwrap();
     let path = Path::new(fasta_filename);
-    sfasta::convert_fasta_file(&fasta_filename, &path.file_stem().unwrap().to_str().unwrap());
-
+    sfasta::convert_fasta_file(
+        &fasta_filename,
+        &path.file_stem().unwrap().to_str().unwrap(),
+    );
 }
-
-
 
 fn split(matches: &ArgMatches) {
     let sfasta_filename = matches.value_of("input").unwrap();

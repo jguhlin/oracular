@@ -9,7 +9,7 @@ use std::thread::JoinHandle;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 
-use crossbeam::queue::{ArrayQueue};
+use crossbeam::queue::ArrayQueue;
 use crossbeam::utils::Backoff;
 
 const STACKSIZE: usize = 256 * 1024 * 1024; // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
