@@ -9,7 +9,7 @@ use std::thread::JoinHandle;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 
-use crossbeam::queue::{ArrayQueue, PushError};
+use crossbeam::queue::{ArrayQueue};
 use crossbeam::utils::Backoff;
 
 const STACKSIZE: usize = 256 * 1024 * 1024; // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
@@ -188,7 +188,7 @@ pub fn sequence_generator(
                             seqbuffer.clear();
 
                             let mut result = rawseq_queue.push(wp);
-                            while let Err(PushError(wp)) = result {
+                            while let Err(wp) = result {
                                 result = rawseq_queue.push(wp);
                             }
 
@@ -212,7 +212,7 @@ pub fn sequence_generator(
                                 seqlen = 0;
 
                                 let mut result = rawseq_queue.push(wp);
-                                while let Err(PushError(wp)) = result {
+                                while let Err(wp) = result {
                                     result = rawseq_queue.push(wp);
                                 }
 
@@ -233,7 +233,7 @@ pub fn sequence_generator(
                 *generator_done.write().unwrap() = true;
                 for _ in 0..4 {
                     let mut result = rawseq_queue.push(ThreadCommand::Terminate);
-                    while let Err(PushError(wp)) = result {
+                    while let Err(wp) = result {
                         // println!("Parking generator thread...");
                         thread::park();
                         result = rawseq_queue.push(wp);
@@ -255,7 +255,7 @@ fn io_worker_thread(
     let backoff = Backoff::new();
 
     loop {
-        if let Ok(command) = rawseq_queue.pop() {
+        if let Some(command) = rawseq_queue.pop() {
             // We got the work packet!
 
             // We are finished, end the thread...
@@ -280,7 +280,7 @@ fn io_worker_thread(
                     });
 
                     let mut result = seq_queue.push(wp);
-                    while let Err(PushError(wp)) = result {
+                    while let Err(wp) = result {
                         backoff.snooze();
                         result = seq_queue.push(wp);
                     }
@@ -296,7 +296,7 @@ fn io_worker_thread(
                     });
 
                     let mut result = seq_queue.push(wp);
-                    while let Err(PushError(wp)) = result {
+                    while let Err(wp) = result {
                         // println!("Parking IO worker thread -- FULL");
                         thread::park();
                         result = seq_queue.push(wp);

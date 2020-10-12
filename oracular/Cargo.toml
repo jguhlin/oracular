@@ -13,7 +13,7 @@ serde = { version = "1.0.115", features = ["derive", "rc"] }
 indicatif = "0.15.0"
 once_cell = "1.4.1"
 thincollections = "0.5.3"
-crossbeam = "0.7.3"
+crossbeam = "0.8.0"
 liboracular = { path = "../liboracular/" }
 num-traits = "0.2.12"
 wyhash = "0.4.1"

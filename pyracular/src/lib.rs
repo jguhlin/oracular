@@ -1,7 +1,13 @@
 extern crate mimalloc;
-extern crate rayon;
+extern crate crossbeam;
 
 use mimalloc::MiMalloc;
+use crossbeam::queue::ArrayQueue;
+use crossbeam::utils::Backoff;
+use std::thread;
+
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -48,7 +54,6 @@ fn convert_string_to_array(k: usize, s: &[u8]) -> Vec<u8> {
 }
 
 // ** Kmer Classification GFF3
-// Non-batch discriminator masked generator
 #[pyclass]
 struct Gff3KmerGenerator {
     iter: Box<dyn Iterator<Item = Gff3Kmers> + Send>,
@@ -180,8 +185,73 @@ impl Gff3KmerGenerator {
     }
 }
 
-// ** Discriminator Masked Generator Wrapper
+// ** Queue-version of DiscriminatorMaskedGeneratorWrapper
+// Get around the PYTHON GIL
 
+#[pyclass]
+struct MaskedKmersGenerator {
+    wrapper: JoinHandle<()>,
+    batch_size: usize,
+    k: usize,
+    offset: usize,
+    window_size: usize,
+    filename: String,
+    replacement_pct: f32,
+    rc: bool,
+    rand: bool,
+    queue_size: usize,
+    shutdown: AtomicBool,
+    queue: Arc<ArrayQueue<>>,
+}
+
+#[pymethods]
+impl MaskedKmersGenerator {
+    #[new]
+    fn new(
+        k: usize,
+        filename: String,
+        window_size: usize,
+        batch_size: usize,
+        replacement_pct: f32,
+        rand: bool,
+    ) -> Self {
+
+        let queue = Arc::new(ArrayQueue::new(queue_size));
+
+        // Create KmerWindowGenerator
+        let kmer_window_generator =
+            KmerWindowGenerator::new(&filename, k, window_size, 0, false, rand);
+
+        let discriminator_masked_generator =
+            DiscriminatorMaskedGenerator::new(replacement_pct, k, kmer_window_generator);
+
+        let wrapper = DiscriminatorMaskedGeneratorWrapper {
+            iter: Box::new(discriminator_masked_generator),
+            batch_size,
+            k,
+            offset: 0,
+            filename,
+            window_size,
+            replacement_pct,
+            rc: false,
+            rand,
+        };
+
+        let queue_handle = Arc::clone(queue_handle);
+        let handle = thread::spawn(move|| {
+
+
+            
+        });
+
+
+
+
+    }
+}
+
+
+// ** Discriminator Masked Generator Wrapper
 #[pyclass]
 struct DiscriminatorMaskedGeneratorWrapper {
     iter: Box<dyn Iterator<Item = DiscriminatorMasked> + Send>, // + Send>,
