@@ -1,5 +1,7 @@
 extern crate crossbeam;
 extern crate mimalloc;
+extern crate rand;
+extern crate rand_xoshiro;
 
 use crossbeam::queue::ArrayQueue;
 use crossbeam::utils::Backoff;
@@ -8,15 +10,20 @@ use std::sync::atomic::Ordering;
 use std::thread;
 use std::thread::{park, JoinHandle};
 
+use rand::prelude::*;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
+use rand_xoshiro::rand_core::SeedableRng;
+use rand_xoshiro::Xoshiro256PlusPlus;
+
 // NOTE: New naming convention
 // Rust-y stuff is "iter" Python is "Generator"
 
+use liboracular::kmers::KmerWindow;
 use liboracular::kmers::{
     DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3Kmers, Gff3KmersIter, KmerCoordsWindow,
     KmerCoordsWindowIter, KmerWindowGenerator,
@@ -253,11 +260,9 @@ impl MaskedKmersGenerator {
                 let mut finished = false;
 
                 while !finished {
-
                     let mut window_kmers: Vec<Vec<u8>>;
                     let mut window_id: String;
                     let mut window_truth: Vec<u8>;
-    
 
                     let item = match iter.next() {
                         Some(x) => x,
@@ -316,7 +321,6 @@ impl MaskedKmersGenerator {
                         batch = x;
                         park(); // Queue is full, park the thread...
                     }
-    
                 }
             }
         });
@@ -380,6 +384,201 @@ impl PyIterProtocol for MaskedKmersGenerator {
         pyout.set_item("id", result.1).expect("Error with Python");
         pyout
             .set_item("truth", result.2)
+            .expect("Error with Python");
+
+        // One last unparking...
+        mypyself.wrapper.thread().unpark();
+
+        Ok(Some(pyout.to_object(py)))
+    }
+}
+
+struct QueueImpl<I> {
+    iter: Box<dyn Iterator<Item = I> + Send>,
+    wrapper: JoinHandle<()>,
+    shutdown: Arc<AtomicBool>,
+    exhausted: Arc<AtomicBool>,
+    queue: Arc<ArrayQueue<WindowSubmission>>,
+}
+
+impl<I> QueueImpl<I> {
+    fn is_finished(&self) -> bool {
+        if self.queue.len() == 0
+            && (self.exhausted.load(Ordering::Relaxed) || self.shutdown.load(Ordering::Relaxed))
+        {
+            return true;
+        }
+        return false;
+    }
+}
+
+// SequenceOrderKmersGenerator
+type SequenceKmers = (WindowKmers, WindowKmers);
+type SequenceOrder = bool;
+
+type SequenceKmersSubmission = (SequenceKmers, SequenceOrder);
+
+#[pyclass]
+struct SequenceOrderKmersGenerator {
+    wrapper: JoinHandle<()>,
+    shutdown: Arc<AtomicBool>,
+    exhausted: Arc<AtomicBool>,
+    queue: Arc<ArrayQueue<SequenceKmersSubmission>>,
+}
+
+#[pymethods]
+impl SequenceOrderKmersGenerator {
+    #[new]
+    fn new(k: usize, filename: String, window_size: usize, rand: bool, queue_size: usize) -> Self {
+        let queue = Arc::new(ArrayQueue::new(queue_size));
+
+        // Create KmerWindowGenerator
+        let kmer_window_generator =
+            KmerWindowGenerator::new(&filename, k, window_size * 2, 0, false, rand);
+
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let exhausted = Arc::new(AtomicBool::new(false));
+
+        let iter = Box::new(kmer_window_generator);
+
+        let shutdown_c = Arc::clone(&shutdown);
+        let exhausted_c = Arc::clone(&exhausted);
+
+        let queue_handle = Arc::clone(&queue);
+        let handle = thread::spawn(move || {
+            let mut iter: Box<dyn Iterator<Item = KmerWindow> + Send> = iter;
+            let mut offset = 0;
+            let mut rc = false;
+
+            let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
+
+            loop {
+                let mut finished = false;
+
+                while !finished {
+                    let item = match iter.next() {
+                        Some(x) => x,
+                        None => {
+                            offset += 1;
+
+                            if (k == offset) && rc {
+                                exhausted_c.store(true, Ordering::SeqCst);
+                                shutdown_c.store(true, Ordering::SeqCst);
+                                return;
+                            } else {
+                                if k == offset {
+                                    rc = true;
+                                    offset = 0;
+                                }
+
+                                let kmer_window_generator = KmerWindowGenerator::new(
+                                    &filename,
+                                    k,
+                                    window_size,
+                                    offset,
+                                    rc,
+                                    rand,
+                                );
+
+                                iter = Box::new(kmer_window_generator);
+                                continue;
+                            }
+                        }
+                    };
+
+                    let KmerWindow { kmers, id, rc } = item;
+                    let kmers: Vec<Vec<u8>> = kmers
+                        .iter()
+                        .map(|x| convert_string_to_array(k, x))
+                        .collect();
+                    let first = kmers[0..window_size].to_vec();
+                    let second = kmers[window_size..window_size * 2].to_vec();
+
+                    let sequence_kmers;
+                    let sequence_order;
+
+                    if rng.gen::<bool>() {
+                        sequence_kmers = (first, second);
+                        sequence_order = false; // False is in order
+                    } else {
+                        sequence_kmers = (second, first);
+                        sequence_order = true; // Out of order
+                    }
+
+                    let mut batch = (sequence_kmers, sequence_order);
+
+                    while let Err(x) = queue_handle.push(batch) {
+                        if shutdown_c.load(Ordering::Relaxed) {
+                            // Mark as exhausted too then.
+                            exhausted_c.store(true, Ordering::SeqCst);
+                            return; // We are done, something triggered a
+                                    // shutdown...
+                        }
+                        batch = x;
+                        park(); // Queue is full, park the thread...
+                    }
+                }
+            }
+        });
+
+        SequenceOrderKmersGenerator {
+            wrapper: handle,
+            shutdown,
+            exhausted,
+            queue,
+        }
+    }
+
+    fn len(mypyself: PyRef<Self>) -> usize {
+        mypyself.queue.len()
+    }
+}
+
+#[pyproto]
+impl PyIterProtocol for SequenceOrderKmersGenerator {
+    fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        Ok(mypyself.into_py(py))
+    }
+
+    fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
+        if mypyself.queue.len() == 0
+            && (mypyself.exhausted.load(Ordering::Relaxed)
+                || mypyself.shutdown.load(Ordering::Relaxed))
+        {
+            return Ok(None);
+        }
+
+        // Unpark the thread...
+        mypyself.wrapper.thread().unpark();
+
+        let mut result = mypyself.queue.pop();
+        let backoff = Backoff::new();
+
+        while result == None {
+            mypyself.wrapper.thread().unpark();
+            backoff.snooze();
+
+            // Check for exhaustion (or shutdown)...
+            if mypyself.exhausted.load(Ordering::Relaxed)
+                || mypyself.shutdown.load(Ordering::Relaxed)
+            {
+                return Ok(None);
+            }
+
+            result = mypyself.queue.pop();
+        }
+
+        let result = result.unwrap();
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        let pyout = PyDict::new(py);
+        pyout
+            .set_item("kmers", result.0)
+            .expect("Error with Python");
+        pyout
+            .set_item("order", result.1)
             .expect("Error with Python");
 
         // One last unparking...
@@ -763,6 +962,7 @@ fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<DiscriminatorMaskedGeneratorWrapperNB>()?;
     m.add_class::<Gff3KmerGenerator>()?;
     m.add_class::<FastaKmersGenerator>()?;
+    m.add_class::<SequenceOrderKmersGenerator>()?;
     m.add_wrapped(wrap_pyfunction!(convert_fasta_to_sfasta))?;
     m.add_wrapped(wrap_pyfunction!(get_headers_from_sfasta))?;
     m.add_wrapped(wrap_pyfunction!(test_sfasta))?;
