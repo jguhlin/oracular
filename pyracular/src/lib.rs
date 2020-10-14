@@ -199,26 +199,16 @@ impl Gff3KmerGenerator {
 
 #[pyclass]
 struct MaskedKmersGenerator {
-    wrapper: JoinHandle<()>,
-    shutdown: Arc<AtomicBool>,
-    exhausted: Arc<AtomicBool>,
-    queue: Arc<ArrayQueue<WindowSubmission>>,
+    queueimpl: QueueImpl<WindowSubmission>,
 }
 
-type KmerStr = String;
 type Kmer = Vec<u8>;
 type Id = String;
 type Truth = u8;
 
-type WindowKmerStrs = Vec<KmerStr>;
 type WindowKmers = Vec<Kmer>;
 type WindowIds = Id;
 type WindowTruths = Vec<Truth>;
-
-type BatchKmerStrs = Vec<WindowKmerStrs>;
-type BatchKmers = Vec<WindowKmers>;
-type BatchIds = Vec<WindowIds>;
-type BatchTruths = Vec<WindowTruths>;
 
 type WindowSubmission = (WindowKmers, WindowIds, WindowTruths);
 
@@ -233,88 +223,40 @@ impl MaskedKmersGenerator {
         rand: bool,
         queue_size: usize,
     ) -> Self {
-        let queue = Arc::new(ArrayQueue::new(queue_size));
 
-        // Create KmerWindowGenerator
-        let kmer_window_generator =
-            KmerWindowGenerator::new(&filename, k, window_size, 0, false, rand);
+        let queueimpl = QueueImpl::new(queue_size, move |shutdown, exhausted, queue| 
+        {
 
-        let discriminator_masked_generator =
-            DiscriminatorMaskedGenerator::new(replacement_pct, k, kmer_window_generator);
-
-        let shutdown = Arc::new(AtomicBool::new(false));
-        let exhausted = Arc::new(AtomicBool::new(false));
-
-        let iter = Box::new(discriminator_masked_generator);
-
-        let shutdown_c = Arc::clone(&shutdown);
-        let exhausted_c = Arc::clone(&exhausted);
-
-        let queue_handle = Arc::clone(&queue);
-        let handle = thread::spawn(move || {
-            let mut iter: Box<dyn Iterator<Item = DiscriminatorMasked> + Send> = iter;
             let mut offset = 0;
             let mut rc = false;
 
             loop {
-                let mut finished = false;
+                // Create KmerWindowGenerator
+                let kmer_window_generator =
+                KmerWindowGenerator::new(&filename, k, window_size, offset, rc, rand);
 
-                while !finished {
-                    let mut window_kmers: Vec<Vec<u8>>;
-                    let mut window_id: String;
-                    let mut window_truth: Vec<u8>;
+                let discriminator_masked_generator =
+                DiscriminatorMaskedGenerator::new(replacement_pct, k, kmer_window_generator);
 
-                    let item = match iter.next() {
-                        Some(x) => x,
-                        None => {
-                            offset += 1;
+                let mut iter = Box::new(discriminator_masked_generator);
 
-                            if (k == offset) && rc {
-                                exhausted_c.store(true, Ordering::SeqCst);
-                                shutdown_c.store(true, Ordering::SeqCst);
-                                return;
-                            } else {
-                                if k == offset {
-                                    rc = true;
-                                    offset = 0;
-                                }
+                while let Some(x) = iter.next() {
+                    if shutdown.load(Ordering::Relaxed) {
+                        return; // We are done, something triggered a
+                                // shutdown...
+                    }
 
-                                let kmer_window_generator = KmerWindowGenerator::new(
-                                    &filename,
-                                    k,
-                                    window_size,
-                                    offset,
-                                    rc,
-                                    rand,
-                                );
-
-                                let discriminator_masked_generator =
-                                    DiscriminatorMaskedGenerator::new(
-                                        replacement_pct,
-                                        k,
-                                        kmer_window_generator,
-                                    );
-
-                                iter = Box::new(discriminator_masked_generator);
-                                continue;
-                            }
-                        }
-                    };
-
-                    let DiscriminatorMasked { kmers, id, truth } = item;
+                    let DiscriminatorMasked { kmers, id, truth } = x;
                     let kmers = kmers
                         .iter()
                         .map(|x| convert_string_to_array(k, x))
                         .collect();
-                    window_kmers = kmers;
-                    window_id = id;
-                    window_truth = truth;
 
-                    let mut batch = (window_kmers, window_id, window_truth);
-                    while let Err(x) = queue_handle.push(batch) {
-                        if shutdown_c.load(Ordering::Relaxed) {
-                            // Mark as exhausted too then.
-                            exhausted_c.store(true, Ordering::SeqCst);
+                    let mut batch = (kmers, id, truth);
+                    while let Err(x) = queue.push(batch) {
+
+                        // Test if we are prematurely shutdown...
+                        if shutdown.load(Ordering::Relaxed) {
                             return; // We are done, something triggered a
                                     // shutdown...
                         }
@@ -322,19 +264,25 @@ impl MaskedKmersGenerator {
                         park(); // Queue is full, park the thread...
                     }
                 }
+
+                offset += 1;
+
+                if (k == offset) && rc {
+                    return;
+                } else if k == offset {
+                    offset = 0;
+                    rc = true;
+                }
             }
         });
 
         MaskedKmersGenerator {
-            wrapper: handle,
-            shutdown,
-            exhausted,
-            queue,
+            queueimpl
         }
     }
 
     fn len(mypyself: PyRef<Self>) -> usize {
-        mypyself.queue.len()
+        mypyself.queueimpl.queue.len()
     }
 }
 
@@ -347,31 +295,28 @@ impl PyIterProtocol for MaskedKmersGenerator {
     }
 
     fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
-        if mypyself.queue.len() == 0
-            && (mypyself.exhausted.load(Ordering::Relaxed)
-                || mypyself.shutdown.load(Ordering::Relaxed))
+        if mypyself.queueimpl.is_finished()
         {
-            return Ok(None);
+            return Ok(None)
         }
 
         // Unpark the thread...
-        mypyself.wrapper.thread().unpark();
+        mypyself.queueimpl.unpark();
 
-        let mut result = mypyself.queue.pop();
+        let mut result = mypyself.queueimpl.queue.pop();
         let backoff = Backoff::new();
 
         while result == None {
-            mypyself.wrapper.thread().unpark();
+            mypyself.queueimpl.unpark();
             backoff.snooze();
 
             // Check for exhaustion (or shutdown)...
-            if mypyself.exhausted.load(Ordering::Relaxed)
-                || mypyself.shutdown.load(Ordering::Relaxed)
+            if mypyself.queueimpl.is_finished()
             {
-                return Ok(None);
+                return Ok(None)
             }
 
-            result = mypyself.queue.pop();
+            result = mypyself.queueimpl.queue.pop();
         }
 
         let result = result.unwrap();
@@ -387,21 +332,53 @@ impl PyIterProtocol for MaskedKmersGenerator {
             .expect("Error with Python");
 
         // One last unparking...
-        mypyself.wrapper.thread().unpark();
+        mypyself.queueimpl.unpark();
 
         Ok(Some(pyout.to_object(py)))
     }
 }
 
-struct QueueImpl<I> {
-    iter: Box<dyn Iterator<Item = I> + Send>,
-    wrapper: JoinHandle<()>,
+struct QueueImpl<Q> {
+    // iter: Box<dyn Iterator<Item = I> + Send>,
+    handle: JoinHandle<()>,
     shutdown: Arc<AtomicBool>,
     exhausted: Arc<AtomicBool>,
-    queue: Arc<ArrayQueue<WindowSubmission>>,
+    pub queue: Arc<ArrayQueue<Q>>,
 }
 
-impl<I> QueueImpl<I> {
+impl<Q> QueueImpl<Q> {
+    // fn new(iter: Box<dyn Iterator<Item = I> + Send>) -> Self {
+    fn new<F>(queue_size: usize, func: F) -> Self
+    where
+        F: Fn(Arc<AtomicBool>, Arc<AtomicBool>, Arc<ArrayQueue<Q>>) + Sync + 'static + Send,
+        Q: Send + 'static + Sync,
+    {
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let exhausted = Arc::new(AtomicBool::new(false));
+        let queue = Arc::new(ArrayQueue::new(queue_size));
+
+        let shutdown_c = Arc::clone(&shutdown);
+        let exhausted_c = Arc::clone(&exhausted);
+        let queue_c = Arc::clone(&queue);
+
+        let handle = thread::spawn(move || {
+            func(
+                Arc::clone(&shutdown_c),
+                Arc::clone(&exhausted_c),
+                Arc::clone(&queue_c),
+            );
+            exhausted_c.store(true, Ordering::SeqCst);
+            shutdown_c.store(true, Ordering::SeqCst);
+        });
+
+        QueueImpl {
+            shutdown,
+            exhausted,
+            queue,
+            handle,
+        }
+    }
+
     fn is_finished(&self) -> bool {
         if self.queue.len() == 0
             && (self.exhausted.load(Ordering::Relaxed) || self.shutdown.load(Ordering::Relaxed))
@@ -409,6 +386,10 @@ impl<I> QueueImpl<I> {
             return true;
         }
         return false;
+    }
+
+    fn unpark(&self) {
+        self.handle.thread().unpark();
     }
 }
 
