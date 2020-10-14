@@ -408,7 +408,7 @@ impl MatchedKmersGenerator {
                             };
                         }
                     } else {
-                        matched = true;
+                        matched = false;
 
                         item1 = match iter1.next() {
                             Some(x) => x,
