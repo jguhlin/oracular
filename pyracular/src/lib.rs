@@ -368,6 +368,8 @@ impl MatchedKmersGenerator {
             let mut rc = false;
             let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
 
+
+            // TODO: Make even smarter -- Load up 1k windows and pick from there matching and non-matching ones, including some RC ones as well...
             loop {
                 // Create KmerWindowGenerator
                 let mut iter1 =
