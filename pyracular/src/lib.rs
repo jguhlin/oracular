@@ -43,18 +43,18 @@ use pyo3::wrap_pyfunction;
 // use std::io::BufReader;
 
 // TODO: Should be literals to concatenate...
-#[inline(always)]
-fn convert_string_to_array(k: usize, s: &[u8]) -> Vec<u8> {
-    let mut out: Vec<u8> = vec![0; k * 5];
+#[inline]
+fn convert_string_to_array(k: usize, s: &[u8]) -> Vec<bool> {
+    let mut out: Vec<bool> = vec![false; k * 5];
 
     for (x, c) in s.iter().enumerate() {
         match c {
-            65 => out[5*x] = 1,   // A
-            84 => out[5*x+1] = 1, // T
-            67 => out[5*x+3] = 1, // C
-            71 => out[5*x+4] = 1, // G
-            78 => out[5*x+2] = 1, // N
-            _  => out[5*x+2] = 1, // N for everything else...
+            65 => out[5*x] = true,   // A
+            84 => out[5*x+1] = true, // T
+            67 => out[5*x+3] = true, // C
+            71 => out[5*x+4] = true, // G
+            78 => out[5*x+2] = true, // N
+            _  => out[5*x+2] = true, // N for everything else...
             // A_  => { out[5*x+2] = 1; println!("Invalid Character! {} in {}", c, std::str::from_utf8(s).unwrap()) }  // N
         };
     }
@@ -136,7 +136,7 @@ impl PyIterProtocol for Gff3KmerGenerator {
                     coords,
                     rc,
                 } = x;
-                let kmers: Vec<Vec<u8>> = kmers
+                let kmers: Vec<Vec<bool>> = kmers
                     .iter()
                     .map(|x| convert_string_to_array(mypyself.k, x))
                     .collect();
@@ -201,7 +201,7 @@ struct MaskedKmersGenerator {
     queueimpl: QueueImpl<WindowSubmission>,
 }
 
-type Kmer = Vec<u8>;
+type Kmer = Vec<bool>;
 type Id = String;
 type Truth = u8;
 
@@ -573,6 +573,7 @@ impl<Q> QueueImpl<Q> {
         }
     }
 
+    #[inline]
     fn is_finished(&self) -> bool {
         if self.queue.len() == 0
             && (self.exhausted.load(Ordering::Relaxed) || self.shutdown.load(Ordering::Relaxed))
@@ -582,6 +583,7 @@ impl<Q> QueueImpl<Q> {
         return false;
     }
 
+    #[inline]
     fn unpark(&self) {
         self.handle.thread().unpark();
     }
@@ -667,7 +669,7 @@ impl SequenceOrderKmersGenerator {
                         continue
                     }
 
-                    let kmers: Vec<Vec<u8>> = kmers
+                    let kmers: Vec<Vec<bool>> = kmers
                         .iter()
                         .map(|x| convert_string_to_array(k, x))
                         .collect();
@@ -792,7 +794,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
 
     fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
         // Generate Batch
-        let mut batch_kmers: Vec<Vec<Vec<u8>>> = Vec::with_capacity(mypyself.batch_size);
+        let mut batch_kmers: Vec<Vec<Vec<bool>>> = Vec::with_capacity(mypyself.batch_size);
         let mut batch_id: Vec<String> = Vec::with_capacity(mypyself.batch_size);
         let mut batch_truth: Vec<Vec<u8>> = Vec::with_capacity(mypyself.batch_size);
 
@@ -959,7 +961,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
                     truth,
                     id: _,
                 } = x;
-                let kmers: Vec<Vec<u8>> = kmers
+                let kmers: Vec<Vec<bool>> = kmers
                     .iter()
                     .map(|x| convert_string_to_array(mypyself.k, x))
                     .collect();
@@ -1085,7 +1087,7 @@ impl PyIterProtocol for FastaKmersGenerator {
                     id,
                     rc,
                 } = x;
-                let kmers: Vec<Vec<u8>> = kmers
+                let kmers: Vec<Vec<bool>> = kmers
                     .iter()
                     .map(|x| convert_string_to_array(mypyself.k, x))
                     .collect();

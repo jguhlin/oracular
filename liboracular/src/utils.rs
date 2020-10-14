@@ -3,6 +3,7 @@ use std::fs::{metadata, File};
 use std::io::Read;
 use std::io::BufReader;
 
+#[inline]
 pub fn generic_open_file(filename: &str) -> (usize, bool, Box<dyn Read + Send>) {
     let filesize = metadata(filename)
         .unwrap_or_else(|_| panic!("{}", &format!("Unable to open file: {}", filename)))
@@ -31,6 +32,7 @@ pub fn generic_open_file(filename: &str) -> (usize, bool, Box<dyn Read + Send>) 
     (filesize as usize, compressed, fasta)
 }
 
+#[inline]
 pub fn get_good_sequence_coords(seq: &[u8]) -> Vec<(usize, usize)> {
     let mut start: Option<usize> = None;
     let mut end: usize;
@@ -52,6 +54,7 @@ pub fn get_good_sequence_coords(seq: &[u8]) -> Vec<(usize, usize)> {
         .enumerate()
         .filter(|(_y, x)| bytecount::count(&x, b'N') < 3)
         .map(|(y, _x)| y);
+
     for pos in results {
         match start {
             None => {
@@ -87,6 +90,7 @@ pub fn get_good_sequence_coords(seq: &[u8]) -> Vec<(usize, usize)> {
 
 // Copied from opinionated lib...
 // Mutability here because we change everything to uppercase
+#[inline]
 pub fn capitalize_nucleotides(slice: &mut [u8]) {
     // Convert to uppercase (using, what is hopefully a fast op)
     for nucl in slice.iter_mut() {
@@ -107,7 +111,8 @@ pub fn capitalize_nucleotides(slice: &mut [u8]) {
     }
 }
 
-fn _complement_nucl(nucl: u8) -> u8 {
+#[inline]
+const fn _complement_nucl(nucl: u8) -> u8 {
     // Should all be capitalized by now...
     // N -> 78
     // A -> 65
