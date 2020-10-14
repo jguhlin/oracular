@@ -1,6 +1,7 @@
 /// Opens files, including compressed files (gzip or snappy)
 use std::fs::{metadata, File};
 use std::io::Read;
+use std::io::BufReader;
 
 pub fn generic_open_file(filename: &str) -> (usize, bool, Box<dyn Read + Send>) {
     let filesize = metadata(filename)
@@ -12,6 +13,8 @@ pub fn generic_open_file(filename: &str) -> (usize, bool, Box<dyn Read + Send>) 
         Ok(file) => file,
     };
 
+
+    let file = BufReader::new(file);
     let mut compressed: bool = false;
 
     let fasta: Box<dyn Read + Send> = if filename.ends_with("gz") {

@@ -17,6 +17,11 @@ subcommands:
                 about: Input SFASTA file
                 index: 1
                 required: true
+    - bp:
+        args:
+            - input:
+                index: 1
+                required: true
     - index:
         about: Create an SFASTA index
         args:

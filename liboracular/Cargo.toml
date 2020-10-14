@@ -36,3 +36,6 @@ bumpalo = { version = "3.4.0", features = ["collections", "boxed"] }
 zstd = "0.5.3"
 serde_bytes = "0.11.5"
 hashbrown = { version = "0.9.1", features = ["nightly", "serde"] }
+bitpacking = "0.8.2"
+
+
