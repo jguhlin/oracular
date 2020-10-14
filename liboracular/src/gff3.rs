@@ -2,14 +2,12 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 //use std::collections::HashSet;
-use std::collections::HashMap;
-use std::hash::BuildHasherDefault;
+use hashbrown::HashMap;
 
 use crate::intervals;
 
 use linked_hash_set::LinkedHashSet;
 use rust_lapper::{Interval, Lapper};
-use twox_hash::XxHash64;
 
 // use std::collections::HashMap;
 
@@ -100,7 +98,7 @@ pub fn get_gff3_intervals(filename: &str) -> (intervals::IntervalMap<Vec<u8>>, V
 
     let types: Vec<String> = types.into_iter().collect();
 
-    let mut types_one_hot: HashMap<String, Vec<u8>, BuildHasherDefault<XxHash64>> =
+    let mut types_one_hot: HashMap<String, Vec<u8>> =
         Default::default();
 
     let types_len = types.len(); // Calculate only once...

@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-use std::hash::BuildHasherDefault;
-use twox_hash::XxHash64;
+use hashbrown::HashMap;
 
 use rust_lapper::Lapper;
 
@@ -10,7 +8,7 @@ use rust_lapper::Lapper;
 // Landmark
 
 pub struct IntervalMap<T: Eq + Clone> {
-    pub landmarks: HashMap<String, Lapper<T>, BuildHasherDefault<XxHash64>>,
+    pub landmarks: HashMap<String, Lapper<T>>,
 }
 
 impl<T: Eq + Clone> Default for IntervalMap<T> {

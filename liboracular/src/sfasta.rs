@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::convert::From;
 use std::convert::TryFrom;
 use std::fs::{metadata, File};
@@ -13,8 +13,6 @@ use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 
 use serde::{Deserialize, Serialize};
-
-use twox_hash::RandomXxHashBuilder64;
 
 use crate::io;
 
@@ -184,7 +182,7 @@ impl From<Entry> for io::Sequence {
 pub struct CompressedSequences {
     pub header: Header,
     reader: Box<dyn ReadAndSeek + Send>,
-    pub idx: Option<HashMap<String, u64, RandomXxHashBuilder64>>,
+    pub idx: Option<HashMap<String, u64>>,
     access: SeqMode,
     random_list: Option<Vec<u64>>,
 }
@@ -193,7 +191,7 @@ pub struct CompressedSequences {
 pub struct Sequences {
     pub header: Header,
     reader: Box<dyn ReadAndSeek + Send>,
-    pub idx: Option<HashMap<String, u64, RandomXxHashBuilder64>>,
+    pub idx: Option<HashMap<String, u64>>,
     access: SeqMode,
     random_list: Option<Vec<u64>>,
 }
@@ -344,7 +342,7 @@ pub fn open_file(
     filename: &str,
 ) -> (
     Box<dyn ReadAndSeek + Send>,
-    Option<HashMap<String, u64, RandomXxHashBuilder64>>,
+    Option<HashMap<String, u64>>,
 ) {
     let filename = check_extension(filename);
 
@@ -648,7 +646,7 @@ fn get_index_filename(filename: &str) -> String {
     path + &filename
 }
 
-fn load_index(filename: &str) -> Option<HashMap<String, u64, RandomXxHashBuilder64>> {
+fn load_index(filename: &str) -> Option<HashMap<String, u64>> {
     let idx_filename = get_index_filename(filename);
     if !Path::new(&idx_filename).exists() {
         println!("IdxFile does not exist!");
@@ -657,7 +655,7 @@ fn load_index(filename: &str) -> Option<HashMap<String, u64, RandomXxHashBuilder
 
     let (_, _, mut idxfh) = generic_open_file(&idx_filename);
     // let idx: HashMap<String, u64>;
-    let idx: HashMap<String, u64, RandomXxHashBuilder64>;
+    let idx: HashMap<String, u64>;
     idx = bincode::deserialize_from(&mut idxfh).expect("Unable to open Index file");
     Some(idx)
 }
