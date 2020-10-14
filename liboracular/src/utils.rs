@@ -19,11 +19,11 @@ pub fn generic_open_file(filename: &str) -> (usize, bool, Box<dyn Read + Send>) 
 
     let fasta: Box<dyn Read + Send> = if filename.ends_with("gz") {
         compressed = true;
-        Box::new(flate2::read::GzDecoder::new(file))
+        Box::new(BufReader::new(flate2::read::GzDecoder::new(file)))
     } else if filename.ends_with("snappy") || filename.ends_with("sz") || filename.ends_with("sfai")
     {
         compressed = true;
-        Box::new(snap::read::FrameDecoder::new(file))
+        Box::new(BufReader::new(snap::read::FrameDecoder::new(file)))
     } else {
         Box::new(file)
     };
