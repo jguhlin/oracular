@@ -196,7 +196,6 @@ impl Gff3KmerGenerator {
 
 // ** Queue-version of DiscriminatorMaskedGeneratorWrapper
 // Get around the PYTHON GIL
-
 #[pyclass]
 struct MaskedKmersGenerator {
     queueimpl: QueueImpl<WindowSubmission>,
@@ -338,6 +337,194 @@ impl PyIterProtocol for MaskedKmersGenerator {
     }
 }
 
+
+/// ** MatchedKmersGenerator
+/// 1 if both sets of sequences are from the same sequence, 0 if not
+
+#[pyclass]
+struct MatchedKmersGenerator {
+    queueimpl: QueueImpl<MatchedSubmission>,
+}
+
+type MatchedKmers = (WindowKmers, WindowKmers);
+type Matches = bool;
+
+type MatchedSubmission = (MatchedKmers, Matches);
+
+#[pymethods]
+impl MatchedKmersGenerator {
+    #[new]
+    fn new(
+        k: usize,
+        filename: String,
+        window_size: usize,
+        queue_size: usize,
+    ) -> Self {
+
+        let queueimpl = QueueImpl::new(queue_size, move |shutdown, exhausted, queue| 
+        {
+
+            let mut offset = 0;
+            let mut rc = false;
+            let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
+
+            loop {
+                // Create KmerWindowGenerator
+                let mut iter1 =
+                    KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
+                
+                let mut iter2 =
+                    KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
+
+                loop {
+                    if shutdown.load(Ordering::Relaxed) {
+                        return; // We are done, something triggered a
+                                // shutdown...
+                    }
+
+                    let mut item1;
+                    let mut item2;
+                    let matched;
+
+                    if rng.gen::<bool>() {
+                        matched = true;
+
+                        item1 = match iter1.next() {
+                            Some(x) => x,
+                            None => break
+                        };
+
+                        item2 = match iter1.next() {
+                            Some(x) => x,
+                            None => break,
+                        };
+
+                        while item1.id != item2.id {
+                            item1 = item2.clone();
+
+                            item2 = match iter1.next() {
+                                Some(x) => x,
+                                None => break,
+                            };
+                        }
+                    } else {
+                        matched = true;
+
+                        item1 = match iter1.next() {
+                            Some(x) => x,
+                            None => break
+                        };
+
+                        item2 = match iter1.next() {
+                            Some(x) => x,
+                            None => break,
+                        };
+
+                        while item1.id == item2.id {
+                            item2 = match iter2.next() {
+                                Some(x) => x,
+                                None => break,
+                            };
+                        }
+                    }
+
+                    let KmerWindow { kmers: kmers1, id: _, rc: _, } = item1;
+                    let KmerWindow { kmers: kmers2, id: _, rc: _, } = item2;
+
+                    let kmers1 = kmers1
+                        .iter()
+                        .map(|x| convert_string_to_array(k, x))
+                        .collect();
+
+                    let kmers2 = kmers2
+                        .iter()
+                        .map(|x| convert_string_to_array(k, x))
+                        .collect();
+
+                    let mut batch = ((kmers1, kmers2), matched);
+                    while let Err(x) = queue.push(batch) {
+
+                        // Test if we are prematurely shutdown...
+                        if shutdown.load(Ordering::Relaxed) {
+                            return; // We are done, something triggered a
+                                    // shutdown...
+                        }
+                        batch = x;
+                        park(); // Queue is full, park the thread...
+                    }
+                }
+
+                offset += 1;
+
+                if (k == offset) && rc {
+                    return;
+                } else if k == offset {
+                    offset = 0;
+                    rc = true;
+                }
+            }
+        });
+
+        MatchedKmersGenerator {
+            queueimpl
+        }
+    }
+
+    fn len(mypyself: PyRef<Self>) -> usize {
+        mypyself.queueimpl.queue.len()
+    }
+}
+
+#[pyproto]
+impl PyIterProtocol for MatchedKmersGenerator {
+    fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        Ok(mypyself.into_py(py))
+    }
+
+    fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
+        if mypyself.queueimpl.is_finished()
+        {
+            return Ok(None)
+        }
+
+        // Unpark the thread...
+        mypyself.queueimpl.unpark();
+
+        let mut result = mypyself.queueimpl.queue.pop();
+        let backoff = Backoff::new();
+
+        while result == None {
+            mypyself.queueimpl.unpark();
+            backoff.snooze();
+
+            // Check for exhaustion (or shutdown)...
+            if mypyself.queueimpl.is_finished()
+            {
+                return Ok(None)
+            }
+
+            result = mypyself.queueimpl.queue.pop();
+        }
+
+        let result = result.unwrap();
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        let pyout = PyDict::new(py);
+        pyout
+            .set_item("kmers", result.0)
+            .expect("Error with Python");
+        pyout.set_item("matched", result.1).expect("Error with Python");
+
+        // One last unparking...
+        mypyself.queueimpl.unpark();
+
+        Ok(Some(pyout.to_object(py)))
+    }
+}
+
+/// Queue Impl
 struct QueueImpl<Q> {
     // iter: Box<dyn Iterator<Item = I> + Send>,
     handle: JoinHandle<()>,
@@ -944,6 +1131,7 @@ fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Gff3KmerGenerator>()?;
     m.add_class::<FastaKmersGenerator>()?;
     m.add_class::<SequenceOrderKmersGenerator>()?;
+    m.add_class::<MatchedKmersGenerator>()?;
     m.add_wrapped(wrap_pyfunction!(convert_fasta_to_sfasta))?;
     m.add_wrapped(wrap_pyfunction!(get_headers_from_sfasta))?;
     m.add_wrapped(wrap_pyfunction!(test_sfasta))?;

@@ -46,7 +46,7 @@ impl std::cmp::PartialEq<&[u8]> for KmerCoords {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct KmerWindow {
     pub kmers: Vec<Kmer>,
     pub id: String,
