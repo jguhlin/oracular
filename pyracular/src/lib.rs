@@ -396,7 +396,7 @@ impl MatchedKmersGenerator {
 
                         // Half the time skip a window...
                         if rng.gen::<bool>() {
-                            iter1.skip(1);
+                            iter1.next();
                         }
 
                         item2 = match iter1.next() {
