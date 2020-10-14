@@ -655,6 +655,11 @@ impl SequenceOrderKmersGenerator {
                     };
 
                     let KmerWindow { kmers, id, rc } = item;
+
+                    if kmers.len() < window_size*2 {
+                        continue
+                    }
+
                     let kmers: Vec<Vec<u8>> = kmers
                         .iter()
                         .map(|x| convert_string_to_array(k, x))
