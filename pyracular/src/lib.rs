@@ -1117,6 +1117,7 @@ impl FastaKmersGenerator {
     ///     sliding: Sliding window or just a once-over?
     ///     start_rc: Start on the reverse strand? WARNING: Only use this when
     /// not doing sliding windows...
+    /// TODO: Need to give this a chance to return less than window_size kmer's
     #[new]
     fn new(k: usize, filename: String, window_size: usize, sliding: bool, start_rc: bool) -> Self {
         // Create KmerWindowGenerator

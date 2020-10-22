@@ -180,6 +180,7 @@ impl KmerWindowGenerator {
         // TODO: Should be able to handle between min_seq and max_seq
         // So instead of only 20 or 30 kmers at a time, get 10 - 100 (prefer more)
         let needed_sequence = k * window_size;
+        // HERE! Need to return small sequences unless < window_size, and let the generators deal with removing them or not...
 
         KmerWindowGenerator {
             sequences,
@@ -200,6 +201,7 @@ impl Iterator for KmerWindowGenerator {
     fn next(&mut self) -> Option<KmerWindow> {
         // While instead of if, because if we get a too short sequence we should skip
         // it...
+        // and HERE! Need to return small sequences unless < window_size, and let the generators deal with removing them or not...
         while (self.kmer_generator.len - self.kmer_generator.curpos) <= self.needed_sequence {
             let mut curseq: io::Sequence = match self.sequences.next() {
                 Some(x) => x,

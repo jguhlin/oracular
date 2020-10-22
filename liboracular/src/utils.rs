@@ -14,7 +14,6 @@ pub fn generic_open_file(filename: &str) -> (usize, bool, Box<dyn Read + Send>) 
         Ok(file) => file,
     };
 
-
     let file = BufReader::new(file);
     let mut compressed: bool = false;
 
