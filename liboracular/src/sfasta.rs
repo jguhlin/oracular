@@ -404,10 +404,10 @@ pub fn build_zstd_dict(filename: &str) -> Option<Vec<u8>> {
     if total_len <= 1024 * 256 || sample_sizes.len() <= 7 {
         None
     } else {
-        Some(
-            zstd::dict::from_continuous(&sample_data, &sample_sizes, maxsize)
-                .expect("Unable to generate zstd dict"),
-        )
+        match zstd::dict::from_continuous(&sample_data, &sample_sizes, maxsize) {
+            Ok(x) => Some(x),
+            Err(_)  => None,
+        }
     }
 }
 
