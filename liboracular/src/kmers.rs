@@ -179,7 +179,8 @@ impl KmerWindowGenerator {
         let kmer_generator = Kmers::new(curseq.seq.clone(), k, offset, rc);
         // TODO: Should be able to handle between min_seq and max_seq
         // So instead of only 20 or 30 kmers at a time, get 10 - 100 (prefer more)
-        let needed_sequence = k * window_size;
+        //let needed_sequence = k * window_size;
+        let needed_sequence = k;
         // HERE! Need to return small sequences unless < window_size, and let the generators deal with removing them or not...
 
         KmerWindowGenerator {
