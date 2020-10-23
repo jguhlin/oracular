@@ -183,6 +183,11 @@ impl KmerWindowGenerator {
         let needed_sequence = k;
         // HERE! Need to return small sequences unless < window_size, and let the generators deal with removing them or not...
 
+        println!("needed: {}", needed_sequence);
+        println!("CurseqEnd: {}", curseq.end);
+        println!("curseq: {:#?}", curseq.seq.len());
+        println!("curseq: {:#?}", std::str::from_utf8(&curseq.seq).unwrap());
+
         KmerWindowGenerator {
             sequences,
             window_size,
@@ -576,10 +581,31 @@ mod tests {
 
         assert!(first.kmers[0] == b"ACT");
 
+        crate::sfasta::convert_fasta_file(
+            "test_data/test.fna",
+            "test_data/test.sfasta",
+        );
+
         let mut kmers = KmerWindowGenerator::new("test_data/test.sfasta", 3, 3, 0, false, false);
 
         let skipped = kmers.nth(2).expect("Unable to skip ahead");
         assert!(skipped.kmers[0] == b"NAC");
+
+        crate::sfasta::convert_fasta_file(
+            "test_data/test_single.fna",
+            "test_data/test_single.sfasta",
+        );
+
+        let mut kmers = KmerWindowGenerator::new(
+            "test_data/test_single.sfasta",
+            21,
+            512,
+            0,
+            false,
+            false,
+        );
+        kmers.next().expect("Unable to get KmerWindow");
+
     }
 
     #[test]

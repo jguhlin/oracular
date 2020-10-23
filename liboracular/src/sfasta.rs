@@ -649,7 +649,7 @@ fn get_index_filename(filename: &str) -> String {
 fn load_index(filename: &str) -> Option<HashMap<String, u64>> {
     let idx_filename = get_index_filename(filename);
     if !Path::new(&idx_filename).exists() {
-        println!("IdxFile does not exist!");
+        println!("IdxFile does not exist! {} {}", filename, idx_filename);
         return None;
     }
 
