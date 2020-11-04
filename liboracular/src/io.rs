@@ -37,7 +37,7 @@ impl SequenceSplitter3N {
             .into_iter()
             .collect();
 
-        println!("{:#?}", coords);
+        //println!("{:#?}", coords);
 
         SequenceSplitter3N {
             sequences,
