@@ -338,12 +338,7 @@ fn generate_sfasta_compressed_entry(
 
 /// Opens an SFASTA file and an index and returns a Box<dyn Read>,
 /// HashMap<String, usize> type
-pub fn open_file(
-    filename: &str,
-) -> (
-    Box<dyn ReadAndSeek + Send>,
-    Option<HashMap<String, u64>>,
-) {
+pub fn open_file(filename: &str) -> (Box<dyn ReadAndSeek + Send>, Option<HashMap<String, u64>>) {
     let filename = check_extension(filename);
 
     let file = match File::open(Path::new(&filename)) {
@@ -406,7 +401,7 @@ pub fn build_zstd_dict(filename: &str) -> Option<Vec<u8>> {
     } else {
         match zstd::dict::from_continuous(&sample_data, &sample_sizes, maxsize) {
             Ok(x) => Some(x),
-            Err(_)  => None,
+            Err(_) => None,
         }
     }
 }

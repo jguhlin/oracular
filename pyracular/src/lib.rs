@@ -26,7 +26,7 @@ use rand_xoshiro::Xoshiro256PlusPlus;
 use liboracular::kmers::KmerWindow;
 use liboracular::kmers::{
     DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3Kmers, Gff3KmersIter, KmerCoordsWindow,
-    KmerCoordsWindowIter, KmerWindowGenerator,
+    KmerCoordsWindowIter, KmerWindowGenerator, rc_kmerwindow, replace_random
 };
 use liboracular::sfasta;
 
@@ -203,7 +203,7 @@ struct MaskedKmersGenerator {
 
 type Kmer = Vec<bool>;
 type Id = String;
-type Truth = u8;
+type Truth = bool;
 
 type WindowKmers = Vec<Kmer>;
 type WindowIds = Id;
@@ -222,20 +222,17 @@ impl MaskedKmersGenerator {
         rand: bool,
         queue_size: usize,
     ) -> Self {
-
-        let queueimpl = QueueImpl::new(queue_size, move |shutdown, exhausted, queue| 
-        {
-
+        let queueimpl = QueueImpl::new(queue_size, move |shutdown, exhausted, queue| {
             let mut offset = 0;
             let mut rc = false;
 
             loop {
                 // Create KmerWindowGenerator
                 let kmer_window_generator =
-                KmerWindowGenerator::new(&filename, k, window_size, offset, rc, rand);
+                    KmerWindowGenerator::new(&filename, k, window_size, offset, rc, rand);
 
                 let discriminator_masked_generator =
-                DiscriminatorMaskedGenerator::new(replacement_pct, k, kmer_window_generator);
+                    DiscriminatorMaskedGenerator::new(replacement_pct, k, kmer_window_generator);
 
                 let mut iter = Box::new(discriminator_masked_generator);
 
@@ -253,7 +250,6 @@ impl MaskedKmersGenerator {
 
                     let mut batch = (kmers, id, truth);
                     while let Err(x) = queue.push(batch) {
-
                         // Test if we are prematurely shutdown...
                         if shutdown.load(Ordering::Relaxed) {
                             return; // We are done, something triggered a
@@ -275,9 +271,7 @@ impl MaskedKmersGenerator {
             }
         });
 
-        MaskedKmersGenerator {
-            queueimpl
-        }
+        MaskedKmersGenerator { queueimpl }
     }
 
     fn len(mypyself: PyRef<Self>) -> usize {
@@ -294,9 +288,8 @@ impl PyIterProtocol for MaskedKmersGenerator {
     }
 
     fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
-        if mypyself.queueimpl.is_finished()
-        {
-            return Ok(None)
+        if mypyself.queueimpl.is_finished() {
+            return Ok(None);
         }
 
         // Unpark the thread...
@@ -310,9 +303,8 @@ impl PyIterProtocol for MaskedKmersGenerator {
             backoff.snooze();
 
             // Check for exhaustion (or shutdown)...
-            if mypyself.queueimpl.is_finished()
-            {
-                return Ok(None)
+            if mypyself.queueimpl.is_finished() {
+                return Ok(None);
             }
 
             result = mypyself.queueimpl.queue.pop();
@@ -337,7 +329,6 @@ impl PyIterProtocol for MaskedKmersGenerator {
     }
 }
 
-
 /// ** MatchedKmersGenerator
 /// 1 if both sets of sequences are from the same sequence, 0 if not
 
@@ -354,27 +345,19 @@ type MatchedSubmission = (MatchedKmers, Matches);
 #[pymethods]
 impl MatchedKmersGenerator {
     #[new]
-    fn new(
-        k: usize,
-        filename: String,
-        window_size: usize,
-        queue_size: usize,
-    ) -> Self {
-
-        let queueimpl = QueueImpl::new(queue_size, move |shutdown, exhausted, queue| 
-        {
-
+    fn new(k: usize, filename: String, window_size: usize, queue_size: usize) -> Self {
+        let queueimpl = QueueImpl::new(queue_size, move |shutdown, exhausted, queue| {
             let mut offset = 0;
             let mut rc = false;
             let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
 
-
-            // TODO: Make even smarter -- Load up 1k windows and pick from there matching and non-matching ones, including some RC ones as well...
+            // TODO: Make even smarter -- Load up 1k windows and pick from there matching
+            // and non-matching ones, including some RC ones as well...
             loop {
                 // Create KmerWindowGenerator
                 let mut iter1 =
                     KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
-                
+
                 let mut iter2 =
                     KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
 
@@ -393,7 +376,7 @@ impl MatchedKmersGenerator {
 
                         item1 = match iter1.next() {
                             Some(x) => x,
-                            None => break
+                            None => break,
                         };
 
                         // Half the time skip a window...
@@ -419,7 +402,7 @@ impl MatchedKmersGenerator {
 
                         item1 = match iter1.next() {
                             Some(x) => x,
-                            None => break
+                            None => break,
                         };
 
                         item2 = match iter1.next() {
@@ -435,8 +418,17 @@ impl MatchedKmersGenerator {
                         }
                     }
 
-                    let KmerWindow { kmers: kmers1, id: _, rc: _, } = item1;
-                    let KmerWindow { kmers: kmers2, id: _, rc: _, } = item2;
+                    let KmerWindow {
+                        kmers: kmers1,
+                        id: _,
+                        rc: _,
+                    } = item1;
+
+                    let KmerWindow {
+                        kmers: kmers2,
+                        id: _,
+                        rc: _,
+                    } = item2;
 
                     let kmers1 = kmers1
                         .iter()
@@ -450,7 +442,6 @@ impl MatchedKmersGenerator {
 
                     let mut batch = ((kmers1, kmers2), matched);
                     while let Err(x) = queue.push(batch) {
-
                         // Test if we are prematurely shutdown...
                         if shutdown.load(Ordering::Relaxed) {
                             return; // We are done, something triggered a
@@ -472,9 +463,7 @@ impl MatchedKmersGenerator {
             }
         });
 
-        MatchedKmersGenerator {
-            queueimpl
-        }
+        MatchedKmersGenerator { queueimpl }
     }
 
     fn len(mypyself: PyRef<Self>) -> usize {
@@ -491,9 +480,8 @@ impl PyIterProtocol for MatchedKmersGenerator {
     }
 
     fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
-        if mypyself.queueimpl.is_finished()
-        {
-            return Ok(None)
+        if mypyself.queueimpl.is_finished() {
+            return Ok(None);
         }
 
         // Unpark the thread...
@@ -507,9 +495,8 @@ impl PyIterProtocol for MatchedKmersGenerator {
             backoff.snooze();
 
             // Check for exhaustion (or shutdown)...
-            if mypyself.queueimpl.is_finished()
-            {
-                return Ok(None)
+            if mypyself.queueimpl.is_finished() {
+                return Ok(None);
             }
 
             result = mypyself.queueimpl.queue.pop();
@@ -522,7 +509,230 @@ impl PyIterProtocol for MatchedKmersGenerator {
         pyout
             .set_item("kmers", result.0)
             .expect("Error with Python");
-        pyout.set_item("matched", result.1).expect("Error with Python");
+        pyout
+            .set_item("matched", result.1)
+            .expect("Error with Python");
+
+        // One last unparking...
+        mypyself.queueimpl.unpark();
+
+        Ok(Some(pyout.to_object(py)))
+    }
+}
+
+/// ** TripleLossKmersGenerator
+/// 3 outputs
+///   [] -> is kmer replaced (up to 15% replaced, or whatever is passed in),
+///   1 if both sets of sequences are from the same sequence, 0 if not
+///   0 if not reverse complement, 1 if reverse complement of first sequence (thus the second output is going to be 1 as well!)
+/// All can have up to 15% replaced
+
+
+#[pyclass]
+struct TripleLossKmersGenerator {
+    queueimpl: QueueImpl<TripleLossSubmission>,
+}
+
+type TripleLossKmers = (WindowKmers, WindowKmers);
+type ReverseComplement = bool;
+type Truths = Vec<bool>;
+
+type TripleLossSubmission = (MatchedKmers, (Truths, Truths, Matches, ReverseComplement));
+
+#[pymethods]
+impl TripleLossKmersGenerator {
+    #[new]
+    fn new(k: usize, filename: String, replacement_pct: f32, window_size: usize, queue_size: usize) -> Self {
+        let queueimpl = QueueImpl::new(queue_size, move |shutdown, exhausted, queue| {
+            let mut offset = 0;
+            let mut rc = false;
+            let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
+
+            // TODO: Make even smarter -- Load up 1k windows and pick from there matching
+            // and non-matching ones, including some RC ones as well...
+            loop {
+                // Create KmerWindowGenerator
+                let mut iter1 =
+                    KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
+
+                let mut iter2 =
+                    KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
+
+                loop {
+                    if shutdown.load(Ordering::Relaxed) {
+                        return; // We are done, something triggered a
+                                // shutdown...
+                    }
+
+                    let mut item1;
+                    let mut item2;
+                    let matched;
+                    let reversecomplement;
+
+                    // So we have 3 states..
+                    // Matched sequence -- So kmer window 1 and 2 from the same sequence
+                    // Matched Sequence -- RC -- Kmer window 1 and it's reverse complement
+                    // Non-matched sequence -- Kmer window 1 and 2 from completely different seqs...
+                    let choice: u8 = rng.gen_range(0, 3); // Give us a number between 0 and 2
+
+                    // Always need a starting window...
+                    item1 = match iter1.next() {
+                        Some(x) => x,
+                        None => break,
+                    };
+
+                    // Let's have matched sequence...
+                    if choice == 0 {
+                        matched = true;
+                        reversecomplement = false;
+
+                        // Half the time skip a window or a few...
+                        while rng.gen::<bool>() {
+                            iter1.next();
+                        }
+
+                        item2 = match iter1.next() {
+                            Some(x) => x,
+                            None => break,
+                        };
+
+                        while item1.id != item2.id {
+                            item1 = item2.clone();
+
+                            item2 = match iter1.next() {
+                                Some(x) => x,
+                                None => break,
+                            };
+                        }
+                    } else if choice == 1 {
+                        // RC
+                        matched = true;
+                        reversecomplement = true;
+
+                        item2 = item1.clone();
+                        item2 = rc_kmerwindow(item2);
+                        
+                    // Third option, not matched sequence...
+                    } else {
+                        matched = false;
+                        reversecomplement = false;
+
+                        item1 = match iter1.next() {
+                            Some(x) => x,
+                            None => break,
+                        };
+
+                        item2 = match iter1.next() {
+                            Some(x) => x,
+                            None => break,
+                        };
+
+                        while item1.id == item2.id {
+                            item2 = match iter2.next() {
+                                Some(x) => x,
+                                None => break,
+                            };
+                        }
+                    }
+
+                    let KmerWindow {
+                        kmers: mut kmers1,
+                        id: _,
+                        rc: _,
+                    } = item1;
+                    let KmerWindow {
+                        kmers: mut kmers2,
+                        id: _,
+                        rc: _,
+                    } = item2;
+
+                    let truth1 = replace_random(k, replacement_pct, &mut kmers1);
+                    let truth2 = replace_random(k, replacement_pct, &mut kmers2);
+
+
+                    let kmers1 = kmers1
+                        .iter()
+                        .map(|x| convert_string_to_array(k, x))
+                        .collect();
+
+                    let kmers2 = kmers2
+                        .iter()
+                        .map(|x| convert_string_to_array(k, x))
+                        .collect();
+
+
+                    let mut batch = ((kmers1, kmers2), (truth1, truth2, matched, reversecomplement));
+                    while let Err(x) = queue.push(batch) {
+                        // Test if we are prematurely shutdown...
+                        if shutdown.load(Ordering::Relaxed) {
+                            return; // We are done, something triggered a
+                                    // shutdown...
+                        }
+                        batch = x;
+                        park(); // Queue is full, park the thread...
+                    }
+                }
+
+                offset += 1;
+
+                if (k == offset) && rc {
+                    return;
+                } else if k == offset {
+                    offset = 0;
+                    rc = true;
+                }
+            }
+        });
+
+        TripleLossKmersGenerator { queueimpl }
+    }
+
+    fn len(mypyself: PyRef<Self>) -> usize {
+        mypyself.queueimpl.queue.len()
+    }
+}
+
+#[pyproto]
+impl PyIterProtocol for TripleLossKmersGenerator {
+    fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        Ok(mypyself.into_py(py))
+    }
+
+    fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
+        if mypyself.queueimpl.is_finished() {
+            return Ok(None);
+        }
+
+        // Unpark the thread...
+        mypyself.queueimpl.unpark();
+
+        let mut result = mypyself.queueimpl.queue.pop();
+        let backoff = Backoff::new();
+
+        while result == None {
+            mypyself.queueimpl.unpark();
+            backoff.snooze();
+
+            // Check for exhaustion (or shutdown)...
+            if mypyself.queueimpl.is_finished() {
+                return Ok(None);
+            }
+
+            result = mypyself.queueimpl.queue.pop();
+        }
+
+        let result = result.unwrap();
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        let pyout = PyDict::new(py);
+        pyout
+            .set_item("kmers", result.0)
+            .expect("Error with Python");
+        pyout
+            .set_item("matched", result.1)
+            .expect("Error with Python");
 
         // One last unparking...
         mypyself.queueimpl.unpark();
@@ -665,8 +875,8 @@ impl SequenceOrderKmersGenerator {
 
                     let KmerWindow { kmers, id, rc } = item;
 
-                    if kmers.len() < window_size*2 {
-                        continue
+                    if kmers.len() < window_size * 2 {
+                        continue;
                     }
 
                     let kmers: Vec<Vec<bool>> = kmers
@@ -796,7 +1006,7 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
         // Generate Batch
         let mut batch_kmers: Vec<Vec<Vec<bool>>> = Vec::with_capacity(mypyself.batch_size);
         let mut batch_id: Vec<String> = Vec::with_capacity(mypyself.batch_size);
-        let mut batch_truth: Vec<Vec<u8>> = Vec::with_capacity(mypyself.batch_size);
+        let mut batch_truth: Vec<Vec<bool>> = Vec::with_capacity(mypyself.batch_size);
 
         while batch_kmers.len() < mypyself.batch_size {
             let item = match mypyself.iter.next() {

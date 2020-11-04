@@ -11,6 +11,18 @@ use crate::utils;
 type Kmer = Vec<u8>;
 type Coords = (usize, usize);
 
+pub fn rc_kmerwindow(mut window: KmerWindow) -> KmerWindow {
+    let mut reversed = window.kmers.iter().map(|x| {
+        let mut y = x.clone();
+        y.reverse();
+        utils::complement_nucleotides(&mut y);
+        return y
+    }).collect::<Vec<Vec<u8>>>();
+    reversed.reverse();
+    window.kmers = reversed;
+    window
+}
+
 pub struct KmerCoords {
     pub kmer: Vec<u8>,
     pub coords: Coords,
@@ -68,7 +80,7 @@ pub struct KmerWindowGenerator {
 pub struct DiscriminatorMasked {
     pub kmers: Vec<Vec<u8>>,
     pub id: String,
-    pub truth: Vec<u8>,
+    pub truth: Vec<bool>,
 }
 
 pub struct DiscriminatorMaskedGenerator {
@@ -94,6 +106,29 @@ impl DiscriminatorMaskedGenerator {
     }
 }
 
+pub fn replace_random(k: usize, replacement_pct: f32, kmers: &mut Vec<Vec<u8>>) -> Vec<bool> {
+    // TODO: Make switchable, so we can train protein sequences
+    // ~2% chance of an N
+    let choices = [(b'A', 48), (b'C', 48), (b'T', 48), (b'G', 48), (b'N', 4)];
+
+    let mut rng = rand::thread_rng();
+
+    let mut truth: Vec<bool> = Vec::with_capacity(kmers.len());
+    for kmer in kmers.iter_mut() {
+        if rng.gen::<f32>() < replacement_pct {
+            let mut new_kmer: Vec<u8> = Vec::with_capacity(k);
+            for _i in 0..k {
+                new_kmer.push(choices.choose_weighted(&mut rng, |item| item.1).unwrap().0);            }
+            *kmer = new_kmer;
+            truth.push(false);
+        } else {
+            truth.push(true);
+        }
+    }
+
+    truth
+}
+
 impl Iterator for DiscriminatorMaskedGenerator {
     type Item = DiscriminatorMasked;
 
@@ -109,26 +144,7 @@ impl Iterator for DiscriminatorMaskedGenerator {
             rc: _,
         } = next_item;
 
-        // TODO: Make switchable, so we can train protein sequences
-        // ~2% chance of an N
-        let choices = [(b'A', 48), (b'C', 48), (b'T', 48), (b'G', 48), (b'N', 4)];
-
-        let mut truth: Vec<u8> = Vec::with_capacity(kmers.len());
-
-        let mut rng = rand::thread_rng();
-
-        for kmer in kmers.iter_mut() {
-            if rng.gen::<f32>() < self.replacement_pct {
-                let mut new_kmer: Vec<u8> = Vec::with_capacity(self.k);
-                for _i in 0..self.k {
-                    new_kmer.push(choices.choose_weighted(&mut rng, |item| item.1).unwrap().0);
-                }
-                *kmer = new_kmer;
-                truth.push(0);
-            } else {
-                truth.push(1);
-            }
-        }
+        let truth = replace_random(self.k, self.replacement_pct, &mut kmers);
 
         // return Some(DiscriminatorMasked { kmers, id, taxons, taxon, truth })
         Some(DiscriminatorMasked { kmers, id, truth })
@@ -181,12 +197,13 @@ impl KmerWindowGenerator {
         // So instead of only 20 or 30 kmers at a time, get 10 - 100 (prefer more)
         //let needed_sequence = k * window_size;
         let needed_sequence = k;
-        // HERE! Need to return small sequences unless < window_size, and let the generators deal with removing them or not...
+        // HERE! Need to return small sequences unless < window_size, and let the
+        // generators deal with removing them or not...
 
-        println!("needed: {}", needed_sequence);
+        /*println!("needed: {}", needed_sequence);
         println!("CurseqEnd: {}", curseq.end);
         println!("curseq: {:#?}", curseq.seq.len());
-        println!("curseq: {:#?}", std::str::from_utf8(&curseq.seq).unwrap());
+        println!("curseq: {:#?}", std::str::from_utf8(&curseq.seq).unwrap());*/
 
         KmerWindowGenerator {
             sequences,
@@ -207,7 +224,8 @@ impl Iterator for KmerWindowGenerator {
     fn next(&mut self) -> Option<KmerWindow> {
         // While instead of if, because if we get a too short sequence we should skip
         // it...
-        // and HERE! Need to return small sequences unless < window_size, and let the generators deal with removing them or not...
+        // and HERE! Need to return small sequences unless < window_size, and let the
+        // generators deal with removing them or not...
         while (self.kmer_generator.len - self.kmer_generator.curpos) <= self.needed_sequence {
             let mut curseq: io::Sequence = match self.sequences.next() {
                 Some(x) => x,
@@ -581,10 +599,7 @@ mod tests {
 
         assert!(first.kmers[0] == b"ACT");
 
-        crate::sfasta::convert_fasta_file(
-            "test_data/test.fna",
-            "test_data/test.sfasta",
-        );
+        crate::sfasta::convert_fasta_file("test_data/test.fna", "test_data/test.sfasta");
 
         let mut kmers = KmerWindowGenerator::new("test_data/test.sfasta", 3, 3, 0, false, false);
 
@@ -596,16 +611,37 @@ mod tests {
             "test_data/test_single.sfasta",
         );
 
-        let mut kmers = KmerWindowGenerator::new(
-            "test_data/test_single.sfasta",
-            21,
-            512,
-            0,
-            false,
-            false,
-        );
+        let mut kmers =
+            KmerWindowGenerator::new("test_data/test_single.sfasta", 21, 2, 0, false, false);
         kmers.next().expect("Unable to get KmerWindow");
+    }
 
+    #[test]
+    pub fn test_convert_kmerwindow_to_rc() {
+        let mut kmers =
+            KmerWindowGenerator::new("test_data/test_single.sfasta", 21, 2, 0, false, false);
+        let window = kmers.next().expect("Unable to get KmerWindow");
+        println!("{:#?}", window.clone().kmers.iter().map(|x| std::str::from_utf8(x).unwrap()).collect::<Vec<&str>>());
+        // TCAGTCAGTCAGTCAGTCAGT
+        // and 
+        // TTTTTTTTTTTTTTTTTTTTT
+
+        let reversed = rc_kmerwindow(window);
+
+/*        let mut reversed = window.kmers.iter().map(|x| {
+                let mut y = x.clone();
+                y.reverse();
+                utils::complement_nucleotides(&mut y);
+                return y
+            }
+        ).collect::<Vec<Vec<u8>>>();
+        reversed.reverse();*/
+
+
+        let reversed_as_str = reversed.kmers.clone().iter().map(|x| std::str::from_utf8(x).unwrap().to_string()).collect::<Vec<String>>().clone();
+        println!("{:#?}", reversed.kmers.clone().iter().map(|x| std::str::from_utf8(x).unwrap()).collect::<Vec<&str>>());
+        assert!(reversed_as_str[0] == "TTTTTTTTTTTTTTTTTTTTT");
+        assert!(reversed_as_str[1] == "TCAGTCAGTCAGTCAGTCAGT");
     }
 
     #[test]

@@ -98,8 +98,7 @@ pub fn get_gff3_intervals(filename: &str) -> (intervals::IntervalMap<Vec<u8>>, V
 
     let types: Vec<String> = types.into_iter().collect();
 
-    let mut types_one_hot: HashMap<String, Vec<u8>> =
-        Default::default();
+    let mut types_one_hot: HashMap<String, Vec<u8>> = Default::default();
 
     let types_len = types.len(); // Calculate only once...
 
