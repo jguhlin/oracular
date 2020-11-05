@@ -1357,6 +1357,7 @@ fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<FastaKmersGenerator>()?;
     m.add_class::<SequenceOrderKmersGenerator>()?;
     m.add_class::<MatchedKmersGenerator>()?;
+    m.add_class::<TripleLossKmersGenerator>()?;
     m.add_wrapped(wrap_pyfunction!(convert_fasta_to_sfasta))?;
     m.add_wrapped(wrap_pyfunction!(get_headers_from_sfasta))?;
     m.add_wrapped(wrap_pyfunction!(test_sfasta))?;
