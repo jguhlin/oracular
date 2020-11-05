@@ -586,8 +586,9 @@ impl TripleLossKmersGenerator {
                         matched = true;
                         reversecomplement = false;
 
-                        // Half the time skip a window or a few...
-                        while rng.gen::<bool>() {
+                        // Half the time skip a window...
+                        // TODO: Do this better...
+                        if rng.gen::<bool>() {
                             iter1.next();
                         }
 
