@@ -37,7 +37,7 @@ impl SequenceSplitter3N {
             .into_iter()
             .collect();
 
-        //println!("{:#?}", coords);
+        // println!("{:#?}", coords);
 
         SequenceSplitter3N {
             sequences,
@@ -66,7 +66,7 @@ impl Iterator for SequenceSplitter3N {
                 while x == None {
                     let curseq = match self.sequences.next() {
                         Some(x) => x,
-                        None => return None,
+                        None => { println!("Stop1"); return None },
                     };
 
                     let coords: VecDeque<(usize, usize)>;
@@ -78,7 +78,7 @@ impl Iterator for SequenceSplitter3N {
                     self.coords = coords;
                     x = match self.coords.pop_front() {
                         Some(x) => Some(x),
-                        None => None,
+                        None => { println!("Stop2"); return None },
                     }
                 }
 
@@ -121,7 +121,7 @@ impl Iterator for Sequences {
     fn next(&mut self) -> Option<Sequence> {
         let seq: Sequence = match bincode::deserialize_from(&mut self.reader) {
             Ok(x) => x,
-            Err(_) => return None,
+            Err(_) => {println!("SeqStop"); return None },
         };
         Some(seq)
     }
@@ -174,6 +174,10 @@ mod tests {
     #[test]
     pub fn test_3n_splitter() {
         let sequences = Box::new(sfasta::Sequences::new("test_data/test.sfasta"));
+        let count = sequences.count();
+        assert!(count == 1);
+
+        let sequences = Box::new(sfasta::Sequences::new("test_data/test.sfasta"));
         let sequences = Box::new(io::SequenceSplitter3N::new(sequences));
         assert!(sequences.coords[0] == (0, 19));
 
@@ -181,6 +185,14 @@ mod tests {
             "test_data/test_multiple.fna",
             "test_data/test_multiple.sfasta",
         );
+
+        let mut sequences = Box::new(sfasta::Sequences::new("test_data/test_multiple.sfasta"));
+        sequences.set_mode(sfasta::SeqMode::Random);
+        let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
+        let count = sequences.count();
+        println!("Sequences after 3N Split: {}", count);
+        assert!(count == 216);
+
         let sequences = Box::new(sfasta::Sequences::new("test_data/test_multiple.sfasta"));
         let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
         sequences.next();
@@ -202,7 +214,10 @@ mod tests {
 
     #[test]
     pub fn test_sequences_impl() {
-        Sequences::new("test_data/test.fna".to_string());
+        let seqs = Box::new(sfasta::Sequences::new("test_data/test_multiple.sfasta"));
+        let count = seqs.count();
+        println!("Sequences Impl Count {}", count);
+        assert!(count == 8);
     }
 
     #[test]

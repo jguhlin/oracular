@@ -161,6 +161,7 @@ impl KmerWindowGenerator {
         rand: bool, // Mostly for debugging, but also for synteny plots and such...
     ) -> KmerWindowGenerator {
         let mut sequences = Box::new(sfasta::Sequences::new(filename));
+
         if rand {
             sequences.set_mode(sfasta::SeqMode::Random);
         }
@@ -229,7 +230,7 @@ impl Iterator for KmerWindowGenerator {
         while (self.kmer_generator.len - self.kmer_generator.curpos) <= self.needed_sequence {
             let mut curseq: io::Sequence = match self.sequences.next() {
                 Some(x) => x,
-                None => return None, // That's it... no more!
+                None => { println!("No more seqs..."); return None }, // That's it... no more!
             };
 
             if self.rc {
@@ -268,7 +269,7 @@ impl Iterator for KmerWindowGenerator {
                         panic!("Invalid Kmer");
                     }
                 }
-                None => return None,
+                None => continue,
             };
         }
 
@@ -597,7 +598,11 @@ mod tests {
         );
         let first = kmers.next().expect("Unable to get KmerWindow");
 
+        let count = kmers.count();
+
         assert!(first.kmers[0] == b"ACT");
+        println!("Count: {}", count);
+        assert!(count == 49);
 
         crate::sfasta::convert_fasta_file("test_data/test.fna", "test_data/test.sfasta");
 
@@ -614,6 +619,19 @@ mod tests {
         let mut kmers =
             KmerWindowGenerator::new("test_data/test_single.sfasta", 21, 2, 0, false, false);
         kmers.next().expect("Unable to get KmerWindow");
+
+        crate::sfasta::convert_fasta_file("test_data/test_multiple.fna", "test_data/test_multiple_kmer_window_generator.sfasta");
+
+        let mut kmers = KmerWindowGenerator::new("test_data/test_multiple_kmer_window_generator.sfasta", 5, 5, 0, false, false);
+        for i in kmers {
+            println!("{}", i.id);
+        }
+
+        let mut kmers = KmerWindowGenerator::new("test_data/test_multiple_kmer_window_generator.sfasta", 5, 5, 0, false, false);
+        let count = kmers.count();
+        println!("Count is {}", count);
+        // TODO: Maybe this is correct?
+        assert!(count == 418);
     }
 
     #[test]
@@ -636,7 +654,6 @@ mod tests {
             }
         ).collect::<Vec<Vec<u8>>>();
         reversed.reverse();*/
-
 
         let reversed_as_str = reversed.kmers.clone().iter().map(|x| std::str::from_utf8(x).unwrap().to_string()).collect::<Vec<String>>().clone();
         println!("{:#?}", reversed.kmers.clone().iter().map(|x| std::str::from_utf8(x).unwrap()).collect::<Vec<&str>>());
