@@ -67,7 +67,7 @@ impl Iterator for SequenceSplitter3N {
                     let curseq = match self.sequences.next() {
                         Some(x) => x,
                         None => {
-                            println!("Stop1");
+                            // println!("Stop1");
                             return None;
                         }
                     };
