@@ -533,7 +533,6 @@ struct TripleLossKmersGenerator {
     queueimpl: QueueImpl<TripleLossSubmission>,
 }
 
-type TripleLossKmers = (WindowKmers, WindowKmers);
 type ReverseComplement = bool;
 type Truths = Vec<bool>;
 
@@ -554,13 +553,10 @@ impl TripleLossKmersGenerator {
             let mut rc = false;
             let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
 
-            let mut counter = 0;
-
             // TODO: Make even smarter -- Load up 1k windows and pick from there matching
             // and non-matching ones, including some RC ones as well...
             loop {
                 //println!("Counter: {}", counter);
-                counter += 1;
                 // Create KmerWindowGenerator
                 let mut iter1 =
                     KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
@@ -589,7 +585,6 @@ impl TripleLossKmersGenerator {
                     item1 = match iter1.next() {
                         Some(x) => x,
                         None => {
-                            println!("Break1");
                             break;
                         }
                     };
@@ -608,7 +603,6 @@ impl TripleLossKmersGenerator {
                         item2 = match iter1.next() {
                             Some(x) => x,
                             None => {
-                                println!("Break2");
                                 break;
                             }
                         };
@@ -619,7 +613,6 @@ impl TripleLossKmersGenerator {
                             item2 = match iter1.next() {
                                 Some(x) => x,
                                 None => {
-                                    println!("Break3");
                                     break;
                                 }
                             };
@@ -640,7 +633,6 @@ impl TripleLossKmersGenerator {
                         item1 = match iter1.next() {
                             Some(x) => x,
                             None => {
-                                println!("Break4");
                                 break;
                             }
                         };
@@ -648,7 +640,6 @@ impl TripleLossKmersGenerator {
                         item2 = match iter1.next() {
                             Some(x) => x,
                             None => {
-                                println!("Break5");
                                 break;
                             }
                         };
@@ -661,7 +652,6 @@ impl TripleLossKmersGenerator {
                             item2 = match iter2.next() {
                                 Some(x) => x,
                                 None => {
-                                    println!("Break6");
                                     break;
                                 }
                             };
@@ -706,8 +696,6 @@ impl TripleLossKmersGenerator {
                         park(); // Queue is full, park the thread...
                     }
                 }
-
-                println!("Out of the main loop...");
 
                 offset += 1;
 
@@ -767,7 +755,7 @@ impl PyIterProtocol for TripleLossKmersGenerator {
             .set_item("kmers", result.0)
             .expect("Error with Python");
         pyout
-            .set_item("matched", result.1)
+            .set_item("triple", result.1)
             .expect("Error with Python");
 
         // One last unparking...
