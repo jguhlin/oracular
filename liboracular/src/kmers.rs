@@ -12,12 +12,16 @@ type Kmer = Vec<u8>;
 type Coords = (usize, usize);
 
 pub fn rc_kmerwindow(mut window: KmerWindow) -> KmerWindow {
-    let mut reversed = window.kmers.iter().map(|x| {
-        let mut y = x.clone();
-        y.reverse();
-        utils::complement_nucleotides(&mut y);
-        return y
-    }).collect::<Vec<Vec<u8>>>();
+    let mut reversed = window
+        .kmers
+        .iter()
+        .map(|x| {
+            let mut y = x.clone();
+            y.reverse();
+            utils::complement_nucleotides(&mut y);
+            return y;
+        })
+        .collect::<Vec<Vec<u8>>>();
     reversed.reverse();
     window.kmers = reversed;
     window
@@ -118,7 +122,8 @@ pub fn replace_random(k: usize, replacement_pct: f32, kmers: &mut Vec<Vec<u8>>) 
         if rng.gen::<f32>() < replacement_pct {
             let mut new_kmer: Vec<u8> = Vec::with_capacity(k);
             for _i in 0..k {
-                new_kmer.push(choices.choose_weighted(&mut rng, |item| item.1).unwrap().0);            }
+                new_kmer.push(choices.choose_weighted(&mut rng, |item| item.1).unwrap().0);
+            }
             *kmer = new_kmer;
             truth.push(false);
         } else {
@@ -230,7 +235,10 @@ impl Iterator for KmerWindowGenerator {
         while (self.kmer_generator.len - self.kmer_generator.curpos) <= self.needed_sequence {
             let mut curseq: io::Sequence = match self.sequences.next() {
                 Some(x) => x,
-                None => { println!("No more seqs..."); return None }, // That's it... no more!
+                None => {
+                    println!("No more seqs...");
+                    return None;
+                } // That's it... no more!
             };
 
             if self.rc {
@@ -620,14 +628,31 @@ mod tests {
             KmerWindowGenerator::new("test_data/test_single.sfasta", 21, 2, 0, false, false);
         kmers.next().expect("Unable to get KmerWindow");
 
-        crate::sfasta::convert_fasta_file("test_data/test_multiple.fna", "test_data/test_multiple_kmer_window_generator.sfasta");
+        crate::sfasta::convert_fasta_file(
+            "test_data/test_multiple.fna",
+            "test_data/test_multiple_kmer_window_generator.sfasta",
+        );
 
-        let mut kmers = KmerWindowGenerator::new("test_data/test_multiple_kmer_window_generator.sfasta", 5, 5, 0, false, false);
+        let mut kmers = KmerWindowGenerator::new(
+            "test_data/test_multiple_kmer_window_generator.sfasta",
+            5,
+            5,
+            0,
+            false,
+            false,
+        );
         for i in kmers {
             println!("{}", i.id);
         }
 
-        let mut kmers = KmerWindowGenerator::new("test_data/test_multiple_kmer_window_generator.sfasta", 5, 5, 0, false, false);
+        let mut kmers = KmerWindowGenerator::new(
+            "test_data/test_multiple_kmer_window_generator.sfasta",
+            5,
+            5,
+            0,
+            false,
+            false,
+        );
         let count = kmers.count();
         println!("Count is {}", count);
         // TODO: Maybe this is correct?
@@ -639,14 +664,22 @@ mod tests {
         let mut kmers =
             KmerWindowGenerator::new("test_data/test_single.sfasta", 21, 2, 0, false, false);
         let window = kmers.next().expect("Unable to get KmerWindow");
-        println!("{:#?}", window.clone().kmers.iter().map(|x| std::str::from_utf8(x).unwrap()).collect::<Vec<&str>>());
+        println!(
+            "{:#?}",
+            window
+                .clone()
+                .kmers
+                .iter()
+                .map(|x| std::str::from_utf8(x).unwrap())
+                .collect::<Vec<&str>>()
+        );
         // TCAGTCAGTCAGTCAGTCAGT
-        // and 
+        // and
         // TTTTTTTTTTTTTTTTTTTTT
 
         let reversed = rc_kmerwindow(window);
 
-/*        let mut reversed = window.kmers.iter().map(|x| {
+        /*        let mut reversed = window.kmers.iter().map(|x| {
                 let mut y = x.clone();
                 y.reverse();
                 utils::complement_nucleotides(&mut y);
@@ -655,8 +688,22 @@ mod tests {
         ).collect::<Vec<Vec<u8>>>();
         reversed.reverse();*/
 
-        let reversed_as_str = reversed.kmers.clone().iter().map(|x| std::str::from_utf8(x).unwrap().to_string()).collect::<Vec<String>>().clone();
-        println!("{:#?}", reversed.kmers.clone().iter().map(|x| std::str::from_utf8(x).unwrap()).collect::<Vec<&str>>());
+        let reversed_as_str = reversed
+            .kmers
+            .clone()
+            .iter()
+            .map(|x| std::str::from_utf8(x).unwrap().to_string())
+            .collect::<Vec<String>>()
+            .clone();
+        println!(
+            "{:#?}",
+            reversed
+                .kmers
+                .clone()
+                .iter()
+                .map(|x| std::str::from_utf8(x).unwrap())
+                .collect::<Vec<&str>>()
+        );
         assert!(reversed_as_str[0] == "TTTTTTTTTTTTTTTTTTTTT");
         assert!(reversed_as_str[1] == "TCAGTCAGTCAGTCAGTCAGT");
     }

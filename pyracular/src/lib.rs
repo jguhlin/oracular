@@ -25,8 +25,8 @@ use rand_xoshiro::Xoshiro256PlusPlus;
 
 use liboracular::kmers::KmerWindow;
 use liboracular::kmers::{
-    DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3Kmers, Gff3KmersIter, KmerCoordsWindow,
-    KmerCoordsWindowIter, KmerWindowGenerator, rc_kmerwindow, replace_random
+    rc_kmerwindow, replace_random, DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3Kmers,
+    Gff3KmersIter, KmerCoordsWindow, KmerCoordsWindowIter, KmerWindowGenerator,
 };
 use liboracular::sfasta;
 
@@ -524,9 +524,9 @@ impl PyIterProtocol for MatchedKmersGenerator {
 /// 3 outputs
 ///   [] -> is kmer replaced (up to 15% replaced, or whatever is passed in),
 ///   1 if both sets of sequences are from the same sequence, 0 if not
-///   0 if not reverse complement, 1 if reverse complement of first sequence (thus the second output is going to be 1 as well!)
-/// All can have up to 15% replaced
-
+///   0 if not reverse complement, 1 if reverse complement of first sequence
+/// (thus the second output is going to be 1 as well!) All can have up to 15%
+/// replaced
 
 #[pyclass]
 struct TripleLossKmersGenerator {
@@ -542,15 +542,25 @@ type TripleLossSubmission = (MatchedKmers, (Truths, Truths, Matches, ReverseComp
 #[pymethods]
 impl TripleLossKmersGenerator {
     #[new]
-    fn new(k: usize, filename: String, replacement_pct: f32, window_size: usize, queue_size: usize) -> Self {
+    fn new(
+        k: usize,
+        filename: String,
+        replacement_pct: f32,
+        window_size: usize,
+        queue_size: usize,
+    ) -> Self {
         let queueimpl = QueueImpl::new(queue_size, move |shutdown, exhausted, queue| {
             let mut offset = 0;
             let mut rc = false;
             let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
 
+            let mut counter = 0;
+
             // TODO: Make even smarter -- Load up 1k windows and pick from there matching
             // and non-matching ones, including some RC ones as well...
             loop {
+                //println!("Counter: {}", counter);
+                counter += 1;
                 // Create KmerWindowGenerator
                 let mut iter1 =
                     KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
@@ -578,7 +588,10 @@ impl TripleLossKmersGenerator {
                     // Always need a starting window...
                     item1 = match iter1.next() {
                         Some(x) => x,
-                        None => break,
+                        None => {
+                            println!("Break1");
+                            break;
+                        }
                     };
 
                     // Let's have matched sequence...
@@ -594,7 +607,10 @@ impl TripleLossKmersGenerator {
 
                         item2 = match iter1.next() {
                             Some(x) => x,
-                            None => break,
+                            None => {
+                                println!("Break2");
+                                break;
+                            }
                         };
 
                         while item1.id != item2.id {
@@ -602,7 +618,10 @@ impl TripleLossKmersGenerator {
 
                             item2 = match iter1.next() {
                                 Some(x) => x,
-                                None => break,
+                                None => {
+                                    println!("Break3");
+                                    break;
+                                }
                             };
                         }
                     } else if choice == 1 {
@@ -612,7 +631,7 @@ impl TripleLossKmersGenerator {
 
                         item2 = item1.clone();
                         item2 = rc_kmerwindow(item2);
-                        
+
                     // Third option, not matched sequence...
                     } else {
                         matched = false;
@@ -620,18 +639,31 @@ impl TripleLossKmersGenerator {
 
                         item1 = match iter1.next() {
                             Some(x) => x,
-                            None => break,
+                            None => {
+                                println!("Break4");
+                                break;
+                            }
                         };
 
                         item2 = match iter1.next() {
                             Some(x) => x,
-                            None => break,
+                            None => {
+                                println!("Break5");
+                                break;
+                            }
                         };
+
+                        if rng.gen::<bool>() {
+                            iter2.next();
+                        }
 
                         while item1.id == item2.id {
                             item2 = match iter2.next() {
                                 Some(x) => x,
-                                None => break,
+                                None => {
+                                    println!("Break6");
+                                    break;
+                                }
                             };
                         }
                     }
@@ -650,7 +682,6 @@ impl TripleLossKmersGenerator {
                     let truth1 = replace_random(k, replacement_pct, &mut kmers1);
                     let truth2 = replace_random(k, replacement_pct, &mut kmers2);
 
-
                     let kmers1 = kmers1
                         .iter()
                         .map(|x| convert_string_to_array(k, x))
@@ -661,8 +692,10 @@ impl TripleLossKmersGenerator {
                         .map(|x| convert_string_to_array(k, x))
                         .collect();
 
-
-                    let mut batch = ((kmers1, kmers2), (truth1, truth2, matched, reversecomplement));
+                    let mut batch = (
+                        (kmers1, kmers2),
+                        (truth1, truth2, matched, reversecomplement),
+                    );
                     while let Err(x) = queue.push(batch) {
                         // Test if we are prematurely shutdown...
                         if shutdown.load(Ordering::Relaxed) {
@@ -673,6 +706,8 @@ impl TripleLossKmersGenerator {
                         park(); // Queue is full, park the thread...
                     }
                 }
+
+                println!("Out of the main loop...");
 
                 offset += 1;
 

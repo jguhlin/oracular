@@ -66,7 +66,10 @@ impl Iterator for SequenceSplitter3N {
                 while x == None {
                     let curseq = match self.sequences.next() {
                         Some(x) => x,
-                        None => { println!("Stop1"); return None },
+                        None => {
+                            println!("Stop1");
+                            return None;
+                        }
                     };
 
                     let coords: VecDeque<(usize, usize)>;
@@ -78,7 +81,10 @@ impl Iterator for SequenceSplitter3N {
                     self.coords = coords;
                     x = match self.coords.pop_front() {
                         Some(x) => Some(x),
-                        None => { println!("Stop2"); return None },
+                        None => {
+                            println!("Stop2");
+                            return None;
+                        }
                     }
                 }
 
@@ -121,7 +127,10 @@ impl Iterator for Sequences {
     fn next(&mut self) -> Option<Sequence> {
         let seq: Sequence = match bincode::deserialize_from(&mut self.reader) {
             Ok(x) => x,
-            Err(_) => {println!("SeqStop"); return None },
+            Err(_) => {
+                println!("SeqStop");
+                return None;
+            }
         };
         Some(seq)
     }
