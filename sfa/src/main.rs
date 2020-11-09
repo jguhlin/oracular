@@ -59,14 +59,14 @@ fn split(matches: &ArgMatches) {
 
     let out_train =
         File::create(output_prefix.to_string() + "_train.sfasta").expect("Unable to write to file");
-    let mut out_train = BufWriter::with_capacity(1024 * 1024, out_train);
+    let mut out_train = BufWriter::new(out_train);
 
     let out_valid = File::create(output_prefix.to_string() + "_validation.sfasta")
         .expect("Unable to write to file");
-    let mut out_valid = BufWriter::with_capacity(1024 * 1024, out_valid);
+    let mut out_valid = BufWriter::new(out_valid);
 
     let mut seqs = sfasta::Sequences::new(&sfasta_filename);
-    seqs.set_mode(sfasta::SeqMode::Random);
+    // seqs.set_mode(sfasta::SeqMode::Random);
     let seqs = seqs.into_compressed_sequences();
 
     let mut total_len = 0;
@@ -107,7 +107,9 @@ fn split(matches: &ArgMatches) {
             bincode::serialize_into(&mut out_valid, &s).expect("Unable to write to bincode output")
         });
 
+        // TODO: I don't think this is complete / working...
         println!("Training: {}\tValidation: {}", npct, n - npct);
+
     } else {
         for entry in seqs {
             total_len += entry.len;
