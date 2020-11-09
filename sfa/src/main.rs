@@ -49,6 +49,7 @@ fn convert(matches: &ArgMatches) {
 }
 
 fn split(matches: &ArgMatches) {
+    // TODO: Make the index as we go along, rather than at the end!
     let sfasta_filename = matches.value_of("input").unwrap();
     let output_prefix = matches.value_of("output").unwrap();
     let training_split = matches.value_of_t::<f32>("training").unwrap();
