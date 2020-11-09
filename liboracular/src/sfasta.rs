@@ -7,8 +7,8 @@ use std::io::{BufRead, BufReader, BufWriter, Read, SeekFrom, Write};
 use std::path::Path;
 use std::time::Instant;
 
-use crate::utils::generic_open_file;
 use crate::fasta;
+use crate::utils::generic_open_file;
 
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
@@ -80,15 +80,15 @@ impl Entry {
 
         // ZSTD Line
         let mut writer = if dict.is_some() {
-                zstd::stream::Encoder::with_dictionary(
-                    compressed_seq,
-                    compression_level,
-                    &dict.as_ref().unwrap(),
-                )
-                .unwrap()
-            } else {
-                zstd::stream::Encoder::new(compressed_seq, compression_level).unwrap()
-            };
+            zstd::stream::Encoder::with_dictionary(
+                compressed_seq,
+                compression_level,
+                &dict.as_ref().unwrap(),
+            )
+            .unwrap()
+        } else {
+            zstd::stream::Encoder::new(compressed_seq, compression_level).unwrap()
+        };
         writer
             .write_all(&seq)
             .expect("Unable to write to vector...");
@@ -407,13 +407,13 @@ pub fn build_zstd_dict(filename: &str) -> Option<Vec<u8>> {
     }
 }
 
-use std::thread;
-use std::thread::{park, JoinHandle};
+use crossbeam::queue::ArrayQueue;
+use crossbeam::utils::Backoff;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::Arc;
-use crossbeam::queue::ArrayQueue;
-use crossbeam::utils::Backoff;
+use std::thread;
+use std::thread::{park, JoinHandle};
 
 /// Converts a FASTA file to an SFASTA file...
 pub fn convert_fasta_file(filename: &str, output: &str)
@@ -486,10 +486,12 @@ pub fn convert_fasta_file(filename: &str, output: &str)
                 match result {
                     None => {
                         backoff.snooze();
-                        if shutdown.load(Ordering::Relaxed) && ce.load(Ordering::Relaxed) == te.load(Ordering::Relaxed) {
+                        if shutdown.load(Ordering::Relaxed)
+                            && ce.load(Ordering::Relaxed) == te.load(Ordering::Relaxed)
+                        {
                             return;
                         }
-                    },
+                    }
                     Some(x) => {
                         // let x = result.unwrap();
                         let mut entry: EntryCompressed = generate_sfasta_compressed_entry(
@@ -535,12 +537,13 @@ pub fn convert_fasta_file(filename: &str, output: &str)
                     }
                     backoff.snooze();
                     if (written_entries.load(Ordering::Relaxed) == te.load(Ordering::Relaxed))
-                        && shutdown.load(Ordering::Relaxed) {
+                        && shutdown.load(Ordering::Relaxed)
+                    {
                         drop(out_fh);
                         create_index(&output_filename, ids, locations);
                         return;
                     }
-                },
+                }
                 Some(cs) => {
                     ids.push(cs.id.clone());
                     locations.push(pos);
@@ -564,7 +567,6 @@ pub fn convert_fasta_file(filename: &str, output: &str)
             backoff.snooze();
         }
         total_entries.fetch_add(1, Ordering::SeqCst);
-
     });
 
     while queue.len() > 0 || output_queue.len() > 0 {
@@ -573,7 +575,9 @@ pub fn convert_fasta_file(filename: &str, output: &str)
 
     shutdown.store(true, Ordering::SeqCst);
 
-    output_thread.join().expect("Unable to join the output thread back...");
+    output_thread
+        .join()
+        .expect("Unable to join the output thread back...");
 }
 
 /// Get all IDs from an SFASTA file
@@ -712,8 +716,10 @@ fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>)> {
     let (_, _, mut idxfh) = generic_open_file(&idx_filename);
     // let idx: HashMap<String, u64>;
     // let idx: HashMap<String, u64>;
-    // idx = bincode::deserialize_from(&mut idxfh).expect("Unable to open Index file");
-    let length: u64 = bincode::deserialize_from(&mut idxfh).expect("Unable to read length of index");
+    // idx = bincode::deserialize_from(&mut idxfh).expect("Unable to open Index
+    // file");
+    let length: u64 =
+        bincode::deserialize_from(&mut idxfh).expect("Unable to read length of index");
     let mut keys: Vec<String> = Vec::with_capacity(length as usize);
     keys = bincode::deserialize_from(&mut idxfh).expect("Unable to read idx keys");
     let mut vals: Vec<u64> = Vec::with_capacity(length as usize);
@@ -726,10 +732,10 @@ fn create_index(filename: &str, ids: Vec<String>, locations: Vec<u64>) -> String
     let idx: HashMap<String, u64> = ids.into_iter().zip(locations).collect();
 
     let mut sorted: Vec<_> = idx.into_iter().collect();
-    sorted.sort_by(|x,y| x.0.cmp(&y.0));
+    sorted.sort_by(|x, y| x.0.cmp(&y.0));
     let keys: Vec<_> = sorted.iter().map(|x| x.0.clone()).collect();
     let vals: Vec<_> = sorted.iter().map(|x| x.1.clone()).collect();
-    
+
     let output_filename = get_index_filename(filename);
 
     let out_file = snap::write::FrameEncoder::new(
@@ -738,7 +744,7 @@ fn create_index(filename: &str, ids: Vec<String>, locations: Vec<u64>) -> String
 
     let mut out_fh = BufWriter::with_capacity(1024 * 1024, out_file);
     // bincode::serialize_into(&mut out_fh, &idx).expect("Unable to write index");
-    
+
     bincode::serialize_into(&mut out_fh, &(keys.len() as u64)).expect("Unable to write index");
     bincode::serialize_into(&mut out_fh, &keys).expect("Unable to write index");
     bincode::serialize_into(&mut out_fh, &vals).expect("Unable to write index");

@@ -227,8 +227,13 @@ mod tests {
 
     #[test]
     pub fn test_sequences_impl() {
-        sfasta::convert_fasta_file("test_data/test_multiple.fna", "test_data/test_sequences_impl.sfasta");
-        let seqs = Box::new(sfasta::Sequences::new("test_data/test_sequences_impl.sfasta"));
+        sfasta::convert_fasta_file(
+            "test_data/test_multiple.fna",
+            "test_data/test_sequences_impl.sfasta",
+        );
+        let seqs = Box::new(sfasta::Sequences::new(
+            "test_data/test_sequences_impl.sfasta",
+        ));
         let count = seqs.count();
         println!("Sequences Impl Count {}", count);
         assert!(count == 8);
