@@ -42,11 +42,11 @@ impl Iterator for Fasta {
         while let Ok(bytes_read) = self.reader.read_until(b'\n', &mut self.buffer) {
             if bytes_read == 0 {
                 if self.seqlen > 0 {
-                    self.seqlen = 0;
                     let seq = Sequence {
                         seq: self.seqbuffer[..self.seqlen].to_vec(),
                         id: self.next_seqid.clone().unwrap(),
                     };
+                    self.seqlen = 0;
                     return Some(seq);
                 } else {
                     return None;
@@ -113,5 +113,11 @@ mod tests {
         let fasta = Fasta::new("test_data/test.fna");
         let seq_ids: Vec<String> = fasta.map(|x| x.id).collect();
         assert!(seq_ids.len() == 1);
+        let mut fasta = Fasta::new("test_data/test.fna");
+        let x = fasta.next().unwrap();
+        println!("SeqID: {}", x.id);
+        println!("Seq: {}", std::str::from_utf8(&x.seq).unwrap());
+        println!("SeqLen: {}", x.seq.len());
+        assert!(x.seq.len() == 669);
     }
 }

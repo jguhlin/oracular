@@ -8,6 +8,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use crate::utils::generic_open_file;
+use crate::fasta;
 
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
@@ -40,7 +41,7 @@ pub enum SeqMode {
     Random,
 }
 
-#[derive(PartialEq, Serialize, Deserialize, Debug)]
+#[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub struct Header {
     pub id: Option<String>,
     pub comment: Option<String>,
@@ -79,15 +80,15 @@ impl Entry {
 
         // ZSTD Line
         let mut writer = if dict.is_some() {
-            zstd::stream::Encoder::with_dictionary(
-                compressed_seq,
-                compression_level,
-                &dict.as_ref().unwrap(),
-            )
-            .unwrap()
-        } else {
-            zstd::stream::Encoder::new(compressed_seq, compression_level).unwrap()
-        };
+                zstd::stream::Encoder::with_dictionary(
+                    compressed_seq,
+                    compression_level,
+                    &dict.as_ref().unwrap(),
+                )
+                .unwrap()
+            } else {
+                zstd::stream::Encoder::new(compressed_seq, compression_level).unwrap()
+            };
         writer
             .write_all(&seq)
             .expect("Unable to write to vector...");
@@ -182,7 +183,7 @@ impl From<Entry> for io::Sequence {
 pub struct CompressedSequences {
     pub header: Header,
     reader: Box<dyn ReadAndSeek + Send>,
-    pub idx: Option<HashMap<String, u64>>,
+    pub idx: Option<(Vec<String>, Vec<u64>)>,
     access: SeqMode,
     random_list: Option<Vec<u64>>,
 }
@@ -191,7 +192,7 @@ pub struct CompressedSequences {
 pub struct Sequences {
     pub header: Header,
     reader: Box<dyn ReadAndSeek + Send>,
-    pub idx: Option<HashMap<String, u64>>,
+    pub idx: Option<(Vec<String>, Vec<u64>)>,
     access: SeqMode,
     random_list: Option<Vec<u64>>,
 }
@@ -222,7 +223,7 @@ impl Sequences {
         if self.access == SeqMode::Random {
             assert!(self.idx.is_some());
             let idx = self.idx.as_ref().unwrap();
-            let mut locs: Vec<u64> = idx.values().map(|x| *x as u64).collect();
+            let mut locs: Vec<u64> = idx.1.clone();
             let mut rng = ChaCha20Rng::seed_from_u64(42);
             locs.shuffle(&mut rng);
             self.random_list = Some(locs);
@@ -338,7 +339,7 @@ fn generate_sfasta_compressed_entry(
 
 /// Opens an SFASTA file and an index and returns a Box<dyn Read>,
 /// HashMap<String, usize> type
-pub fn open_file(filename: &str) -> (Box<dyn ReadAndSeek + Send>, Option<HashMap<String, u64>>) {
+pub fn open_file(filename: &str) -> (Box<dyn ReadAndSeek + Send>, Option<(Vec<String>, Vec<u64>)>) {
     let filename = check_extension(filename);
 
     let file = match File::open(Path::new(&filename)) {
@@ -406,28 +407,31 @@ pub fn build_zstd_dict(filename: &str) -> Option<Vec<u8>> {
     }
 }
 
+use std::thread;
+use std::thread::{park, JoinHandle};
+use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, AtomicUsize};
+use std::sync::Arc;
+use crossbeam::queue::ArrayQueue;
+use crossbeam::utils::Backoff;
+
 /// Converts a FASTA file to an SFASTA file...
 pub fn convert_fasta_file(filename: &str, output: &str)
-// TODO: Convert to use FASTA iterator
 // TODO: Make multithreaded for very large datasets (>= 1Gbp or 5Gbp or something)
 // TODO: Add progress bar option ... or not..
 //
-// Convert file to bincode/snappy for faster processing
+// Convert file to bincode/zstd for faster processing
 // Stores accession/taxon information inside the Sequence struct
 {
-    let dict = build_zstd_dict(filename);
+    // let dict = build_zstd_dict(filename);
+    let dict = None;
 
     let output_filename = check_extension(output);
 
     let out_file = File::create(output_filename.clone()).expect("Unable to write to file");
     let mut out_fh = BufWriter::with_capacity(1024 * 1024, out_file);
 
-    let mut buffer: Vec<u8> = Vec::with_capacity(1024);
-    let mut id: String = String::from("INVALID_ID_FIRST_ENTRY_YOU_SHOULD_NOT_SEE_THIS");
-    let mut seqbuffer: Vec<u8> = Vec::with_capacity(32 * 1024 * 1024);
-    let mut seqlen: usize = 0;
-
-    let (filesize, _, fasta) = generic_open_file(filename);
+    let (filesize, _, _) = generic_open_file(filename);
 
     let header = Header {
         dict,
@@ -447,72 +451,129 @@ pub fn convert_fasta_file(filename: &str, output: &str)
         .seek(SeekFrom::Current(0))
         .expect("Unable to work with seek API");
 
-    let mut reader = BufReader::with_capacity(512 * 1024, fasta);
-    while let Ok(bytes_read) = reader.read_until(b'\n', &mut buffer) {
-        if bytes_read == 0 {
-            // No more reads, thus no more data...
-            // Write out the final piece...
-            ids.push(id.clone());
-            locations.push(pos);
-            let entry: EntryCompressed = generate_sfasta_compressed_entry(
-                id,
-                None,
-                seqbuffer[..seqlen].to_vec(),
-                CompressionType::ZSTD,
-                3,
-                &header.dict,
-            );
-            bincode::serialize_into(&mut out_fh, &entry)
-                .expect("Unable to write to bincode output");
+    let fasta = fasta::Fasta::new(filename);
 
-            break;
-        }
+    let thread_count = 64;
+    let queue_size = 1024;
 
-        match buffer[0] {
-            // 62 is a > meaning we have a new sequence id.
-            62 => {
-                // Write out entry...
-                if seqlen > 0 {
-                    // Ignore first one..
-                    ids.push(id.clone());
+    // multi-threading...
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let total_entries = Arc::new(AtomicUsize::new(0));
+    let compressed_entries = Arc::new(AtomicUsize::new(0));
+    let written_entries = Arc::new(AtomicUsize::new(0));
+
+    let queue: Arc<ArrayQueue<fasta::Sequence>> = Arc::new(ArrayQueue::new(queue_size));
+    let output_queue: Arc<ArrayQueue<EntryCompressed>> = Arc::new(ArrayQueue::new(queue_size));
+
+    let mut worker_handles = Vec::new();
+
+    for _ in 0..thread_count {
+        let q = Arc::clone(&queue);
+        let oq = Arc::clone(&output_queue);
+        let header_copy = header.clone();
+        let shutdown_copy = Arc::clone(&shutdown);
+        let te = Arc::clone(&total_entries);
+        let ce = Arc::clone(&compressed_entries);
+
+        let handle = thread::spawn(move || {
+            let shutdown = shutdown_copy;
+            let backoff = Backoff::new();
+            let header = header_copy;
+            let mut result;
+            loop {
+                result = q.pop();
+
+                match result {
+                    None => {
+                        backoff.snooze();
+                        if shutdown.load(Ordering::Relaxed) && ce.load(Ordering::Relaxed) == te.load(Ordering::Relaxed) {
+                            return;
+                        }
+                    },
+                    Some(x) => {
+                        // let x = result.unwrap();
+                        let mut entry: EntryCompressed = generate_sfasta_compressed_entry(
+                            x.id.clone(),
+                            None,
+                            x.seq.to_vec(),
+                            CompressionType::ZSTD,
+                            3,
+                            &header.dict,
+                        );
+
+                        while let Err(x) = oq.push(entry) {
+                            entry = x;
+                            park(); // Queue is full, park the thread...
+                        }
+                        ce.fetch_add(1, Ordering::SeqCst);
+                    }
+                }
+            }
+        });
+
+        worker_handles.push(handle);
+    }
+
+    let oq = Arc::clone(&output_queue);
+    let shutdown_copy = Arc::clone(&shutdown);
+    let q = Arc::clone(&queue);
+    let te = Arc::clone(&total_entries);
+
+    let output_thread = thread::spawn(move || {
+        let shutdown = shutdown_copy;
+        let output_queue = oq;
+        let backoff = Backoff::new();
+
+        let mut result;
+        loop {
+            result = output_queue.pop();
+            match result {
+                None => {
+                    // Unpark all other threads..
+                    for i in &worker_handles {
+                        i.thread().unpark();
+                    }
+                    backoff.snooze();
+                    if (written_entries.load(Ordering::Relaxed) == te.load(Ordering::Relaxed))
+                        && shutdown.load(Ordering::Relaxed) {
+                        drop(out_fh);
+                        create_index(&output_filename, ids, locations);
+                        return;
+                    }
+                },
+                Some(cs) => {
+                    ids.push(cs.id.clone());
                     locations.push(pos);
-                    let entry: EntryCompressed = generate_sfasta_compressed_entry(
-                        id,
-                        None,
-                        seqbuffer[..seqlen].to_vec(),
-                        CompressionType::ZSTD,
-                        3,
-                        &header.dict,
-                    );
-                    bincode::serialize_into(&mut out_fh, &entry)
+                    bincode::serialize_into(&mut out_fh, &cs)
                         .expect("Unable to write to bincode output");
-
                     pos = out_fh
                         .seek(SeekFrom::Current(0))
                         .expect("Unable to work with seek API");
-
-                    seqbuffer.clear();
-                    seqlen = 0;
+                    written_entries.fetch_add(1, Ordering::SeqCst);
                 }
-
-                let slice_end = bytes_read.saturating_sub(1);
-                id = String::from_utf8(buffer[1..slice_end].to_vec())
-                    .expect("Invalid UTF-8 encoding...");
-                id = id.split(' ').next().unwrap().trim().to_string();
-            }
-            _ => {
-                let slice_end = bytes_read.saturating_sub(1);
-                seqbuffer.extend_from_slice(&buffer[0..slice_end]);
-                seqlen = seqlen.saturating_add(slice_end);
             }
         }
+    });
 
-        buffer.clear();
+    let backoff = Backoff::new();
+    fasta.for_each(|x| {
+        let mut item;
+        item = x;
+        while let Err(x) = queue.push(item) {
+            item = x;
+            backoff.snooze();
+        }
+        total_entries.fetch_add(1, Ordering::SeqCst);
+
+    });
+
+    while queue.len() > 0 || output_queue.len() > 0 {
+        backoff.snooze();
     }
 
-    drop(out_fh);
+    shutdown.store(true, Ordering::SeqCst);
 
-    create_index(&output_filename, ids, locations);
+    output_thread.join().expect("Unable to join the output thread back...");
 }
 
 /// Get all IDs from an SFASTA file
@@ -641,7 +702,7 @@ fn get_index_filename(filename: &str) -> String {
     path + &filename
 }
 
-fn load_index(filename: &str) -> Option<HashMap<String, u64>> {
+fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>)> {
     let idx_filename = get_index_filename(filename);
     if !Path::new(&idx_filename).exists() {
         println!("IdxFile does not exist! {} {}", filename, idx_filename);
@@ -650,14 +711,25 @@ fn load_index(filename: &str) -> Option<HashMap<String, u64>> {
 
     let (_, _, mut idxfh) = generic_open_file(&idx_filename);
     // let idx: HashMap<String, u64>;
-    let idx: HashMap<String, u64>;
-    idx = bincode::deserialize_from(&mut idxfh).expect("Unable to open Index file");
-    Some(idx)
+    // let idx: HashMap<String, u64>;
+    // idx = bincode::deserialize_from(&mut idxfh).expect("Unable to open Index file");
+    let length: u64 = bincode::deserialize_from(&mut idxfh).expect("Unable to read length of index");
+    let mut keys: Vec<String> = Vec::with_capacity(length as usize);
+    keys = bincode::deserialize_from(&mut idxfh).expect("Unable to read idx keys");
+    let mut vals: Vec<u64> = Vec::with_capacity(length as usize);
+    vals = bincode::deserialize_from(&mut idxfh).expect("Unable to read idx values");
+
+    Some((keys, vals))
 }
 
 fn create_index(filename: &str, ids: Vec<String>, locations: Vec<u64>) -> String {
     let idx: HashMap<String, u64> = ids.into_iter().zip(locations).collect();
 
+    let mut sorted: Vec<_> = idx.into_iter().collect();
+    sorted.sort_by(|x,y| x.0.cmp(&y.0));
+    let keys: Vec<_> = sorted.iter().map(|x| x.0.clone()).collect();
+    let vals: Vec<_> = sorted.iter().map(|x| x.1.clone()).collect();
+    
     let output_filename = get_index_filename(filename);
 
     let out_file = snap::write::FrameEncoder::new(
@@ -665,7 +737,11 @@ fn create_index(filename: &str, ids: Vec<String>, locations: Vec<u64>) -> String
     );
 
     let mut out_fh = BufWriter::with_capacity(1024 * 1024, out_file);
-    bincode::serialize_into(&mut out_fh, &idx).expect("Unable to write index");
+    // bincode::serialize_into(&mut out_fh, &idx).expect("Unable to write index");
+    
+    bincode::serialize_into(&mut out_fh, &(keys.len() as u64)).expect("Unable to write index");
+    bincode::serialize_into(&mut out_fh, &keys).expect("Unable to write index");
+    bincode::serialize_into(&mut out_fh, &vals).expect("Unable to write index");
 
     output_filename
 }
@@ -698,7 +774,7 @@ mod tests {
         let (mut reader, idx) = open_file(output_filename);
 
         let idx = idx.unwrap();
-        let i: Vec<&u64> = idx.values().skip(2).take(1).collect();
+        let i: Vec<&u64> = idx.1.iter().skip(2).take(1).collect();
 
         reader
             .seek(SeekFrom::Start(*i[0]))

@@ -612,29 +612,29 @@ mod tests {
         println!("Count: {}", count);
         assert!(count == 49);
 
-        crate::sfasta::convert_fasta_file("test_data/test.fna", "test_data/test.sfasta");
+        crate::sfasta::convert_fasta_file("test_data/test.fna", "test_data/test_kmer_coords_window_generator.sfasta");
 
-        let mut kmers = KmerWindowGenerator::new("test_data/test.sfasta", 3, 3, 0, false, false);
+        let mut kmers = KmerWindowGenerator::new("test_data/test_kmer_coords_window_generator.sfasta", 3, 3, 0, false, false);
 
         let skipped = kmers.nth(2).expect("Unable to skip ahead");
         assert!(skipped.kmers[0] == b"NAC");
 
         crate::sfasta::convert_fasta_file(
             "test_data/test_single.fna",
-            "test_data/test_single.sfasta",
+            "test_data/test_kmer_coords_window_generator.sfasta",
         );
 
         let mut kmers =
-            KmerWindowGenerator::new("test_data/test_single.sfasta", 10, 2, 0, false, false);
+            KmerWindowGenerator::new("test_data/test_kmer_coords_window_generator.sfasta", 10, 2, 0, false, false);
         kmers.next().expect("Unable to get KmerWindow");
 
         crate::sfasta::convert_fasta_file(
             "test_data/test_multiple.fna",
-            "test_data/test_multiple_kmer_window_generator.sfasta",
+            "test_data/test_kmer_coords_window_generator.sfasta",
         );
 
         let mut kmers = KmerWindowGenerator::new(
-            "test_data/test_multiple_kmer_window_generator.sfasta",
+            "test_data/test_kmer_coords_window_generator.sfasta",
             5,
             5,
             0,
@@ -646,7 +646,7 @@ mod tests {
         }
 
         let mut kmers = KmerWindowGenerator::new(
-            "test_data/test_multiple_kmer_window_generator.sfasta",
+            "test_data/test_kmer_coords_window_generator.sfasta",
             5,
             5,
             0,
@@ -675,8 +675,12 @@ mod tests {
 
     #[test]
     pub fn test_convert_kmerwindow_to_rc() {
+        crate::sfasta::convert_fasta_file(
+            "test_data/test_single.fna",
+            "test_data/test_convert_kmerwindow_to_rc.sfasta",
+        );
         let mut kmers =
-            KmerWindowGenerator::new("test_data/test_single.sfasta", 10, 2, 0, false, false);
+            KmerWindowGenerator::new("test_data/test_convert_kmerwindow_to_rc.sfasta", 10, 2, 0, false, false);
         let window = kmers.next().expect("Unable to get KmerWindow");
         println!(
             "{:#?}",

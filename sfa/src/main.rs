@@ -83,7 +83,7 @@ fn split(matches: &ArgMatches) {
     // Split (based on number of sequences, or on total seq length)
 
     assert!(seqs.idx.is_some());
-    let n = seqs.idx.as_ref().unwrap().len();
+    let n = seqs.idx.as_ref().unwrap().0.len();
 
     let pb = ProgressBar::new(n as u64);
 
@@ -153,7 +153,7 @@ fn stats(matches: &ArgMatches) {
     let seqs = seqs.into_compressed_sequences();
 
     println!("Index Available: {}", idx.is_some());
-    println!("Index Length: {}", idx.unwrap().len());
+    println!("Index Length: {}", idx.unwrap().0.len());
     println!("Header ID: {}", seqs.header.id.as_ref().unwrap());
     println!("Header Comment: {:#?}", seqs.header.comment);
     println!("Header Citation: {:#?}", seqs.header.citation);
