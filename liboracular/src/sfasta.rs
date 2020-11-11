@@ -245,13 +245,12 @@ impl Sequences {
 
         let file_pos = self.idx.as_ref().unwrap().1[pos].clone();
         self.get_at(file_pos)
-        
     }
 
     pub fn get_at(&mut self, file_pos: u64) -> Option<io::Sequence> {
         self.reader
-                .seek(SeekFrom::Start(file_pos))
-                .expect("Unable to work with seek API");
+            .seek(SeekFrom::Start(file_pos))
+            .expect("Unable to work with seek API");
 
         let ec: EntryCompressed = match bincode::deserialize_from(&mut self.reader) {
             Ok(x) => x,
@@ -741,15 +740,31 @@ fn get_index_filename(filename: &str) -> String {
 }
 
 fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>)> {
-
     if IDXCACHE.get().is_none() {
-        IDXCACHE.set(Arc::new(RwLock::new(HashMap::new()))).expect("Unable to set IDXCACHE");
+        IDXCACHE
+            .set(Arc::new(RwLock::new(HashMap::new())))
+            .expect("Unable to set IDXCACHE");
     }
 
     let idx_filename = get_index_filename(filename);
 
-    if IDXCACHE.get().unwrap().read().unwrap().contains_key(&idx_filename) {
-        return Some(IDXCACHE.get().unwrap().read().unwrap().get(&idx_filename).unwrap().clone())
+    if IDXCACHE
+        .get()
+        .unwrap()
+        .read()
+        .unwrap()
+        .contains_key(&idx_filename)
+    {
+        return Some(
+            IDXCACHE
+                .get()
+                .unwrap()
+                .read()
+                .unwrap()
+                .get(&idx_filename)
+                .unwrap()
+                .clone(),
+        );
     }
 
     if !Path::new(&idx_filename).exists() {

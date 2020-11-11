@@ -110,7 +110,6 @@ fn split(matches: &ArgMatches) {
 
         // TODO: I don't think this is complete / working...
         println!("Training: {}\tValidation: {}", npct, n - npct);
-
     } else {
         for entry in seqs {
             total_len += entry.len;

@@ -447,6 +447,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "jetscii"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f25cca2463cb19dbb1061eb3bd38a8b5e4ce1cc5a5a9fc0e02de486d92b9b05"
+
+[[package]]
 name = "jobserver"
 version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -489,6 +495,7 @@ dependencies = [
  "hashbrown",
  "indicatif",
  "itertools",
+ "jetscii",
  "lazy_static",
  "linked_hash_set",
  "ndarray",

@@ -22,7 +22,9 @@ pub struct Sequence {
 pub struct SequenceSplitter3N {
     sequences: Box<dyn Iterator<Item = io::Sequence> + Send>,
     curseq: Sequence,
-    coords: VecDeque<(usize, usize)>,
+    seqstr: String,
+    curpos: usize,
+    curlen: usize,
 }
 
 impl SequenceSplitter3N {
@@ -32,17 +34,15 @@ impl SequenceSplitter3N {
             None => panic!("File is empty!"),
         };
 
-        let coords: VecDeque<(usize, usize)>;
-        coords = crate::utils::get_good_sequence_coords(&curseq.seq)
-            .into_iter()
-            .collect();
-
-        // println!("{:#?}", coords);
+        let seqstr = std::str::from_utf8(&curseq.seq).unwrap().to_string();
+        let curlen = seqstr.len();
 
         SequenceSplitter3N {
             sequences,
             curseq,
-            coords,
+            seqstr,
+            curpos: 0,
+            curlen,
         }
     }
 }
@@ -59,38 +59,34 @@ impl Iterator for SequenceSplitter3N {
     type Item = Sequence;
 
     fn next(&mut self) -> Option<Sequence> {
-        let coords = match self.coords.pop_front() {
-            Some(x) => x,
-            None => {
-                let mut x = None;
-                while x == None {
-                    let curseq = match self.sequences.next() {
-                        Some(x) => x,
-                        None => {
-                            // println!("Stop1");
-                            return None;
-                        }
-                    };
-
-                    let coords: VecDeque<(usize, usize)>;
-                    coords = crate::utils::get_good_sequence_coords(&curseq.seq)
-                        .into_iter()
-                        .collect();
-
-                    self.curseq = curseq;
-                    self.coords = coords;
-                    x = match self.coords.pop_front() {
-                        Some(x) => Some(x),
-                        None => {
-                            println!("Stop2");
-                            return None;
-                        }
-                    }
+        if curlen == curpos {
+            self.curpos = 0;
+            let curseq = match self.sequences.next() {
+                Some(x) => x,
+                None => {
+                    // println!("Stop1");
+                    return None;
                 }
+            };
+            self.curlen = curseq.seq.len();
+            self.seqstr = std::str::from_utf8(&curseq.seq).unwrap().to_string();
+            self.curseq = curseq;
+        }
 
-                x.unwrap()
-            }
-        };
+        let startloc;
+        let endloc;
+
+        if bytecount::count(&self.curseq.seq, b'N') < 3 {
+            startloc = 0;
+            endloc = self.curlen;
+            self.curpos = self.curseq.curlen;
+        } else {
+            startloc = self.curseq.seq[self.curpos..].windows(3).enumerate()
+                .filter(|(_y, &x)|
+                bytecount::count(&x, b'N') < 3)
+            .map(|(y, _x)| y).nth(0).unwrap();
+
+        }
 
         Some(Sequence {
             id: self.curseq.id.clone(),

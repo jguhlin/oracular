@@ -229,11 +229,10 @@ impl KmerWindowGenerator {
         window_size: usize,
         offset: usize,
         rc: bool,
-
     ) -> KmerWindowGenerator {
         let mut sequences = Vec::new();
         sequences.push(sequence);
-        
+
         let mut sequences = Box::new(io::SequenceSplitter3N::new(Box::new(sequences.into_iter())));
         let mut curseq = match sequences.next() {
             Some(x) => x,
@@ -287,7 +286,7 @@ impl Iterator for KmerWindowGenerator {
         // generators deal with removing them or not...
         while (self.kmer_generator.len - self.kmer_generator.curpos) <= self.needed_sequence {
             let mut curseq: io::Sequence = match self.sequences.next() {
-                Some(x) => { x },
+                Some(x) => x,
                 None => {
                     // println!("No more seqs...");
                     return None;
@@ -335,7 +334,7 @@ impl Iterator for KmerWindowGenerator {
         }
 
         if kmers.len() == 0 {
-            return None
+            return None;
         }
 
         Some(KmerWindow {

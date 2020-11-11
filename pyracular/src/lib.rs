@@ -557,7 +557,7 @@ impl TripleLossKmersGenerator {
 
             // let headers = sfasta.idx.as_ref().unwrap().0.clone();
             let locs = sfasta.idx.as_ref().unwrap().1.clone();
-            
+
             // TODO: Make even smarter -- Load up 1k windows and pick from there matching
             // and non-matching ones, including some RC ones as well...
 
@@ -622,7 +622,13 @@ impl TripleLossKmersGenerator {
                         let len = seq.seq.len() - (window_size * k) - k;
                         seq.seq = seq.seq[0..rng.gen_range(0, len)].to_vec();
 
-                        let mut iter2 = KmerWindowGenerator::from_sequence(seq, k, window_size, rng.gen_range(0, k), rng.gen());
+                        let mut iter2 = KmerWindowGenerator::from_sequence(
+                            seq,
+                            k,
+                            window_size,
+                            rng.gen_range(0, k),
+                            rng.gen(),
+                        );
 
                         //let allwindows: Vec<KmerWindow> = iter2.collect();
                         //item2 = allwindows.choose(&mut rng).unwrap().clone();
@@ -630,15 +636,15 @@ impl TripleLossKmersGenerator {
                             Some(x) => x,
                             None => continue,
                         };
-                        //drop(allwindows);
-/*
-                        item2 = match iter2.skip(rng.gen_range(0, total_kmers-1)).next() {
-                            Some(x) => x,
-                            None => {
-                                println!("Continue1...");
-                                continue;
-                            }
-                        }; */
+                    //drop(allwindows);
+                    /*
+                    item2 = match iter2.skip(rng.gen_range(0, total_kmers-1)).next() {
+                        Some(x) => x,
+                        None => {
+                            println!("Continue1...");
+                            continue;
+                        }
+                    }; */
                     // RC
                     } else if choice == 1 {
                         matched = true;
@@ -665,7 +671,13 @@ impl TripleLossKmersGenerator {
                         let len = seq.seq.len() - (window_size * k) - k;
                         seq.seq = seq.seq[0..rng.gen_range(0, len)].to_vec();
 
-                        let mut iter2 = KmerWindowGenerator::from_sequence(seq, k, window_size, rng.gen_range(0, k), rng.gen());
+                        let mut iter2 = KmerWindowGenerator::from_sequence(
+                            seq,
+                            k,
+                            window_size,
+                            rng.gen_range(0, k),
+                            rng.gen(),
+                        );
 
                         //let allwindows: Vec<KmerWindow> = iter2.collect();
                         //item2 = allwindows.choose(&mut rng).unwrap().clone();
@@ -674,7 +686,7 @@ impl TripleLossKmersGenerator {
                             None => continue,
                         };
 
-/*                        item2 = match iter2.skip(rng.gen_range(0, total_kmers-1)).next() {
+                        /*                        item2 = match iter2.skip(rng.gen_range(0, total_kmers-1)).next() {
                             Some(x) => x,
                             None => {
                                 println!("Continue2...");
