@@ -553,15 +553,17 @@ impl TripleLossKmersGenerator {
             let mut rc = false;
             let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
 
+            let mut sfasta = sfasta::Sequences::new(&filename);
+
+            // let headers = sfasta.idx.as_ref().unwrap().0.clone();
+            let locs = sfasta.idx.as_ref().unwrap().1.clone();
+            
             // TODO: Make even smarter -- Load up 1k windows and pick from there matching
             // and non-matching ones, including some RC ones as well...
+
             loop {
-                //println!("Counter: {}", counter);
                 // Create KmerWindowGenerator
                 let mut iter1 =
-                    KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
-
-                let mut iter2 =
                     KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
 
                 loop {
@@ -589,7 +591,16 @@ impl TripleLossKmersGenerator {
                         }
                     };
 
-                    // Let's have matched sequence...
+                    while item1.kmers.len() < window_size {
+                        item1 = match iter1.next() {
+                            Some(x) => x,
+                            None => {
+                                break;
+                            }
+                        };
+                    }
+
+                    // Matched Sequence
                     if choice == 0 {
                         matched = true;
                         reversecomplement = false;
@@ -607,25 +618,36 @@ impl TripleLossKmersGenerator {
                             }
                         };
 
-                        while item1.id != item2.id {
-                            item1 = item2.clone();
+                        let mut seq = sfasta.get(&item1.id).unwrap();
+                        let len = seq.seq.len() - (window_size * k) - k;
+                        seq.seq = seq.seq[0..rng.gen_range(0, len)].to_vec();
 
-                            item2 = match iter1.next() {
-                                Some(x) => x,
-                                None => {
-                                    break;
-                                }
-                            };
-                        }
+                        let mut iter2 = KmerWindowGenerator::from_sequence(seq, k, window_size, rng.gen_range(0, k), rng.gen());
+
+                        //let allwindows: Vec<KmerWindow> = iter2.collect();
+                        //item2 = allwindows.choose(&mut rng).unwrap().clone();
+                        item2 = match iter2.next() {
+                            Some(x) => x,
+                            None => continue,
+                        };
+                        //drop(allwindows);
+/*
+                        item2 = match iter2.skip(rng.gen_range(0, total_kmers-1)).next() {
+                            Some(x) => x,
+                            None => {
+                                println!("Continue1...");
+                                continue;
+                            }
+                        }; */
+                    // RC
                     } else if choice == 1 {
-                        // RC
                         matched = true;
                         reversecomplement = true;
 
                         item2 = item1.clone();
                         item2 = rc_kmerwindow(item2);
 
-                    // Third option, not matched sequence...
+                    // Not matching sequence...
                     } else {
                         matched = false;
                         reversecomplement = false;
@@ -637,25 +659,28 @@ impl TripleLossKmersGenerator {
                             }
                         };
 
-                        item2 = match iter1.next() {
+                        let loc = locs.choose(&mut rng).unwrap().clone();
+                        // Chance of loc being the same as input is minimal...
+                        let mut seq = sfasta.get_at(loc).unwrap();
+                        let len = seq.seq.len() - (window_size * k) - k;
+                        seq.seq = seq.seq[0..rng.gen_range(0, len)].to_vec();
+
+                        let mut iter2 = KmerWindowGenerator::from_sequence(seq, k, window_size, rng.gen_range(0, k), rng.gen());
+
+                        //let allwindows: Vec<KmerWindow> = iter2.collect();
+                        //item2 = allwindows.choose(&mut rng).unwrap().clone();
+                        item2 = match iter2.next() {
                             Some(x) => x,
-                            None => {
-                                break;
-                            }
+                            None => continue,
                         };
 
-                        if rng.gen::<bool>() {
-                            iter2.next();
-                        }
-
-                        while item1.id == item2.id {
-                            item2 = match iter2.next() {
-                                Some(x) => x,
-                                None => {
-                                    break;
-                                }
-                            };
-                        }
+/*                        item2 = match iter2.skip(rng.gen_range(0, total_kmers-1)).next() {
+                            Some(x) => x,
+                            None => {
+                                println!("Continue2...");
+                                continue;
+                            }
+                        }; */
                     }
 
                     let KmerWindow {
@@ -692,6 +717,7 @@ impl TripleLossKmersGenerator {
                             return; // We are done, something triggered a
                                     // shutdown...
                         }
+                        println!("Queue is full...");
                         batch = x;
                         park(); // Queue is full, park the thread...
                     }
@@ -705,6 +731,8 @@ impl TripleLossKmersGenerator {
                     offset = 0;
                     rc = true;
                 }
+
+                println!("Offset: {} RC: {}", offset, rc);
             }
         });
 

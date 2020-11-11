@@ -11,11 +11,16 @@ use crate::fasta;
 use crate::utils::generic_open_file;
 
 use rand::prelude::*;
+use rand::Rng;
 use rand_chacha::ChaCha20Rng;
 
 use serde::{Deserialize, Serialize};
 
 use crate::io;
+
+use once_cell::sync::OnceCell;
+use std::sync::{Arc, RwLock};
+static IDXCACHE: OnceCell<Arc<RwLock<HashMap<String, (Vec<String>, Vec<u64>)>>>> = OnceCell::new();
 
 // SuperTrait
 pub trait ReadAndSeek: Read + Seek + Send {}
@@ -232,6 +237,36 @@ impl Sequences {
         }
     }
 
+    pub fn get(&mut self, id: &str) -> Option<io::Sequence> {
+        let pos = match self.idx.as_ref().unwrap().0.binary_search(&id.to_string()) {
+            Ok(x) => x,
+            Err(_) => return None,
+        };
+
+        let file_pos = self.idx.as_ref().unwrap().1[pos].clone();
+        self.get_at(file_pos)
+        
+    }
+
+    pub fn get_at(&mut self, file_pos: u64) -> Option<io::Sequence> {
+        self.reader
+                .seek(SeekFrom::Start(file_pos))
+                .expect("Unable to work with seek API");
+
+        let ec: EntryCompressed = match bincode::deserialize_from(&mut self.reader) {
+            Ok(x) => x,
+            Err(_) => return None, // panic!("Error at SFASTA::Sequences::next: {}", y)
+        };
+
+        // Have to convert from EntryCompressed to Entry, this handles that middle
+        // conversion.
+        let middle: Entry = ec.decompress(&self.header.dict);
+        let mut seq: io::Sequence = middle.into();
+        seq.make_uppercase();
+
+        Some(seq)
+    }
+
     // Convert to iterator that only returns EntryCompressed...
     pub fn into_compressed_sequences(self) -> CompressedSequences {
         let Sequences {
@@ -411,7 +446,6 @@ use crossbeam::queue::ArrayQueue;
 use crossbeam::utils::Backoff;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicUsize};
-use std::sync::Arc;
 use std::thread;
 use std::thread::{park, JoinHandle};
 
@@ -707,7 +741,17 @@ fn get_index_filename(filename: &str) -> String {
 }
 
 fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>)> {
+
+    if IDXCACHE.get().is_none() {
+        IDXCACHE.set(Arc::new(RwLock::new(HashMap::new()))).expect("Unable to set IDXCACHE");
+    }
+
     let idx_filename = get_index_filename(filename);
+
+    if IDXCACHE.get().unwrap().read().unwrap().contains_key(&idx_filename) {
+        return Some(IDXCACHE.get().unwrap().read().unwrap().get(&idx_filename).unwrap().clone())
+    }
+
     if !Path::new(&idx_filename).exists() {
         println!("IdxFile does not exist! {} {}", filename, idx_filename);
         return None;
@@ -724,6 +768,9 @@ fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>)> {
     keys = bincode::deserialize_from(&mut idxfh).expect("Unable to read idx keys");
     let mut vals: Vec<u64> = Vec::with_capacity(length as usize);
     vals = bincode::deserialize_from(&mut idxfh).expect("Unable to read idx values");
+
+    let mut idxcache = IDXCACHE.get().unwrap().write().unwrap();
+    idxcache.insert(idx_filename.clone(), (keys.clone(), vals.clone()));
 
     Some((keys, vals))
 }

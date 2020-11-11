@@ -222,6 +222,59 @@ impl KmerWindowGenerator {
             rc,
         }
     }
+
+    pub fn from_sequence(
+        sequence: io::Sequence,
+        k: usize,
+        window_size: usize,
+        offset: usize,
+        rc: bool,
+
+    ) -> KmerWindowGenerator {
+        let mut sequences = Vec::new();
+        sequences.push(sequence);
+        
+        let mut sequences = Box::new(io::SequenceSplitter3N::new(Box::new(sequences.into_iter())));
+        let mut curseq = match sequences.next() {
+            Some(x) => x,
+            None => panic!("File is empty or invalid format!"),
+        };
+
+        if rc {
+            let io::Sequence {
+                id,
+                mut seq,
+                location,
+                end,
+            } = curseq;
+
+            utils::complement_nucleotides(&mut seq);
+            seq.reverse();
+
+            // TODO: How to deal with rc?
+
+            curseq = io::Sequence {
+                id,
+                seq,
+                location,
+                end,
+            };
+        }
+
+        let kmer_generator = Kmers::new(curseq.seq.clone(), k, offset, rc);
+        let needed_sequence = k;
+
+        KmerWindowGenerator {
+            sequences,
+            window_size,
+            k,
+            kmer_generator,
+            needed_sequence,
+            curseq,
+            offset,
+            rc,
+        }
+    }
 }
 
 impl Iterator for KmerWindowGenerator {
@@ -234,7 +287,7 @@ impl Iterator for KmerWindowGenerator {
         // generators deal with removing them or not...
         while (self.kmer_generator.len - self.kmer_generator.curpos) <= self.needed_sequence {
             let mut curseq: io::Sequence = match self.sequences.next() {
-                Some(x) => x,
+                Some(x) => { x },
                 None => {
                     // println!("No more seqs...");
                     return None;
@@ -277,8 +330,12 @@ impl Iterator for KmerWindowGenerator {
                         panic!("Invalid Kmer");
                     }
                 }
-                None => continue,
+                None => break,
             };
+        }
+
+        if kmers.len() == 0 {
+            return None
         }
 
         Some(KmerWindow {
