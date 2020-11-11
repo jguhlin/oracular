@@ -31,6 +31,7 @@ pub fn generic_open_file(filename: &str) -> (usize, bool, Box<dyn Read + Send>) 
     (filesize as usize, compressed, fasta)
 }
 
+/*
 pub fn get_good_sequence_coords(seq: &[u8]) -> Vec<(usize, usize)> {
     let mut start: Option<usize> = None;
     let mut end: usize;
@@ -85,6 +86,7 @@ pub fn get_good_sequence_coords(seq: &[u8]) -> Vec<(usize, usize)> {
 
     coords
 }
+*/
 
 // Copied from opinionated lib...
 // Mutability here because we change everything to uppercase

@@ -93,7 +93,7 @@ impl ThreadCommand<SequenceBatchKmers> {
         }
     }
 }
-
+/*
 // Takes a file and submits Sequence type to buffers...
 // Fills up the seq_buffer that it returns
 // UP TO the calling fn/thread to handle clean-up...
@@ -310,3 +310,4 @@ fn io_worker_thread(
         }
     }
 }
+*/

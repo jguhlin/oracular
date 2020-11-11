@@ -59,7 +59,7 @@ impl Iterator for SequenceSplitter3N {
     type Item = Sequence;
 
     fn next(&mut self) -> Option<Sequence> {
-        if curlen == curpos {
+        if self.curlen == self.curpos {
             self.curpos = 0;
             let curseq = match self.sequences.next() {
                 Some(x) => x,
@@ -79,20 +79,25 @@ impl Iterator for SequenceSplitter3N {
         if bytecount::count(&self.curseq.seq, b'N') < 3 {
             startloc = 0;
             endloc = self.curlen;
-            self.curpos = self.curseq.curlen;
         } else {
             startloc = self.curseq.seq[self.curpos..].windows(3).enumerate()
-                .filter(|(_y, &x)|
-                bytecount::count(&x, b'N') < 3)
+                .filter(|(_y, x)|
+                    bytecount::count(&x, b'N') < 3)
             .map(|(y, _x)| y).nth(0).unwrap();
 
+            endloc = self.curseq.seq[self.curpos..].windows(3).enumerate()
+                .filter(|(_y, x)|
+                    bytecount::count(&x, b'N') == 3)
+            .map(|(y, _x)| y).nth(0).unwrap_or(self.curlen);
         }
+
+        self.curpos = endloc;
 
         Some(Sequence {
             id: self.curseq.id.clone(),
-            seq: self.curseq.seq[coords.0..coords.1].to_vec(),
-            location: coords.0 as usize,
-            end: coords.1 as usize,
+            seq: self.curseq.seq[startloc..endloc].to_vec(),
+            location: startloc as usize,
+            end: endloc as usize,
         })
     }
 }
