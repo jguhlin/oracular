@@ -11,7 +11,6 @@ use crate::fasta;
 use crate::utils::generic_open_file;
 
 use rand::prelude::*;
-use rand::Rng;
 use rand_chacha::ChaCha20Rng;
 
 use serde::{Deserialize, Serialize};
@@ -296,10 +295,13 @@ impl Iterator for Sequences {
         if self.access == SeqMode::Random {
             assert!(self.random_list.is_some());
             let rl = self.random_list.as_mut().unwrap();
-            let next_loc = rl.pop();
-            next_loc?;
+            let next_loc = match rl.pop() {
+                Some(x) => x,
+                None => return None
+            };
+
             self.reader
-                .seek(SeekFrom::Start(next_loc.unwrap()))
+                .seek(SeekFrom::Start(next_loc))
                 .expect("Unable to work with seek API");
         }
 
@@ -446,7 +448,7 @@ use crossbeam::utils::Backoff;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::thread;
-use std::thread::{park, JoinHandle};
+use std::thread::{park};
 
 /// Converts a FASTA file to an SFASTA file...
 pub fn convert_fasta_file(filename: &str, output: &str)
@@ -593,8 +595,8 @@ pub fn convert_fasta_file(filename: &str, output: &str)
 
     let backoff = Backoff::new();
     fasta.for_each(|x| {
-        let mut item;
-        item = x;
+        // println!("{:#?}", std::str::from_utf8(&x.seq).unwrap());
+        let mut item = x;
         while let Err(x) = queue.push(item) {
             item = x;
             backoff.snooze();
@@ -739,6 +741,18 @@ fn get_index_filename(filename: &str) -> String {
     path + &filename
 }
 
+pub fn clear_idxcache() {
+    if IDXCACHE.get().is_none() {
+        IDXCACHE
+            .set(Arc::new(RwLock::new(HashMap::new())))
+            .expect("Unable to set IDXCACHE");
+    }
+
+    let mut idxcache = IDXCACHE.get().unwrap().write().unwrap();
+    *idxcache = HashMap::new();
+
+}
+
 fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>)> {
     if IDXCACHE.get().is_none() {
         IDXCACHE
@@ -824,6 +838,7 @@ mod tests {
         let input_filename = "test_data/test_multiple.fna";
         let output_filename = "test_data/test_sfasta_convert_and_index.sfasta";
 
+        clear_idxcache();
         convert_fasta_file(input_filename, output_filename);
 
         let idx_filename = index(output_filename);
@@ -837,6 +852,7 @@ mod tests {
         let input_filename = "test_data/test_multiple.fna";
         let output_filename = "test_data/test_index.sfasta";
 
+        clear_idxcache();
         convert_fasta_file(input_filename, output_filename);
 
         let (mut reader, idx) = open_file(output_filename);
@@ -858,6 +874,7 @@ mod tests {
         let input_filename = "test_data/test_multiple.fna";
         let output_filename = "test_data/test_random.sfasta";
 
+        clear_idxcache();
         convert_fasta_file(input_filename, output_filename);
 
         let mut sequences = Sequences::new(output_filename);

@@ -42,6 +42,7 @@ impl Iterator for Fasta {
         while let Ok(bytes_read) = self.reader.read_until(b'\n', &mut self.buffer) {
             if bytes_read == 0 {
                 if self.seqlen > 0 {
+                    // println!("{:#?}", std::str::from_utf8(&self.seqbuffer[..self.seqlen]).unwrap());
                     let seq = Sequence {
                         seq: self.seqbuffer[..self.seqlen].to_vec(),
                         id: self.next_seqid.clone().unwrap(),
@@ -55,7 +56,12 @@ impl Iterator for Fasta {
                 match self.buffer[0] {
                     // 62 is a > meaning we have a new sequence id.
                     62 => {
-                        let slice_end = bytes_read.saturating_sub(1);
+                        let slice_end = if self.buffer[bytes_read-1] == b'\n' {
+                            bytes_read.saturating_sub(1)
+                        } else {
+                            bytes_read
+                        };
+//                        let slice_end = bytes_read; //.saturating_sub(1);
                         let next_id = String::from_utf8(self.buffer[1..slice_end].to_vec())
                             .expect("Invalid UTF-8 encoding...");
                         self.buffer.clear();
@@ -74,7 +80,12 @@ impl Iterator for Fasta {
                         }
                     }
                     _ => {
-                        let slice_end = bytes_read.saturating_sub(1);
+                        let slice_end = if self.buffer[bytes_read-1] == b'\n' {
+                            bytes_read.saturating_sub(1)
+                        } else {
+                            bytes_read
+                        };
+                        // let slice_end = bytes_read; //.saturating_sub(1);
                         self.seqbuffer.extend_from_slice(&self.buffer[0..slice_end]);
                         self.seqlen = self.seqlen.saturating_add(slice_end);
                         self.buffer.clear();
@@ -118,6 +129,6 @@ mod tests {
         println!("SeqID: {}", x.id);
         println!("Seq: {}", std::str::from_utf8(&x.seq).unwrap());
         println!("SeqLen: {}", x.seq.len());
-        assert!(x.seq.len() == 669);
+        assert!(x.seq.len() == 670);
     }
 }

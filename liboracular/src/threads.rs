@@ -1,4 +1,4 @@
-use crossbeam::atomic::AtomicCell;
+/*use crossbeam::atomic::AtomicCell;
 
 use std::sync::{Arc, RwLock};
 
@@ -14,6 +14,7 @@ use crossbeam::utils::Backoff;
 
 const STACKSIZE: usize = 256 * 1024 * 1024; // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
 const WORKERSTACKSIZE: usize = 64 * 1024 * 1024; // Stack size (needs to be > BUFSIZE + SEQBUFSIZE)
+*/
 
 #[derive(PartialEq)]
 pub struct Sequence {

@@ -648,6 +648,7 @@ mod tests {
 
     #[test]
     pub fn test_kmer_window_generator() {
+        crate::sfasta::clear_idxcache();
         crate::sfasta::convert_fasta_file(
             "test_data/test.fna",
             "test_data/test_kmer_coords_window_generator.sfasta",
@@ -666,8 +667,9 @@ mod tests {
 
         assert!(first.kmers[0] == b"ACT");
         println!("Count: {}", count);
-        assert!(count == 49);
+        assert!(count == 58);
 
+        crate::sfasta::clear_idxcache();
         crate::sfasta::convert_fasta_file(
             "test_data/test.fna",
             "test_data/test_kmer_coords_window_generator.sfasta",
@@ -683,8 +685,10 @@ mod tests {
         );
 
         let skipped = kmers.nth(2).expect("Unable to skip ahead");
-        assert!(skipped.kmers[0] == b"NAC");
+        println!("{:#?}", std::str::from_utf8(&skipped.kmers[0]).unwrap());
+        assert!(skipped.kmers[0] == b"NNA");
 
+        crate::sfasta::clear_idxcache();
         crate::sfasta::convert_fasta_file(
             "test_data/test_single.fna",
             "test_data/test_kmer_coords_window_generator.sfasta",
@@ -700,6 +704,7 @@ mod tests {
         );
         kmers.next().expect("Unable to get KmerWindow");
 
+        crate::sfasta::clear_idxcache();
         crate::sfasta::convert_fasta_file(
             "test_data/test_multiple.fna",
             "test_data/test_kmer_coords_window_generator.sfasta",
@@ -733,6 +738,7 @@ mod tests {
 
     #[test]
     pub fn test_large_kmer_windows() {
+        crate::sfasta::clear_idxcache();
         crate::sfasta::convert_fasta_file(
             "test_data/test_large.fna",
             "test_data/test_large.sfasta",
@@ -740,7 +746,7 @@ mod tests {
 
         let mut kmers =
             KmerWindowGenerator::new("test_data/test_large.sfasta", 21, 512, 0, false, false);
-        let window = kmers.next().expect("Unable to get KmerWindow");
+        let _window = kmers.next().expect("Unable to get KmerWindow");
         let window = kmers.next().expect("Unable to get KmerWindow");
         println!("{}", window.kmers.len());
         assert!(window.kmers.len() == 44);
@@ -748,6 +754,7 @@ mod tests {
 
     #[test]
     pub fn test_convert_kmerwindow_to_rc() {
+        crate::sfasta::clear_idxcache();
         crate::sfasta::convert_fasta_file(
             "test_data/test_single.fna",
             "test_data/test_convert_kmerwindow_to_rc.sfasta",
@@ -802,7 +809,7 @@ mod tests {
                 .map(|x| std::str::from_utf8(x).unwrap())
                 .collect::<Vec<&str>>()
         );
-        assert!(reversed_as_str[0] == "NAAGTCCAGT");
+        assert!(reversed_as_str[0] == "NTNTGAGTCA");
         // assert!(reversed_as_str[1] == "NAAGTCCAGT");
     }
 
@@ -831,18 +838,18 @@ mod tests {
         let mut kmers = KmerCoordsWindowIter::new("test_data/test.sfasta", 3, 3, 0, false, false);
 
         let skipped = kmers.nth(2).expect("Unable to skip ahead");
-        // println!("{:#?}", skipped.kmers[0]);
-        assert!(skipped.kmers[0] == b"NAC");
-        // println!("{:#?}", skipped.coords);
-        assert!(skipped.coords == [(38, 40), (41, 43), (44, 46)]);
+        println!("{:#?}", std::str::from_utf8(&skipped.kmers[0]).unwrap());
+        assert!(skipped.kmers[0] == b"NNA");
+        println!("{:#?}", skipped.coords);
+        assert!(skipped.coords == [(37, 39), (40, 42), (43, 45)]);
 
         // Have to get the right coords for RC
         let kmers = KmerCoordsWindowIter::new("test_data/test.sfasta", 8, 2, 0, true, false);
 
         let coords: Vec<_> = kmers.map(|x| x.coords).collect();
-        println!("{:#?}", coords[0]);
-        println!("{:#?}", coords[1]);
-        assert!(coords[0] == [(11, 18), (3, 10)]);
-        assert!(coords[1] == [(78, 85), (70, 77)]);
+        println!("Coords0 {:#?}", coords[0]);
+        println!("Coords1 {:#?}", coords[1]);
+        assert!(coords[0] == [(12, 19), (4, 11)]);
+        assert!(coords[1] == [(79, 86), (71, 78)]);
     }
 }

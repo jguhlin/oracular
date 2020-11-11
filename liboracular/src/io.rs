@@ -22,7 +22,6 @@ pub struct Sequence {
 pub struct SequenceSplitter3N {
     sequences: Box<dyn Iterator<Item = io::Sequence> + Send>,
     curseq: Sequence,
-    seqstr: String,
     curpos: usize,
     curlen: usize,
 }
@@ -34,13 +33,13 @@ impl SequenceSplitter3N {
             None => panic!("File is empty!"),
         };
 
-        let seqstr = std::str::from_utf8(&curseq.seq).unwrap().to_string();
-        let curlen = seqstr.len();
+        // println!("{:#?}", std::str::from_utf8(&curseq.seq).unwrap());
+
+        let curlen = curseq.seq.len();
 
         SequenceSplitter3N {
             sequences,
             curseq,
-            seqstr,
             curpos: 0,
             curlen,
         }
@@ -69,30 +68,36 @@ impl Iterator for SequenceSplitter3N {
                 }
             };
             self.curlen = curseq.seq.len();
-            self.seqstr = std::str::from_utf8(&curseq.seq).unwrap().to_string();
             self.curseq = curseq;
         }
 
         let startloc;
-        let endloc;
+        let mut endloc;
 
         if bytecount::count(&self.curseq.seq, b'N') < 3 {
             startloc = 0;
             endloc = self.curlen;
         } else {
-            startloc = self.curseq.seq[self.curpos..].windows(3).enumerate()
+            startloc = self.curpos + self.curseq.seq[self.curpos..].windows(3).enumerate()
                 .filter(|(_y, x)|
                     bytecount::count(&x, b'N') < 3)
             .map(|(y, _x)| y).nth(0).unwrap();
 
-            endloc = self.curseq.seq[self.curpos..].windows(3).enumerate()
+            endloc = startloc + 1 + self.curseq.seq[startloc+1..].windows(3).enumerate()
                 .filter(|(_y, x)|
                     bytecount::count(&x, b'N') == 3)
-            .map(|(y, _x)| y).nth(0).unwrap_or(self.curlen);
+            .map(|(y, _x)| y).nth(0).unwrap_or(self.curlen - startloc);
         }
 
-        self.curpos = endloc;
+        
+        if endloc > self.curseq.seq.len() {
+            endloc = self.curseq.seq.len();
+        }
 
+        // println!("{} {} {}", startloc, endloc, self.curseq.seq.len());
+
+        self.curpos = endloc;
+        
         Some(Sequence {
             id: self.curseq.id.clone(),
             seq: self.curseq.seq[startloc..endloc].to_vec(),
@@ -152,14 +157,15 @@ mod tests {
 
     #[test]
     pub fn test_iosequences() {
+        sfasta::clear_idxcache();
         sfasta::convert_fasta_file("test_data/test.fna", "test_data/test_sequences.sfasta");
         let mut sequences = Box::new(sfasta::Sequences::new("test_data/test_sequences.sfasta"));
         let sequence = sequences.next().unwrap();
-        println!("{:#?}", sequence);
+        // println!("{:#?}", sequence);
         assert!(sequence.id == "test");
-        assert!(sequence.end == 669);
+        assert!(sequence.end == 670);
         assert!(sequence.location == 0);
-        assert!(sequence.seq.len() == 669);
+        assert!(sequence.seq.len() == 670);
     }
     /*
     #[test]
@@ -185,15 +191,46 @@ mod tests {
 
     #[test]
     pub fn test_3n_splitter() {
+        sfasta::clear_idxcache();
         sfasta::convert_fasta_file("test_data/test.fna", "test_data/test_3n_splitter.sfasta");
-        let sequences = Box::new(sfasta::Sequences::new("test_data/test_3nsplitter.sfasta"));
+        let sequences = Box::new(sfasta::Sequences::new("test_data/test_3n_splitter.sfasta"));
         let count = sequences.count();
         assert!(count == 1);
 
-        let sequences = Box::new(sfasta::Sequences::new("test_data/test_3nsplitter.sfasta"));
-        let sequences = Box::new(io::SequenceSplitter3N::new(sequences));
-        assert!(sequences.coords[0] == (0, 19));
+        let sequences = Box::new(sfasta::Sequences::new("test_data/test_3n_splitter.sfasta"));
+        let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
+        let x = sequences.next().unwrap();
+        println!("{}", x.seq.len());
+        println!("{}", std::str::from_utf8(&x.seq).unwrap());
+        assert!(x.seq.len() == 20);
 
+        let x = sequences.next().unwrap();
+        println!("{}", x.seq.len());
+        println!("{}", std::str::from_utf8(&x.seq).unwrap());
+        assert!(x.seq.len() == 50);
+
+        let x = sequences.next().unwrap();
+        println!("{}", x.seq.len());
+        println!("{}", std::str::from_utf8(&x.seq).unwrap());
+        assert!(x.seq.len() == 50);
+
+        let x = sequences.next().unwrap();
+        println!("{}", x.seq.len());
+        println!("{}", std::str::from_utf8(&x.seq).unwrap());
+        assert!(x.seq.len() == 50);
+
+        let x = sequences.next().unwrap();
+        println!("{}", x.seq.len());
+        println!("{}", std::str::from_utf8(&x.seq).unwrap());
+        assert!(x.seq.len() == 50);
+
+        let mut therest: Vec<Sequence> = sequences.collect();
+        let x = therest.pop().unwrap();
+        println!("{}", x.seq.len());
+        println!("{}", std::str::from_utf8(&x.seq).unwrap());
+        assert!(x.seq.len() == 30);
+
+        sfasta::clear_idxcache();
         sfasta::convert_fasta_file(
             "test_data/test_multiple.fna",
             "test_data/test_3n_splitter.sfasta",
@@ -202,6 +239,7 @@ mod tests {
         let mut sequences = Box::new(sfasta::Sequences::new("test_data/test_3n_splitter.sfasta"));
         sequences.set_mode(sfasta::SeqMode::Random);
         let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
+
         let count = sequences.count();
         println!("Sequences after 3N Split: {}", count);
         assert!(count == 216);
@@ -209,25 +247,13 @@ mod tests {
         let sequences = Box::new(sfasta::Sequences::new("test_data/test_3n_splitter.sfasta"));
         let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
         sequences.next();
-        println!("Coords: {:#?}", sequences.coords[0]);
-        assert!(sequences.coords[0] == (38, 86));
-
-        sequences.next().unwrap();
-        sequences.next().unwrap();
-        sequences.next().unwrap();
-        sequences.next().unwrap();
-        let x = sequences.next().unwrap();
-
-        // TODO: This is broken because now it's random order that things are written!
-        println!("{:#?}", x.id);
-        assert!(x.id == "test6");
-        assert!(x.seq[0..5] == [78, 65, 67, 84, 71]);
-        assert!(x.location == 105);
-        assert!(x.end == 153);
+        // println!("Coords: {:#?}", sequences.coords[0]);
+        // assert!(sequences.coords[0] == (38, 86));
     }
 
     #[test]
     pub fn test_sequences_impl() {
+        sfasta::clear_idxcache();
         sfasta::convert_fasta_file(
             "test_data/test_multiple.fna",
             "test_data/test_sequences_impl.sfasta",
