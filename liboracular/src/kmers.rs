@@ -229,14 +229,14 @@ impl KmerWindowGenerator {
         window_size: usize,
         offset: usize,
         rc: bool,
-    ) -> KmerWindowGenerator {
+    ) -> Option<KmerWindowGenerator> {
         let mut sequences = Vec::new();
         sequences.push(sequence);
 
         let mut sequences = Box::new(io::SequenceSplitter3N::new(Box::new(sequences.into_iter())));
         let mut curseq = match sequences.next() {
             Some(x) => x,
-            None => panic!("File is empty or invalid format!"),
+            None => return None,
         };
 
         if rc {
@@ -263,7 +263,7 @@ impl KmerWindowGenerator {
         let kmer_generator = Kmers::new(curseq.seq.clone(), k, offset, rc);
         let needed_sequence = k;
 
-        KmerWindowGenerator {
+        Some(KmerWindowGenerator {
             sequences,
             window_size,
             k,
@@ -272,7 +272,7 @@ impl KmerWindowGenerator {
             curseq,
             offset,
             rc,
-        }
+        })
     }
 }
 
@@ -761,7 +761,7 @@ mod tests {
             6,
             0,
             false,
-        );
+        ).unwrap();
 
         let y = iter.next().unwrap();
         println!("{}", y.kmers.len());
@@ -775,7 +775,7 @@ mod tests {
             6,
             0,
             false,
-        );
+        ).unwrap();
 
         let y = iter.next().unwrap();
         println!("{}", y.kmers.len());
