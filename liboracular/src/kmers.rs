@@ -750,6 +750,37 @@ mod tests {
         let window = kmers.next().expect("Unable to get KmerWindow");
         println!("{}", window.kmers.len());
         assert!(window.kmers.len() == 44);
+
+        let mut sfasta = sfasta::Sequences::new("test_data/test_large.sfasta");
+        let locs = sfasta.idx.as_ref().unwrap().1.clone();
+        let seq = sfasta.get_at(locs[0]).unwrap();
+
+        let mut iter = KmerWindowGenerator::from_sequence(
+            seq,
+            9,
+            6,
+            0,
+            false,
+        );
+
+        let y = iter.next().unwrap();
+        println!("{}", y.kmers.len());
+        assert!(y.kmers.len() == 6);
+
+        let seq = sfasta.get("NC_004354.4").unwrap();
+
+        let mut iter = KmerWindowGenerator::from_sequence(
+            seq,
+            9,
+            6,
+            0,
+            false,
+        );
+
+        let y = iter.next().unwrap();
+        println!("{}", y.kmers.len());
+        assert!(y.kmers.len() == 6);
+
     }
 
     #[test]
