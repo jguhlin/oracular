@@ -16,6 +16,7 @@ extension-module = ["pyo3/extension-module"]
 default = ["extension-module"]
 
 [dependencies]
+bytecount = "0.6.0"
 twox-hash = "1.5.0"
 liboracular = { path = "../liboracular/" }
 crossbeam = "0.8.0"

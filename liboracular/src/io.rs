@@ -77,13 +77,16 @@ impl Iterator for SequenceSplitter3N {
             endloc = self.curlen;
         } else {
             startloc = self.curpos
-                + self.curseq.seq[self.curpos..]
+                + match self.curseq.seq[self.curpos..]
                     .windows(3)
                     .enumerate()
                     .filter(|(_y, x)| bytecount::count(&x, b'N') < 3)
                     .map(|(y, _x)| y)
                     .nth(0)
-                    .unwrap();
+                    {
+                        Some(x) => x,
+                        None => return None
+                    };
 
             endloc = startloc
                 + 1

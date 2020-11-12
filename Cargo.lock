@@ -830,6 +830,7 @@ dependencies = [
 name = "pyracular"
 version = "0.1.0"
 dependencies = [
+ "bytecount",
  "crossbeam",
  "liboracular",
  "mimalloc",

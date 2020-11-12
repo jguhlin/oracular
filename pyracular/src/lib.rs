@@ -710,6 +710,15 @@ impl TripleLossKmersGenerator {
 }
 
 /// Support functions for triple loss generator
+fn is_all_ns(seq: &[u8]) -> bool {
+    if bytecount::count(&seq, b'N') == seq.len() {
+        true
+    } else {
+        false
+    }
+}
+
+/// Support functions for triple loss generator
 fn get_random_sequence_from_id<R: Rng + ?Sized>(
     sfasta: &mut sfasta::Sequences,
     k: usize,
