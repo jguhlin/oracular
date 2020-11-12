@@ -737,6 +737,10 @@ fn get_random_sequence_from_id<R: Rng + ?Sized>(
 
     let seqlen = seq.seq.len().saturating_sub(needed_length);
 
+    if seqlen == 0 {
+        return None
+    }
+
     let mut start = rng.gen_range(0, seqlen);
     let mut end = start + needed_length;
     assert!(end < seq.seq.len());
@@ -777,7 +781,7 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
     let mut loc = locs.choose(&mut rng).unwrap().clone();
     let mut seq = sfasta.get_at(loc).unwrap();
  
-    while seq.seq.len() < needed_length && !is_all_ns(&seq.seq[..]) {
+    while seq.seq.len() < needed_length || is_all_ns(&seq.seq[..]) {
         loc = locs.choose(&mut rng).unwrap().clone();
         seq = sfasta.get_at(loc).unwrap();
     }
