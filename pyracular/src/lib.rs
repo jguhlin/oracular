@@ -608,19 +608,6 @@ impl TripleLossKmersGenerator {
                         matched = true;
                         reversecomplement = false;
 
-                        // Half the time skip a window...
-                        // TODO: Do this better...
-                        if rng.gen::<bool>() {
-                            iter1.next();
-                        }
-
-                        item2 = match iter1.next() {
-                            Some(x) => x,
-                            None => {
-                                break;
-                            }
-                        };
-
                         let mut seq = sfasta.get(&item1.id).unwrap();
                         let mut len = seq.seq.len() - (window_size * k) - k;
                         seq.seq = seq.seq[0..rng.gen_range(0, len)].to_vec();
@@ -649,21 +636,10 @@ impl TripleLossKmersGenerator {
 
                         let mut iter2 = iter2.unwrap();
 
-                        //let allwindows: Vec<KmerWindow> = iter2.collect();
-                        //item2 = allwindows.choose(&mut rng).unwrap().clone();
                         item2 = match iter2.next() {
                             Some(x) => x,
                             None => continue,
                         };
-                    //drop(allwindows);
-                    /*
-                    item2 = match iter2.skip(rng.gen_range(0, total_kmers-1)).next() {
-                        Some(x) => x,
-                        None => {
-                            println!("Continue1...");
-                            continue;
-                        }
-                    }; */
                     // RC
                     } else if choice == 1 {
                         matched = true;
@@ -676,13 +652,6 @@ impl TripleLossKmersGenerator {
                     } else {
                         matched = false;
                         reversecomplement = false;
-
-                        item1 = match iter1.next() {
-                            Some(x) => x,
-                            None => {
-                                break;
-                            }
-                        };
 
                         let mut loc = locs.choose(&mut rng).unwrap().clone();
                         // Chance of loc being the same as input is minimal...
