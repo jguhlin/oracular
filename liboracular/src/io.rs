@@ -3,8 +3,6 @@ use std::io::{BufReader, Read};
 
 use serde::{Deserialize, Serialize};
 
-use std::collections::VecDeque;
-
 use crate::io;
 
 pub struct Sequences {

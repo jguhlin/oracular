@@ -712,8 +712,8 @@ impl TripleLossKmersGenerator {
                         rc: _,
                     } = item2;
 
-                    let truth1 = replace_random(k, replacement_pct, &mut kmers1);
-                    let truth2 = replace_random(k, replacement_pct, &mut kmers2);
+                    let truth1 = replace_random(k, replacement_pct, &mut kmers1, &mut rng);
+                    let truth2 = replace_random(k, replacement_pct, &mut kmers2, &mut rng);
 
                     let kmers1 = kmers1
                         .iter()

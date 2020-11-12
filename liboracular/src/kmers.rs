@@ -110,12 +110,15 @@ impl DiscriminatorMaskedGenerator {
     }
 }
 
-pub fn replace_random(k: usize, replacement_pct: f32, kmers: &mut Vec<Vec<u8>>) -> Vec<bool> {
+pub fn replace_random<R: Rng + ?Sized>(k: usize, 
+        replacement_pct: f32, 
+        kmers: &mut Vec<Vec<u8>>,
+        mut rng: &mut R) -> Vec<bool> {
     // TODO: Make switchable, so we can train protein sequences
     // ~2% chance of an N
     let choices = [(b'A', 48), (b'C', 48), (b'T', 48), (b'G', 48), (b'N', 4)];
 
-    let mut rng = rand::thread_rng();
+    // let mut rng = rand::thread_rng();
 
     let mut truth: Vec<bool> = Vec::with_capacity(kmers.len());
     for kmer in kmers.iter_mut() {
@@ -138,6 +141,8 @@ impl Iterator for DiscriminatorMaskedGenerator {
     type Item = DiscriminatorMasked;
 
     fn next(&mut self) -> Option<DiscriminatorMasked> {
+        let mut rng = rand::thread_rng();
+
         let next_item = match self.kmer_window_generator.next() {
             Some(x) => x,
             None => return None,
@@ -149,7 +154,7 @@ impl Iterator for DiscriminatorMaskedGenerator {
             rc: _,
         } = next_item;
 
-        let truth = replace_random(self.k, self.replacement_pct, &mut kmers);
+        let truth = replace_random(self.k, self.replacement_pct, &mut kmers, &mut rng);
 
         // return Some(DiscriminatorMasked { kmers, id, taxons, taxon, truth })
         Some(DiscriminatorMasked { kmers, id, truth })
