@@ -110,10 +110,12 @@ impl DiscriminatorMaskedGenerator {
     }
 }
 
-pub fn replace_random<R: Rng + ?Sized>(k: usize, 
-        replacement_pct: f32, 
-        kmers: &mut Vec<Vec<u8>>,
-        mut rng: &mut R) -> Vec<bool> {
+pub fn replace_random<R: Rng + ?Sized>(
+    k: usize,
+    replacement_pct: f32,
+    kmers: &mut Vec<Vec<u8>>,
+    mut rng: &mut R,
+) -> Vec<bool> {
     // TODO: Make switchable, so we can train protein sequences
     // ~2% chance of an N
     let choices = [(b'A', 48), (b'C', 48), (b'T', 48), (b'G', 48), (b'N', 4)];
@@ -760,13 +762,7 @@ mod tests {
         let locs = sfasta.idx.as_ref().unwrap().1.clone();
         let seq = sfasta.get_at(locs[0]).unwrap();
 
-        let mut iter = KmerWindowGenerator::from_sequence(
-            seq,
-            9,
-            6,
-            0,
-            false,
-        ).unwrap();
+        let mut iter = KmerWindowGenerator::from_sequence(seq, 9, 6, 0, false).unwrap();
 
         let y = iter.next().unwrap();
         println!("{}", y.kmers.len());
@@ -774,13 +770,7 @@ mod tests {
 
         let seq = sfasta.get("NC_004354.4").unwrap();
 
-        let mut iter = KmerWindowGenerator::from_sequence(
-            seq,
-            9,
-            6,
-            0,
-            false,
-        ).unwrap();
+        let mut iter = KmerWindowGenerator::from_sequence(seq, 9, 6, 0, false).unwrap();
 
         let y = iter.next().unwrap();
         println!("{}", y.kmers.len());
@@ -788,18 +778,11 @@ mod tests {
 
         let seq = sfasta.get("NC_004354.4").unwrap();
 
-        let mut iter = KmerWindowGenerator::from_sequence(
-            seq,
-            9,
-            6,
-            11,
-            false,
-        ).unwrap();
+        let mut iter = KmerWindowGenerator::from_sequence(seq, 9, 6, 11, false).unwrap();
 
         let y = iter.next().unwrap();
         println!("{}", y.kmers.len());
         assert!(y.kmers.len() == 6);
-
     }
 
     #[test]

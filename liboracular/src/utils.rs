@@ -140,34 +140,34 @@ pub fn complement_nucleotides(slice: &mut [u8]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-/*
-    #[test]
-    pub fn test_get_good_sequence_coords() {
-        let coords = get_good_sequence_coords(b"AAAAAAAAAAAAAAAAAAAANNNAAAAAAAAAAAAAAAAAAAAAAAA");
-        println!("{:#?}", coords);
-        assert!(coords == [(0, 19), (22, 47)]);
+    /*
+        #[test]
+        pub fn test_get_good_sequence_coords() {
+            let coords = get_good_sequence_coords(b"AAAAAAAAAAAAAAAAAAAANNNAAAAAAAAAAAAAAAAAAAAAAAA");
+            println!("{:#?}", coords);
+            assert!(coords == [(0, 19), (22, 47)]);
 
-        // TODO: Error, but such a minor edge case...
-        let coords =
-            get_good_sequence_coords(b"AAAAAAAAAAAAAAAAAAAANNNAAAAAAAAAAAAAAAAAAAAAAAANNN");
-        println!("{:#?}", coords);
-        assert!(coords == [(0, 19), (22, 50)]);
+            // TODO: Error, but such a minor edge case...
+            let coords =
+                get_good_sequence_coords(b"AAAAAAAAAAAAAAAAAAAANNNAAAAAAAAAAAAAAAAAAAAAAAANNN");
+            println!("{:#?}", coords);
+            assert!(coords == [(0, 19), (22, 50)]);
 
-        // TODO: Error, but such a minor edge case...
-        let coords =
-            get_good_sequence_coords(b"NNNAAAAAAAAAAAAAAAAAAAANNNAAAAAAAAAAAAAAAAAAAAAAAANNN");
-        println!("{:#?}", coords);
-        assert!(coords == [(1, 22), (25, 53)]);
+            // TODO: Error, but such a minor edge case...
+            let coords =
+                get_good_sequence_coords(b"NNNAAAAAAAAAAAAAAAAAAAANNNAAAAAAAAAAAAAAAAAAAAAAAANNN");
+            println!("{:#?}", coords);
+            assert!(coords == [(1, 22), (25, 53)]);
 
-        let coords = get_good_sequence_coords(b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
-        println!("{:#?}", coords);
-        assert!(coords == [(0, 44)]);
+            let coords = get_good_sequence_coords(b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+            println!("{:#?}", coords);
+            assert!(coords == [(0, 44)]);
 
-        let coords = get_good_sequence_coords(b"AAAAAAAANAAAAAAAAANAAAAAAAAAAAAAAAAAAAAAANAA");
-        println!("{:#?}", coords);
-        assert!(coords == [(0, 44)]);
-    }
-*/
+            let coords = get_good_sequence_coords(b"AAAAAAAANAAAAAAAAANAAAAAAAAAAAAAAAAAAAAAANAA");
+            println!("{:#?}", coords);
+            assert!(coords == [(0, 44)]);
+        }
+    */
     #[test]
     pub fn test_complement_nucleotides() {
         let mut seq = b"AGTCCCNTNNNNTAAGATTTAGAGACCAAAAA".to_vec();

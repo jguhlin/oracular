@@ -4,6 +4,7 @@ extern crate bytecount;
 extern crate crossbeam;
 extern crate flate2;
 extern crate itertools;
+extern crate jetscii;
 extern crate lazy_static;
 extern crate linked_hash_set;
 extern crate ndarray;
@@ -15,7 +16,6 @@ extern crate snap;
 extern crate t1ha;
 extern crate thincollections;
 extern crate zstd;
-extern crate jetscii;
 
 // #[macro_use]
 extern crate static_assertions; // I don't think this is being used anymore...

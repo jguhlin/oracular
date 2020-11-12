@@ -609,49 +609,18 @@ impl TripleLossKmersGenerator {
                         reversecomplement = false;
 
                         let mut len = 0;
-                        let mut seq;
 
-                        seq = sfasta.get(&item1.id).unwrap();
-                        len = seq.seq.len().saturating_sub((window_size * k) + k);
-
-                        while len == 0 {
-                            seq = sfasta.get(&item1.id).unwrap();
-                            len = seq.seq.len().saturating_sub((window_size * k) + k);
-                        }
-
-                        let start = rng.gen_range(0, len);
-                        let end = start + (window_size * k) + k;
-
-                        seq.seq = seq.seq[start..end].to_vec();
-
-                        let mut iter2 = KmerWindowGenerator::from_sequence(
-                            seq,
+                        item2 = match get_random_sequence_from_id(
+                            &mut sfasta,
                             k,
                             window_size,
-                            rng.gen_range(0, k),
-                            rng.gen(),
-                        );
-
-                        while iter2.is_none() {
-                            seq = sfasta.get(&item1.id).unwrap();
-                            len = seq.seq.len().saturating_sub((window_size * k) + k);
-                            seq.seq = seq.seq[rng.gen_range(0, len)..].to_vec();
-
-                            iter2 = KmerWindowGenerator::from_sequence(
-                                seq,
-                                k,
-                                window_size,
-                                rng.gen_range(0, k),
-                                rng.gen(),
-                            );
-                        }
-
-                        let mut iter2 = iter2.unwrap();
-
-                        item2 = match iter2.next() {
+                            &item1.id,
+                            &mut rng,
+                        ) {
                             Some(x) => x,
-                            None => continue,
+                            None => continue
                         };
+
                     // RC
                     } else if choice == 1 {
                         matched = true;
@@ -665,66 +634,16 @@ impl TripleLossKmersGenerator {
                         matched = false;
                         reversecomplement = false;
 
-                        let mut loc;
-                        // Chance of loc being the same as input is minimal...
-                        let mut seq;
-                        let mut len = 0;
-
-                        loc = locs.choose(&mut rng).unwrap().clone();
-                        seq = sfasta.get_at(loc).unwrap();
-                        len = seq.seq.len().saturating_sub((window_size * k) + k);
-
-                        while len <= (window_size ) {
-                            loc = locs.choose(&mut rng).unwrap().clone();
-                            seq = sfasta.get_at(loc).unwrap();
-                            len = seq.seq.len().saturating_sub((window_size * k) + k);
-                        }
-
-                        let start = rng.gen_range(0, len);
-                        let end = start + (window_size * k) + k;
-
-                        seq.seq = seq.seq[start..end].to_vec();
-
-                        let mut iter2 = KmerWindowGenerator::from_sequence(
-                            seq,
+                        item2 = match get_random_sequence_from_locs(
+                            &mut sfasta,
                             k,
                             window_size,
-                            rng.gen_range(0, k),
-                            rng.gen(),
-                        );
-
-                        while iter2.is_none() {
-                            loc = locs.choose(&mut rng).unwrap().clone();
-                            // Chance of loc being the same as input is minimal...
-                            seq = sfasta.get_at(loc).unwrap();
-                            len = seq.seq.len().saturating_sub((window_size * k) + k);
-                            seq.seq = seq.seq[0..rng.gen_range(0, len)].to_vec();
-
-                            iter2 = KmerWindowGenerator::from_sequence(
-                                seq,
-                                k,
-                                window_size,
-                                rng.gen_range(0, k),
-                                rng.gen(),
-                            );
-                        }
-
-                        let mut iter2 = iter2.unwrap();
-
-                        //let allwindows: Vec<KmerWindow> = iter2.collect();
-                        //item2 = allwindows.choose(&mut rng).unwrap().clone();
-                        item2 = match iter2.next() {
+                            &locs,
+                            &mut rng,
+                        ) { 
                             Some(x) => x,
                             None => continue,
                         };
-
-                        /*                        item2 = match iter2.skip(rng.gen_range(0, total_kmers-1)).next() {
-                            Some(x) => x,
-                            None => {
-                                println!("Continue2...");
-                                continue;
-                            }
-                        }; */
                     }
 
                     let KmerWindow {
@@ -788,6 +707,83 @@ impl TripleLossKmersGenerator {
     fn len(mypyself: PyRef<Self>) -> usize {
         mypyself.queueimpl.queue.len()
     }
+}
+
+/// Support functions for triple loss generator
+fn get_random_sequence_from_id<R: Rng + ?Sized>(
+    sfasta: &mut sfasta::Sequences,
+    k: usize,
+    window_size: usize,
+    id: &str,
+    rng: &mut R,
+) -> Option<KmerWindow> {
+    let needed_length = (k * window_size) + k;
+
+    let mut seq;
+
+    seq = sfasta.get(&id).unwrap();
+    if seq.seq.len() < needed_length {
+        return None;
+    }
+
+    let seqlen = seq.seq.len().saturating_sub(needed_length);
+
+    let start = rng.gen_range(0, seqlen);
+    let end = start + needed_length;
+    assert!(end < seq.seq.len());
+
+    seq.seq = seq.seq[start..end].to_vec();
+
+    let mut iter2 = KmerWindowGenerator::from_sequence(
+        seq,
+        k,
+        window_size,
+        0, // Already a random sequence, random offset won't do anything...
+        rng.gen(),
+    )
+    .expect("Unable to create KmerWindowGenerator");
+
+    iter2.next()
+}
+
+/// Support functions for triple loss generator
+fn get_random_sequence_from_locs<R: Rng + ?Sized>(
+    sfasta: &mut sfasta::Sequences,
+    k: usize,
+    window_size: usize,
+    locs: &Vec<u64>,
+    mut rng: &mut R,
+) -> Option<KmerWindow> {
+    let needed_length = (k * window_size) + k;
+
+    let mut seqlen = 0;
+    
+    let mut loc = locs.choose(&mut rng).unwrap().clone();
+    let mut seq = sfasta.get_at(loc).unwrap();
+ 
+    while seq.seq.len() < needed_length {
+        loc = locs.choose(&mut rng).unwrap().clone();
+        seq = sfasta.get_at(loc).unwrap();
+    }
+
+    let seqlen = seq.seq.len().saturating_sub(needed_length);
+
+    let mut start = rng.gen_range(0, seqlen);
+    let mut end = start + needed_length;
+    assert!(end < seq.seq.len());
+
+    seq.seq = seq.seq[start..end].to_vec();
+
+    let mut iter2 = KmerWindowGenerator::from_sequence(
+        seq,
+        k,
+        window_size,
+        0, // Already a random sequence, random offset won't do anything...
+        rng.gen(),
+    )
+    .expect("Unable to create KmerWindowGenerator");
+
+    iter2.next()
 }
 
 #[pyproto]

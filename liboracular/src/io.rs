@@ -76,18 +76,26 @@ impl Iterator for SequenceSplitter3N {
             startloc = 0;
             endloc = self.curlen;
         } else {
-            startloc = self.curpos + self.curseq.seq[self.curpos..].windows(3).enumerate()
-                .filter(|(_y, x)|
-                    bytecount::count(&x, b'N') < 3)
-            .map(|(y, _x)| y).nth(0).unwrap();
+            startloc = self.curpos
+                + self.curseq.seq[self.curpos..]
+                    .windows(3)
+                    .enumerate()
+                    .filter(|(_y, x)| bytecount::count(&x, b'N') < 3)
+                    .map(|(y, _x)| y)
+                    .nth(0)
+                    .unwrap();
 
-            endloc = startloc + 1 + self.curseq.seq[startloc+1..].windows(3).enumerate()
-                .filter(|(_y, x)|
-                    bytecount::count(&x, b'N') == 3)
-            .map(|(y, _x)| y).nth(0).unwrap_or(self.curlen - startloc);
+            endloc = startloc
+                + 1
+                + self.curseq.seq[startloc + 1..]
+                    .windows(3)
+                    .enumerate()
+                    .filter(|(_y, x)| bytecount::count(&x, b'N') == 3)
+                    .map(|(y, _x)| y)
+                    .nth(0)
+                    .unwrap_or(self.curlen - startloc);
         }
 
-        
         if endloc > self.curseq.seq.len() {
             endloc = self.curseq.seq.len();
         }
@@ -95,7 +103,7 @@ impl Iterator for SequenceSplitter3N {
         // println!("{} {} {}", startloc, endloc, self.curseq.seq.len());
 
         self.curpos = endloc;
-        
+
         Some(Sequence {
             id: self.curseq.id.clone(),
             seq: self.curseq.seq[startloc..endloc].to_vec(),

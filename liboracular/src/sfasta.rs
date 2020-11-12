@@ -297,7 +297,7 @@ impl Iterator for Sequences {
             let rl = self.random_list.as_mut().unwrap();
             let next_loc = match rl.pop() {
                 Some(x) => x,
-                None => return None
+                None => return None,
             };
 
             self.reader
@@ -448,7 +448,7 @@ use crossbeam::utils::Backoff;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::thread;
-use std::thread::{park};
+use std::thread::park;
 
 /// Converts a FASTA file to an SFASTA file...
 pub fn convert_fasta_file(filename: &str, output: &str)
@@ -750,7 +750,6 @@ pub fn clear_idxcache() {
 
     let mut idxcache = IDXCACHE.get().unwrap().write().unwrap();
     *idxcache = HashMap::new();
-
 }
 
 fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>)> {
