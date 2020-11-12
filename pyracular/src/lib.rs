@@ -608,9 +608,21 @@ impl TripleLossKmersGenerator {
                         matched = true;
                         reversecomplement = false;
 
-                        let mut seq = sfasta.get(&item1.id).unwrap();
-                        let mut len = seq.seq.len() - (window_size * k) - k;
-                        seq.seq = seq.seq[0..rng.gen_range(0, len)].to_vec();
+                        let mut len = 0;
+                        let mut seq;
+
+                        seq = sfasta.get(&item1.id).unwrap();
+                        len = seq.seq.len().saturating_sub((window_size * k) + k);
+
+                        while len == 0 {
+                            seq = sfasta.get(&item1.id).unwrap();
+                            len = seq.seq.len().saturating_sub((window_size * k) + k);
+                        }
+
+                        let start = rng.gen_range(0, len);
+                        let end = start + (window_size * k) + k;
+
+                        seq.seq = seq.seq[start..end].to_vec();
 
                         let mut iter2 = KmerWindowGenerator::from_sequence(
                             seq,
@@ -622,8 +634,8 @@ impl TripleLossKmersGenerator {
 
                         while iter2.is_none() {
                             seq = sfasta.get(&item1.id).unwrap();
-                            len = seq.seq.len() - (window_size * k) - k;
-                            seq.seq = seq.seq[0..rng.gen_range(0, len)].to_vec();
+                            len = seq.seq.len().saturating_sub((window_size * k) + k);
+                            seq.seq = seq.seq[rng.gen_range(0, len)..].to_vec();
 
                             iter2 = KmerWindowGenerator::from_sequence(
                                 seq,
@@ -653,11 +665,25 @@ impl TripleLossKmersGenerator {
                         matched = false;
                         reversecomplement = false;
 
-                        let mut loc = locs.choose(&mut rng).unwrap().clone();
+                        let mut loc;
                         // Chance of loc being the same as input is minimal...
-                        let mut seq = sfasta.get_at(loc).unwrap();
-                        let mut len = seq.seq.len() - (window_size * k) - k;
-                        seq.seq = seq.seq[0..rng.gen_range(0, len)].to_vec();
+                        let mut seq;
+                        let mut len = 0;
+
+                        loc = locs.choose(&mut rng).unwrap().clone();
+                        seq = sfasta.get_at(loc).unwrap();
+                        len = seq.seq.len().saturating_sub((window_size * k) + k);
+
+                        while len <= (window_size ) {
+                            loc = locs.choose(&mut rng).unwrap().clone();
+                            seq = sfasta.get_at(loc).unwrap();
+                            len = seq.seq.len().saturating_sub((window_size * k) + k);
+                        }
+
+                        let start = rng.gen_range(0, len);
+                        let end = start + (window_size * k) + k;
+
+                        seq.seq = seq.seq[start..end].to_vec();
 
                         let mut iter2 = KmerWindowGenerator::from_sequence(
                             seq,
@@ -671,7 +697,7 @@ impl TripleLossKmersGenerator {
                             loc = locs.choose(&mut rng).unwrap().clone();
                             // Chance of loc being the same as input is minimal...
                             seq = sfasta.get_at(loc).unwrap();
-                            len = seq.seq.len() - (window_size * k) - k;
+                            len = seq.seq.len().saturating_sub((window_size * k) + k);
                             seq.seq = seq.seq[0..rng.gen_range(0, len)].to_vec();
 
                             iter2 = KmerWindowGenerator::from_sequence(
