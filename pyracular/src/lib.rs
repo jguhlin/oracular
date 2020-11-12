@@ -680,7 +680,6 @@ impl TripleLossKmersGenerator {
                             return; // We are done, something triggered a
                                     // shutdown...
                         }
-                        println!("Queue is full...");
                         batch = x;
                         park(); // Queue is full, park the thread...
                     }
