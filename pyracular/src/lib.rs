@@ -790,14 +790,16 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
 
     seq.seq = seq.seq[start..end].to_vec();
 
-    let mut iter2 = KmerWindowGenerator::from_sequence(
+    let mut iter2 = match KmerWindowGenerator::from_sequence(
         seq,
         k,
         window_size,
         0, // Already a random sequence, random offset won't do anything...
         rng.gen(),
-    )
-    .expect("Unable to create KmerWindowGenerator");
+    ) {
+        Some(x) => x,
+        None => return None
+    };
 
     iter2.next()
 }
