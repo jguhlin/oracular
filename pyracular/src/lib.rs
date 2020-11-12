@@ -737,20 +737,27 @@ fn get_random_sequence_from_id<R: Rng + ?Sized>(
 
     let seqlen = seq.seq.len().saturating_sub(needed_length);
 
-    let start = rng.gen_range(0, seqlen);
-    let end = start + needed_length;
+    let mut start = rng.gen_range(0, seqlen);
+    let mut end = start + needed_length;
     assert!(end < seq.seq.len());
+
+    while is_all_ns(&seq.seq[start..end]) {
+        start = rng.gen_range(0, seqlen);
+        end = start + needed_length;
+    }
 
     seq.seq = seq.seq[start..end].to_vec();
 
-    let mut iter2 = KmerWindowGenerator::from_sequence(
+    let mut iter2 = match KmerWindowGenerator::from_sequence(
         seq,
         k,
         window_size,
         0, // Already a random sequence, random offset won't do anything...
         rng.gen(),
-    )
-    .expect("Unable to create KmerWindowGenerator");
+    ) {
+        Some(x) => x,
+        None => return None
+    };
 
     iter2.next()
 }
