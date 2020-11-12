@@ -562,6 +562,7 @@ impl TripleLossKmersGenerator {
             // and non-matching ones, including some RC ones as well...
 
             loop {
+                let mut count = 0;
                 // Create KmerWindowGenerator
                 let mut iter1 =
                     KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
@@ -590,6 +591,8 @@ impl TripleLossKmersGenerator {
                             break;
                         }
                     };
+
+                    count += 1;
 
                     while item1.kmers.len() < window_size {
                         item1 = match iter1.next() {
@@ -768,6 +771,8 @@ impl TripleLossKmersGenerator {
                         park(); // Queue is full, park the thread...
                     }
                 }
+
+                println!("{} {} Total from Iter: {}", offset, rc, count);
 
                 offset += 1;
 

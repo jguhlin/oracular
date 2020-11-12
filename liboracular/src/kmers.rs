@@ -781,6 +781,20 @@ mod tests {
         println!("{}", y.kmers.len());
         assert!(y.kmers.len() == 6);
 
+        let seq = sfasta.get("NC_004354.4").unwrap();
+
+        let mut iter = KmerWindowGenerator::from_sequence(
+            seq,
+            9,
+            6,
+            11,
+            false,
+        ).unwrap();
+
+        let y = iter.next().unwrap();
+        println!("{}", y.kmers.len());
+        assert!(y.kmers.len() == 6);
+
     }
 
     #[test]
