@@ -770,7 +770,7 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
     let mut loc = locs.choose(&mut rng).unwrap().clone();
     let mut seq = sfasta.get_at(loc).unwrap();
  
-    while seq.seq.len() < needed_length {
+    while seq.seq.len() < needed_length && !is_all_ns(&seq.seq[..]) {
         loc = locs.choose(&mut rng).unwrap().clone();
         seq = sfasta.get_at(loc).unwrap();
     }
