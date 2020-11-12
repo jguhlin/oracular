@@ -567,7 +567,7 @@ impl TripleLossKmersGenerator {
                 let mut iter1 =
                     KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
 
-                loop {
+                'inner: loop {
                     if shutdown.load(Ordering::Relaxed) {
                         return; // We are done, something triggered a
                                 // shutdown...
@@ -588,7 +588,7 @@ impl TripleLossKmersGenerator {
                     item1 = match iter1.next() {
                         Some(x) => x,
                         None => {
-                            break;
+                            break 'inner;
                         }
                     };
 
@@ -598,7 +598,7 @@ impl TripleLossKmersGenerator {
                         item1 = match iter1.next() {
                             Some(x) => x,
                             None => {
-                                break;
+                                break 'inner;
                             }
                         };
                     }
@@ -607,8 +607,6 @@ impl TripleLossKmersGenerator {
                     if choice == 0 {
                         matched = true;
                         reversecomplement = false;
-
-                        let mut len = 0;
 
                         item2 = match get_random_sequence_from_id(
                             &mut sfasta,
@@ -674,6 +672,7 @@ impl TripleLossKmersGenerator {
                         (kmers1, kmers2),
                         (truth1, truth2, matched, reversecomplement),
                     );
+
                     while let Err(x) = queue.push(batch) {
                         // Test if we are prematurely shutdown...
                         if shutdown.load(Ordering::Relaxed) {

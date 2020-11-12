@@ -783,6 +783,10 @@ mod tests {
         let y = iter.next().unwrap();
         println!("{}", y.kmers.len());
         assert!(y.kmers.len() == 6);
+
+        let y: Vec<KmerWindow> = iter.collect();
+        println!("Len: {}", y.len());
+        assert!(y.len() == 215);
     }
 
     #[test]
