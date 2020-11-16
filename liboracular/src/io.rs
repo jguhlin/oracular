@@ -83,12 +83,13 @@ impl Iterator for SequenceSplitter3N {
                     .filter(|(_y, x)| bytecount::count(&x, b'N') < 3)
                     .map(|(y, _x)| y)
                     .nth(0)
-                    {
-                        Some(x) => x,
-                        None => { // println!("Stop2"); 
-                                    return None; 
-                                }
-                    };
+                {
+                    Some(x) => x,
+                    None => {
+                        // println!("Stop2");
+                        return None;
+                    }
+                };
 
             endloc = startloc
                 + 1

@@ -34,9 +34,9 @@ impl<T: Read + Seek + Send> ReadAndSeek for T {}
 pub enum CompressionType {
     ZSTD,
     SNAPPY, // Not yet implemented -- IMPLEMENT
-    GZIP, // Please don't use this -- IMPLEMENT
-    NAF,  // Not yet supported -- IMPLEMENT
-    NONE, // No Compression -- IMPLEMENT
+    GZIP,   // Please don't use this -- IMPLEMENT
+    NAF,    // Not yet supported -- IMPLEMENT
+    NONE,   // No Compression -- IMPLEMENT
 }
 
 #[derive(PartialEq)]
@@ -836,13 +836,17 @@ mod tests {
     pub fn test_entry() {
         let seq = b"ACTGGACTACAGTTCAGGACATCACTTTCACTACTAGTGAGATTGACCACTA".to_vec();
         let oseq = seq.clone();
-        let e = Entry { id: "Test".to_string(), len: seq.len() as u64, seq: seq, comment: None };
+        let e = Entry {
+            id: "Test".to_string(),
+            len: seq.len() as u64,
+            seq: seq,
+            comment: None,
+        };
 
         let ec = e.compress(CompressionType::ZSTD, 3, &None);
         let e = ec.decompress(&None);
 
         assert!(e.seq == oseq);
-
     }
 
     #[test]

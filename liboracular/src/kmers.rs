@@ -291,7 +291,9 @@ impl Iterator for KmerWindowGenerator {
         // it...
         // and HERE! Need to return small sequences unless < window_size, and let the
         // generators deal with removing them or not...
-        while (self.kmer_generator.len - self.kmer_generator.curpos - self.offset) <= self.needed_sequence {
+        while (self.kmer_generator.len - self.kmer_generator.curpos - self.offset)
+            <= self.needed_sequence
+        {
             let mut curseq: io::Sequence = match self.sequences.next() {
                 Some(x) => x,
                 None => {
@@ -820,15 +822,13 @@ mod tests {
         println!("Len: {}", y.len());
         assert!(y.len() == 216);
 
-        let kmers =
-            KmerWindowGenerator::new("test_data/test_large.sfasta", 21, 16, 0, false, true);
+        let kmers = KmerWindowGenerator::new("test_data/test_large.sfasta", 21, 16, 0, false, true);
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 35);
         assert!(b"GAATTCGTCAGAAATGAGCTA".to_vec() == y[0].kmers[0]);
 
-        let kmers =
-            KmerWindowGenerator::new("test_data/test_large.sfasta", 21, 16, 1, false, true);
+        let kmers = KmerWindowGenerator::new("test_data/test_large.sfasta", 21, 16, 1, false, true);
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 35);
@@ -843,8 +843,7 @@ mod tests {
         assert!(b"AAACAAATTTAAATCATTAAA".to_vec() == y[0].kmers[0]);
         println!("{:#?}", std::str::from_utf8(&y[0].kmers[0]).expect("Err"));
 
-        let kmers =
-            KmerWindowGenerator::new("test_data/test_large.sfasta", 21, 16, 20, true, true);
+        let kmers = KmerWindowGenerator::new("test_data/test_large.sfasta", 21, 16, 20, true, true);
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 35);
@@ -852,38 +851,74 @@ mod tests {
         println!("{:#?}", std::str::from_utf8(&y[0].kmers[0]).expect("Err"));
 
         // Test Large Multiple
-        let kmers =
-            KmerWindowGenerator::new("test_data/test_large_multiple.sfasta", 21, 16, 0, false, true);
+        let kmers = KmerWindowGenerator::new(
+            "test_data/test_large_multiple.sfasta",
+            21,
+            16,
+            0,
+            false,
+            true,
+        );
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 655);
 
-        let kmers =
-            KmerWindowGenerator::new("test_data/test_large_multiple.sfasta", 21, 16, 1, false, true);
+        let kmers = KmerWindowGenerator::new(
+            "test_data/test_large_multiple.sfasta",
+            21,
+            16,
+            1,
+            false,
+            true,
+        );
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 655);
-        
-        let kmers =
-            KmerWindowGenerator::new("test_data/test_large_multiple.sfasta", 21, 16, 19, false, true);
+
+        let kmers = KmerWindowGenerator::new(
+            "test_data/test_large_multiple.sfasta",
+            21,
+            16,
+            19,
+            false,
+            true,
+        );
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 654);
 
-        let kmers =
-            KmerWindowGenerator::new("test_data/test_large_multiple.sfasta", 21, 16, 20, false, true);
+        let kmers = KmerWindowGenerator::new(
+            "test_data/test_large_multiple.sfasta",
+            21,
+            16,
+            20,
+            false,
+            true,
+        );
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 654);
 
-        let kmers =
-            KmerWindowGenerator::new("test_data/test_large_multiple.sfasta", 21, 16, 20, true, true);
+        let kmers = KmerWindowGenerator::new(
+            "test_data/test_large_multiple.sfasta",
+            21,
+            16,
+            20,
+            true,
+            true,
+        );
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 654);
 
-        let kmers =
-            KmerWindowGenerator::new("test_data/test_large_multiple.sfasta", 21, 16, 3, true, true);
+        let kmers = KmerWindowGenerator::new(
+            "test_data/test_large_multiple.sfasta",
+            21,
+            16,
+            3,
+            true,
+            true,
+        );
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 655);
