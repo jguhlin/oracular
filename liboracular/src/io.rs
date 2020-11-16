@@ -85,7 +85,9 @@ impl Iterator for SequenceSplitter3N {
                     .nth(0)
                     {
                         Some(x) => x,
-                        None => return None
+                        None => { // println!("Stop2"); 
+                                    return None; 
+                                }
                     };
 
             endloc = startloc

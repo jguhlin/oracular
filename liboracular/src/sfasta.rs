@@ -33,7 +33,7 @@ impl<T: Read + Seek + Send> ReadAndSeek for T {}
 #[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub enum CompressionType {
     ZSTD,
-    SNAPPY,
+    SNAPPY, // Not yet implemented -- IMPLEMENT
     GZIP, // Please don't use this -- IMPLEMENT
     NAF,  // Not yet supported -- IMPLEMENT
     NONE, // No Compression -- IMPLEMENT
@@ -831,6 +831,19 @@ fn create_index(filename: &str, ids: Vec<String>, locations: Vec<u64>) -> String
 mod tests {
     use super::*;
     use std::io::SeekFrom;
+
+    #[test]
+    pub fn test_entry() {
+        let seq = b"ACTGGACTACAGTTCAGGACATCACTTTCACTACTAGTGAGATTGACCACTA".to_vec();
+        let oseq = seq.clone();
+        let e = Entry { id: "Test".to_string(), len: seq.len() as u64, seq: seq, comment: None };
+
+        let ec = e.compress(CompressionType::ZSTD, 3, &None);
+        let e = ec.decompress(&None);
+
+        assert!(e.seq == oseq);
+
+    }
 
     #[test]
     pub fn convert_fasta_to_sfasta_and_index() {
