@@ -587,6 +587,7 @@ pub fn convert_fasta_file(filename: &str, output: &str)
                         pos = out_fh
                             .seek(SeekFrom::Current(0))
                             .expect("Unable to work with seek API");
+                        block_locations.push(pos);
                         block_ids.push((block.id.clone(), block.block_id));
                         bincode::serialize_into(&mut out_fh, &block)
                             .expect("Unable to write to bincode output");
@@ -656,6 +657,11 @@ pub fn test_sfasta(filename: String) {
     let mut reader = BufReader::with_capacity(512 * 1024, file);
 
     let mut seqnum: usize = 0;
+
+    let header: Header = match bincode::deserialize_from(&mut reader) {
+        Ok(x) => x,
+        Err(_) => panic!("Header missing or malformed in SFASTA file"),
+    };
 
     loop {
         seqnum += 1;
