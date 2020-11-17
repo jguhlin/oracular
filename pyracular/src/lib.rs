@@ -29,6 +29,7 @@ use liboracular::kmers::{
     Gff3KmersIter, KmerCoordsWindow, KmerCoordsWindowIter, KmerWindowGenerator,
 };
 use liboracular::sfasta;
+use liboracular::io as io;
 
 use pyo3::prelude::*;
 // use pyo3::wrap_pyfunction;
@@ -772,35 +773,40 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
     locs: &Vec<u64>,
     mut rng: &mut R,
 ) -> Option<KmerWindow> {
-    let needed_length = (k * window_size) + k;
+    let needed_length = ((k * window_size) + k) as u64;
 
     let mut seqlen = 0;
 
     let mut loc = locs.choose(&mut rng).unwrap().clone();
-    let mut seq = sfasta.get_at(loc).unwrap();
+    let mut seq = sfasta.get_header_at(loc).expect("Unable to get header");
 
-    while (seq.seq.len() < needed_length) || is_all_ns(&seq.seq[..]) {
+    while (seq.len < needed_length) {
         loc = locs.choose(&mut rng).unwrap().clone();
-        seq = sfasta.get_at(loc).unwrap();
+        seq = sfasta.get_header_at(loc).unwrap();
     }
 
-    let seqlen = seq.seq.len().saturating_sub(needed_length);
+    let seqlen = seq.len.saturating_sub(needed_length);
 
     let mut start = rng.gen_range(0, seqlen);
     let mut end = start + needed_length;
-    assert!(end < seq.seq.len());
-    if seq.seq.len() >= end + 1000 {
+    assert!(end < seq.len);
+    if seq.len >= end + 1000 {
         end += 1000;
     } else {
-        end = seq.seq.len();
+        end = seq.len;
     }
 
-    // Some extra room
+    let sequence = sfasta.get_seq_slice(seq.id.clone(), start, end).expect("Unable to get seq slice");
 
-    seq.seq = seq.seq[start..end].to_vec();
+    let mut workseq = io::Sequence {
+        seq: sequence,
+        end: end as usize,
+        location: start as usize,
+        id: seq.id.clone()
+    };
 
     let mut iter2 = match KmerWindowGenerator::from_sequence(
-        seq,
+        workseq,
         k,
         window_size,
         0, // Already a random sequence, random offset won't do anything...

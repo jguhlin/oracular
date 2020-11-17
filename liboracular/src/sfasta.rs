@@ -3,7 +3,7 @@ use std::convert::From;
 use std::convert::TryFrom;
 use std::fs::{metadata, File};
 use std::io::prelude::*;
-use std::io::{BufReader, BufWriter, Read, SeekFrom, Write};
+use std::io::{BufReader, BufWriter, Read, SeekFrom};
 use std::path::Path;
 use std::time::Instant;
 
@@ -19,7 +19,7 @@ use crate::io;
 
 use once_cell::sync::OnceCell;
 use std::sync::{Arc, RwLock};
-static IDXCACHE: OnceCell<Arc<RwLock<HashMap<String, (Vec<String>, Vec<u64>)>>>> = OnceCell::new();
+static IDXCACHE: OnceCell<Arc<RwLock<HashMap<String, (Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)>>>> = OnceCell::new();
 
 // SuperTrait
 pub trait ReadAndSeek: Read + Seek + Send {}
@@ -151,7 +151,7 @@ impl From<Entry> for io::Sequence {
 pub struct CompressedSequences {
     pub header: Header,
     reader: Box<dyn ReadAndSeek + Send>,
-    pub idx: Option<(Vec<String>, Vec<u64>)>,
+    pub idx: Option<(Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)>,
     access: SeqMode,
     random_list: Option<Vec<u64>>,
 }
@@ -160,7 +160,7 @@ pub struct CompressedSequences {
 pub struct Sequences {
     pub header: Header,
     reader: Box<dyn ReadAndSeek + Send>,
-    pub idx: Option<(Vec<String>, Vec<u64>)>,
+    pub idx: Option<(Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)>,
     access: SeqMode,
     random_list: Option<Vec<u64>>,
 }
@@ -207,6 +207,60 @@ impl Sequences {
 
         let file_pos = self.idx.as_ref().unwrap().1[pos].clone();
         self.get_at(file_pos)
+    }
+
+    pub fn get_header_at(&mut self, file_pos: u64) -> Result<EntryCompressedHeader, &'static str> {
+        self.reader
+            .seek(SeekFrom::Start(file_pos))
+            .expect("Unable to work with seek API");
+        
+        let ec: EntryCompressedHeader = match bincode::deserialize_from(&mut self.reader) {
+            Ok(x) => x,
+            Err(_) => return Err("Unable to get header via get_header_at"),
+        };
+
+        Ok(ec)
+    }
+
+    pub fn get_seq_slice(&mut self, id: String, start: u64, end: u64) -> Result<Vec<u8>, &'static str> {
+        let start_block = start as f64 / BLOCK_SIZE as f64;
+        let start_block = start_block.floor() as usize;
+
+        let end_block = end as f64 / BLOCK_SIZE as f64;
+        let end_block = end_block.ceil() as usize;
+
+        let mut sequence: Vec<u8> = Vec::with_capacity((end_block - start_block) * BLOCK_SIZE);
+
+        let mut decompressor = zstd::block::Decompressor::new();
+
+        for i in start_block..end_block {
+            let block_loc = match self.idx.as_ref().unwrap().2.binary_search(&(id.clone(), i as u64)) {
+                Ok(x) => x as u64,
+                Err(_) => return Err("Unable to find block"),
+            };
+
+            self.reader
+                .seek(SeekFrom::Start(block_loc))
+                .expect("Unable to work with seek API");
+
+            let ec: EntryCompressedBlock = match bincode::deserialize_from(&mut self.reader) {
+                Ok(x) => x,
+                Err(_) => return Err("Unable to get block in get_seq_slice"),
+            };
+
+            let seq = match decompressor.decompress(&ec.compressed_seq, BLOCK_SIZE) {
+                Ok(x) => x,
+                Err(_) => panic!("Unable to decompress"),
+            };
+
+            sequence.extend_from_slice(&seq);
+
+        }
+
+        let mut start = start as usize - (BLOCK_SIZE as usize * start_block);
+        let mut end = end as usize - (BLOCK_SIZE as usize * start_block);
+
+        return Ok(sequence[start..end].to_vec())
     }
 
     // Decompresses the entire sequence...
@@ -374,7 +428,7 @@ fn generate_sfasta_compressed_entry(
 
 /// Opens an SFASTA file and an index and returns a Box<dyn Read>,
 /// HashMap<String, usize> type
-pub fn open_file(filename: &str) -> (Box<dyn ReadAndSeek + Send>, Option<(Vec<String>, Vec<u64>)>) {
+pub fn open_file(filename: &str) -> (Box<dyn ReadAndSeek + Send>, Option<(Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)>) {
     let filename = check_extension(filename);
 
     let file = match File::open(Path::new(&filename)) {
@@ -732,7 +786,7 @@ pub fn clear_idxcache() {
     *idxcache = HashMap::new();
 }
 
-fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>)> {
+fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)> {
     if IDXCACHE.get().is_none() {
         IDXCACHE
             .set(Arc::new(RwLock::new(HashMap::new())))
@@ -777,10 +831,15 @@ fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>)> {
     let mut vals: Vec<u64> = Vec::with_capacity(length as usize);
     vals = bincode::deserialize_from(&mut idxfh).expect("Unable to read idx values");
 
-    let mut idxcache = IDXCACHE.get().unwrap().write().unwrap();
-    idxcache.insert(idx_filename.clone(), (keys.clone(), vals.clone()));
+    let mut block_keys: Vec<(String, u64)> = Vec::with_capacity(length as usize);
+    block_keys = bincode::deserialize_from(&mut idxfh).expect("Unable to read idx keys");
+    let mut block_vals: Vec<u64> = Vec::with_capacity(length as usize);
+    block_vals = bincode::deserialize_from(&mut idxfh).expect("Unable to read idx values");
 
-    Some((keys, vals))
+    let mut idxcache = IDXCACHE.get().unwrap().write().unwrap();
+    idxcache.insert(idx_filename.clone(), (keys.clone(), vals.clone(), block_keys.clone(), block_vals.clone()));
+
+    Some((keys, vals, block_keys, block_vals))
 }
 
 fn create_index(
