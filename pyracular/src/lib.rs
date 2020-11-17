@@ -779,7 +779,7 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
     let mut loc = locs.choose(&mut rng).unwrap().clone();
     let mut seq = sfasta.get_at(loc).unwrap();
  
-    while seq.seq.len() <= needed_length || is_all_ns(&seq.seq[..]) {
+    while (seq.seq.len() < needed_length) || is_all_ns(&seq.seq[..]) {
         loc = locs.choose(&mut rng).unwrap().clone();
         seq = sfasta.get_at(loc).unwrap();
     }
@@ -789,6 +789,13 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
     let mut start = rng.gen_range(0, seqlen);
     let mut end = start + needed_length;
     assert!(end < seq.seq.len());
+    if seq.seq.len() >= end + 1000 {
+        end += 1000;
+    } else {
+        end = seq.seq.len();
+    }
+
+    // Some extra room
 
     seq.seq = seq.seq[start..end].to_vec();
 
