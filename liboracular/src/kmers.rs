@@ -676,10 +676,10 @@ mod tests {
         crate::sfasta::clear_idxcache();
         crate::sfasta::convert_fasta_file(
             "test_data/test.fna",
-            "test_data/test_kmer_coords_window_generator.sfasta",
+            "test_data/test_kmer_window_generator.sfasta",
         );
         let mut kmers = KmerWindowGenerator::new(
-            "test_data/test_kmer_coords_window_generator.sfasta",
+            "test_data/test_kmer_window_generator.sfasta",
             3,
             3,
             0,
@@ -697,11 +697,11 @@ mod tests {
         crate::sfasta::clear_idxcache();
         crate::sfasta::convert_fasta_file(
             "test_data/test.fna",
-            "test_data/test_kmer_coords_window_generator.sfasta",
+            "test_data/test_kmer_window_generator.sfasta",
         );
 
         let mut kmers = KmerWindowGenerator::new(
-            "test_data/test_kmer_coords_window_generator.sfasta",
+            "test_data/test_kmer_window_generator.sfasta",
             3,
             3,
             0,
@@ -716,11 +716,11 @@ mod tests {
         crate::sfasta::clear_idxcache();
         crate::sfasta::convert_fasta_file(
             "test_data/test_single.fna",
-            "test_data/test_kmer_coords_window_generator.sfasta",
+            "test_data/test_kmer_window_generator.sfasta",
         );
 
         let mut kmers = KmerWindowGenerator::new(
-            "test_data/test_kmer_coords_window_generator.sfasta",
+            "test_data/test_kmer_window_generator.sfasta",
             10,
             2,
             0,
@@ -732,11 +732,11 @@ mod tests {
         crate::sfasta::clear_idxcache();
         crate::sfasta::convert_fasta_file(
             "test_data/test_multiple.fna",
-            "test_data/test_kmer_coords_window_generator.sfasta",
+            "test_data/test_kmer_window_generator.sfasta",
         );
 
         let mut kmers = KmerWindowGenerator::new(
-            "test_data/test_kmer_coords_window_generator.sfasta",
+            "test_data/test_kmer_window_generator.sfasta",
             5,
             5,
             0,
@@ -748,7 +748,7 @@ mod tests {
         }
 
         let mut kmers = KmerWindowGenerator::new(
-            "test_data/test_kmer_coords_window_generator.sfasta",
+            "test_data/test_kmer_window_generator.sfasta",
             5,
             5,
             0,
@@ -1001,13 +1001,19 @@ mod tests {
 
     #[test]
     pub fn test_kmer_coords_window_generator() {
-        let mut kmers = KmerCoordsWindowIter::new("test_data/test.sfasta", 3, 3, 0, false, false);
+        crate::sfasta::clear_idxcache();
+        crate::sfasta::convert_fasta_file(
+            "test_data/test.fna",
+            "test_data/test_kmer_coords_window_generator.sfasta",
+        );
+        let mut kmers = KmerCoordsWindowIter::new("test_data/test_kmer_coords_window_generator.sfasta", 3, 3, 0, false, false);
         let first = kmers.next().expect("Unable to get KmerWindow");
 
         assert!(first.coords == [(0, 2), (3, 5), (6, 8)]);
         assert!(first.kmers[0] == b"ACT");
+        println!("First test...");
 
-        let mut kmers = KmerCoordsWindowIter::new("test_data/test.sfasta", 3, 3, 0, false, false);
+        let mut kmers = KmerCoordsWindowIter::new("test_data/test_kmer_coords_window_generator.sfasta", 3, 3, 0, false, false);
 
         let skipped = kmers.nth(2).expect("Unable to skip ahead");
         println!("{:#?}", std::str::from_utf8(&skipped.kmers[0]).unwrap());
@@ -1016,7 +1022,7 @@ mod tests {
         assert!(skipped.coords == [(37, 39), (40, 42), (43, 45)]);
 
         // Have to get the right coords for RC
-        let kmers = KmerCoordsWindowIter::new("test_data/test.sfasta", 8, 2, 0, true, false);
+        let kmers = KmerCoordsWindowIter::new("test_data/test_kmer_coords_window_generator.sfasta", 8, 2, 0, true, false);
 
         let coords: Vec<_> = kmers.map(|x| x.coords).collect();
         println!("Coords0 {:#?}", coords[0]);

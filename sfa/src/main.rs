@@ -159,7 +159,6 @@ fn stats(matches: &ArgMatches) {
     println!("Header ID: {}", seqs.header.id.as_ref().unwrap());
     println!("Header Comment: {:#?}", seqs.header.comment);
     println!("Header Citation: {:#?}", seqs.header.citation);
-    // println!("Header Zstd Dict: {:#?}", seqs.header.dict);
 
     let ids: Vec<(String, usize, u64)> = seqs
         .take(5)
@@ -175,7 +174,7 @@ fn stats(matches: &ArgMatches) {
     let mut seqs = seqs.into_compressed_sequences();
     let ec = seqs.next().unwrap();
 
-    let seq = ec.clone().decompress(&seqs.header.dict);
+    let seq = ec.clone().decompress();
     let len = if seq.len < 500 { seq.len as usize } else { 500 };
     println!("{}", std::str::from_utf8(&seq.seq[0..len]).unwrap());
     println!("{} {}", seq.len, ec.compressed_seq.len());

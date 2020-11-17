@@ -50,8 +50,6 @@ pub struct Header {
     pub id: Option<String>,
     pub comment: Option<String>,
     pub citation: Option<String>,
-    #[serde(with = "serde_bytes")]
-    pub dict: Option<Vec<u8>>,
 }
 
 /// Represents an entry from an SFASTA file (extension of .sfasta)
@@ -64,12 +62,13 @@ pub struct Entry {
     pub len: u64,
 }
 
+const BLOCK_SIZE: usize = 256 * 1024;
+
 impl Entry {
     pub fn compress(
         self,
         compression_type: CompressionType,
         compression_level: i32,
-        dict: &Option<Vec<u8>>,
     ) -> EntryCompressed {
         let Entry {
             id,
@@ -78,31 +77,25 @@ impl Entry {
             len,
         } = self;
 
-        let compressed_seq = Vec::with_capacity(self.len as usize);
-        // SNAPPY Line
-        //let mut writer = snap::write::FrameEncoder::new(compressed_seq);
+        let mut compressed_seq = Vec::with_capacity(self.len as usize);
+        let mut block_locs: Vec<(u64, u64)> = Vec::with_capacity(256);
 
-        // ZSTD Line
-        let mut writer = if dict.is_some() {
-            zstd::stream::Encoder::with_dictionary(
-                compressed_seq,
-                compression_level,
-                &dict.as_ref().unwrap(),
-            )
-            .unwrap()
-        } else {
-            zstd::stream::Encoder::new(compressed_seq, compression_level).unwrap()
-        };
-        writer
-            .write_all(&seq)
-            .expect("Unable to write to vector...");
-        writer.flush().expect("Unable to flush");
-        let compressed_seq = writer.finish().unwrap();
+        let blocks = seq.chunks(BLOCK_SIZE);
+        let mut compressor = zstd::block::Compressor::new();
+
+        for block in blocks {
+            let block_start = compressed_seq.len() as u64;
+            let compressed = compressor.compress(&block, compression_level).expect("Unable to write to compression buffer");
+            compressed_seq.extend_from_slice(&compressed);
+            let block_end = compressed_seq.len() as u64;
+            block_locs.push((block_start, block_end));
+        }
 
         EntryCompressed {
             id,
             compression_type,
             compressed_seq,
+            block_locs,
             comment,
             len,
         }
@@ -120,6 +113,7 @@ pub struct EntryCompressed {
 
     #[serde(with = "serde_bytes")]
     pub compressed_seq: Vec<u8>,
+    pub block_locs: Vec<(u64, u64)>,
     pub comment: Option<String>,
     pub len: u64,
 }
@@ -130,34 +124,23 @@ impl EntryCompressed {
         self.id
     }
 
-    pub fn decompress(self, dict: &Option<Vec<u8>>) -> Entry {
+    pub fn decompress(self) -> Entry {
         let EntryCompressed {
             id,
             compression_type,
             compressed_seq,
+            block_locs,
             comment,
             len,
         } = self;
-        // SNAPPY Compatability line
-        //let mut seq_reader = snap::read::FrameDecoder::new(&item.compressed_seq[..]);
-
+        
         let mut seq: Vec<u8> = Vec::with_capacity(len as usize);
 
-        // ZSTD Lines
-        if dict.is_some() {
-            let mut seq_reader = zstd::stream::read::Decoder::with_dictionary(
-                &compressed_seq[..],
-                dict.as_ref().unwrap(),
-            )
-            .unwrap();
-            seq_reader
-                .read_to_end(&mut seq)
-                .expect("Unable to read compressed sequence");
-        } else {
-            let mut seq_reader = zstd::stream::read::Decoder::new(&compressed_seq[..]).unwrap();
-            seq_reader
-                .read_to_end(&mut seq)
-                .expect("Unable to read compressed sequence");
+        let mut decompressor = zstd::block::Decompressor::new();
+
+        for loc in block_locs {
+            let decompressed = decompressor.decompress(&compressed_seq[loc.0 as usize..loc.1 as usize], BLOCK_SIZE).expect("Unable to decompress");
+            seq.extend_from_slice(&decompressed);
         }
 
         Entry {
@@ -201,7 +184,6 @@ pub struct Sequences {
     random_list: Option<Vec<u64>>,
 }
 
-// TODO: We need to cache DecoderDictionary at some point...
 impl Sequences {
     /// Given a filename, returns a Sequences variable.
     /// Can be used as an iterator.
@@ -258,7 +240,7 @@ impl Sequences {
 
         // Have to convert from EntryCompressed to Entry, this handles that middle
         // conversion.
-        let middle: Entry = ec.decompress(&self.header.dict);
+        let middle: Entry = ec.decompress();
         let mut seq: io::Sequence = middle.into();
         seq.make_uppercase();
 
@@ -312,7 +294,7 @@ impl Iterator for Sequences {
 
         // Have to convert from EntryCompressed to Entry, this handles that middle
         // conversion.
-        let middle: Entry = ec.decompress(&self.header.dict);
+        let middle: Entry = ec.decompress();
         let mut seq: io::Sequence = middle.into();
         seq.make_uppercase();
 
@@ -359,7 +341,6 @@ fn generate_sfasta_compressed_entry(
     seq: Vec<u8>,
     compression_type: CompressionType,
     compression_level: i32,
-    dict: &Option<Vec<u8>>,
 ) -> EntryCompressed {
     let len: u64 =
         u64::try_from(seq.len()).expect("Unlikely as it is, sequence length exceeds u64::MAX...");
@@ -370,7 +351,7 @@ fn generate_sfasta_compressed_entry(
         len,
     };
 
-    entry.compress(compression_type, compression_level, dict)
+    entry.compress(compression_type, compression_level)
 }
 
 /// Opens an SFASTA file and an index and returns a Box<dyn Read>,
@@ -388,61 +369,6 @@ pub fn open_file(filename: &str) -> (Box<dyn ReadAndSeek + Send>, Option<(Vec<St
     (Box::new(reader), load_index(&filename))
 }
 
-/// Build a ZSTD dictionary
-pub fn build_zstd_dict(filename: &str) -> Option<Vec<u8>> {
-    let (_, _, fasta) = generic_open_file(filename);
-    let mut reader = BufReader::with_capacity(512 * 1024, fasta);
-
-    let mut buffer: Vec<u8> = Vec::with_capacity(256);
-
-    let mut sample_data: Vec<u8> = Vec::with_capacity(64 * 1024 * 1024);
-    let mut sample_sizes: Vec<usize> = Vec::with_capacity(1024);
-    let mut maxsize: usize = 0;
-    let mut total_len: usize = 0;
-    let mut cur_len: usize = 0;
-    let mut first: bool = true;
-
-    while let Ok(bytes_read) = reader.read_until(b'\n', &mut buffer) {
-        if bytes_read == 0 || total_len >= 64 * 1024 * 1024 {
-            maxsize = std::cmp::max(maxsize, cur_len);
-            sample_sizes.push(cur_len);
-            break;
-        }
-
-        match buffer[0] {
-            // 62 is a > meaning we have a new sequence id OR this is the first entry...
-            62 => {
-                if first {
-                    first = false;
-                } else {
-                    maxsize = std::cmp::max(maxsize, cur_len);
-                    sample_sizes.push(cur_len);
-                    cur_len = 0;
-                }
-            }
-            _ => {
-                let slice_end = bytes_read.saturating_sub(1);
-                sample_data.extend_from_slice(&buffer[0..slice_end]);
-                cur_len += slice_end;
-                total_len += slice_end;
-            }
-        }
-
-        buffer.clear();
-    }
-
-    assert!(!sample_sizes.is_empty());
-
-    if total_len <= 1024 * 256 || sample_sizes.len() <= 7 {
-        None
-    } else {
-        match zstd::dict::from_continuous(&sample_data, &sample_sizes, maxsize) {
-            Ok(x) => Some(x),
-            Err(_) => None,
-        }
-    }
-}
-
 use crossbeam::queue::ArrayQueue;
 use crossbeam::utils::Backoff;
 use std::sync::atomic::Ordering;
@@ -458,9 +384,6 @@ pub fn convert_fasta_file(filename: &str, output: &str)
 // Convert file to bincode/zstd for faster processing
 // Stores accession/taxon information inside the Sequence struct
 {
-    // let dict = build_zstd_dict(filename);
-    let dict = None;
-
     let output_filename = check_extension(output);
 
     let out_file = File::create(output_filename.clone()).expect("Unable to write to file");
@@ -469,7 +392,6 @@ pub fn convert_fasta_file(filename: &str, output: &str)
     let (filesize, _, _) = generic_open_file(filename);
 
     let header = Header {
-        dict,
         citation: None,
         comment: None,
         id: Some(filename.to_string()),
@@ -535,7 +457,6 @@ pub fn convert_fasta_file(filename: &str, output: &str)
                             x.seq.to_vec(),
                             CompressionType::ZSTD,
                             3,
-                            &header.dict,
                         );
 
                         while let Err(x) = oq.push(entry) {
@@ -843,8 +764,8 @@ mod tests {
             comment: None,
         };
 
-        let ec = e.compress(CompressionType::ZSTD, 3, &None);
-        let e = ec.decompress(&None);
+        let ec = e.compress(CompressionType::ZSTD, 3);
+        let e = ec.decompress();
 
         assert!(e.seq == oseq);
     }
