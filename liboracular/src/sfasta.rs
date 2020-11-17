@@ -116,7 +116,7 @@ impl Entry {
 /// stored in separate entries following the EntryCompressedHEader.
 /// This allows faster searching of SFASTA files without spending
 /// CPU cycles on decompression prematurely.
-#[derive(PartialEq, Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct EntryCompressedHeader {
     pub id: String,
     pub compression_type: CompressionType,
@@ -343,7 +343,7 @@ impl Iterator for Sequences {
 
         let ec: EntryCompressedHeader = match bincode::deserialize_from(&mut self.reader) {
             Ok(x) => x,
-            Err(_) => return None, // panic!("Error at SFASTA::Sequences::next: {}", y)
+            Err(y) => panic!("Error at SFASTA::Sequences::next: {:#?}", y)
         };
 
         let mut sequence = Vec::new();
@@ -503,7 +503,6 @@ pub fn convert_fasta_file(filename: &str, output: &str)
     for _ in 0..thread_count {
         let q = Arc::clone(&queue);
         let oq = Arc::clone(&output_queue);
-        let header_copy = header.clone();
         let shutdown_copy = Arc::clone(&shutdown);
         let te = Arc::clone(&total_entries);
         let ce = Arc::clone(&compressed_entries);
@@ -578,6 +577,7 @@ pub fn convert_fasta_file(filename: &str, output: &str)
                 }
                 Some(cs) => {
                     ids.push(cs.0.id.clone());
+
                     locations.push(pos);
                     bincode::serialize_into(&mut out_fh, &cs.0)
                         .expect("Unable to write to bincode output");
@@ -669,7 +669,7 @@ pub fn test_sfasta(filename: String) {
 
     loop {
         seqnum += 1;
-        let entry = match bincode::deserialize_from::<_, EntryCompressedHeader>(&mut reader) {
+        let entry: EntryCompressedHeader = match bincode::deserialize_from(&mut reader) {
             Ok(x) => x,
             Err(x) => panic!("Found error: {}", x),
         };
@@ -928,6 +928,17 @@ mod tests {
     }
 
     #[test]
+    pub fn test_sfasta_fn() {
+        let input_filename = "test_data/test_large_multiple.fna";
+        let output_filename = "test_data/test_sfasta_fn.sfasta";
+
+        clear_idxcache();
+        convert_fasta_file(input_filename, output_filename);
+        
+        test_sfasta("test_data/test_sfasta_fn.sfasta".to_string());
+    }
+
+    #[test]
     pub fn test_index() {
         let input_filename = "test_data/test_multiple.fna";
         let output_filename = "test_data/test_index.sfasta";
@@ -959,6 +970,8 @@ mod tests {
 
         let mut sequences = Sequences::new(output_filename);
         sequences.set_mode(SeqMode::Random);
-        sequences.next();
+        let q = sequences.next().unwrap();
+        println!("Seq Len: {}", q.end);
+        assert!(q.end > 0);
     }
 }
