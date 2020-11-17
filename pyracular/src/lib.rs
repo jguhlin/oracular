@@ -616,7 +616,7 @@ impl TripleLossKmersGenerator {
                             &mut rng,
                         ) {
                             Some(x) => x,
-                            None => continue
+                            None => continue,
                         };
 
                     // RC
@@ -638,7 +638,7 @@ impl TripleLossKmersGenerator {
                             window_size,
                             &locs,
                             &mut rng,
-                        ) { 
+                        ) {
                             Some(x) => x,
                             None => continue,
                         };
@@ -736,7 +736,7 @@ fn get_random_sequence_from_id<R: Rng + ?Sized>(
     let seqlen = seq.seq.len().saturating_sub(needed_length);
 
     if seqlen == 0 {
-        return None
+        return None;
     }
 
     let mut start = rng.gen_range(0, seqlen);
@@ -758,7 +758,7 @@ fn get_random_sequence_from_id<R: Rng + ?Sized>(
         rng.gen(),
     ) {
         Some(x) => x,
-        None => return None
+        None => return None,
     };
 
     iter2.next()
@@ -775,10 +775,10 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
     let needed_length = (k * window_size) + k;
 
     let mut seqlen = 0;
-    
+
     let mut loc = locs.choose(&mut rng).unwrap().clone();
     let mut seq = sfasta.get_at(loc).unwrap();
- 
+
     while (seq.seq.len() < needed_length) || is_all_ns(&seq.seq[..]) {
         loc = locs.choose(&mut rng).unwrap().clone();
         seq = sfasta.get_at(loc).unwrap();
@@ -807,7 +807,7 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
         rng.gen(),
     ) {
         Some(x) => x,
-        None => return None
+        None => return None,
     };
 
     iter2.next()

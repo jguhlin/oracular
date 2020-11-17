@@ -160,13 +160,10 @@ fn stats(matches: &ArgMatches) {
     println!("Header Comment: {:#?}", seqs.header.comment);
     println!("Header Citation: {:#?}", seqs.header.citation);
 
-    let ids: Vec<(String, usize, u64)> = seqs
-        .take(5)
-        .map(|seq| (seq.id, seq.compressed_seq.len(), seq.len))
-        .collect();
+    let ids: Vec<(String, u64)> = seqs.take(5).map(|seq| (seq.id, seq.len)).collect();
     println!("\nRandom (up to 5) IDs");
     for e in ids {
-        println!("id: {} Compressed Size: {} Length: {}", e.0, e.1, e.2);
+        println!("id: {} Length: {}", e.0, e.1);
     }
 
     let mut seqs = sfasta::Sequences::new(&sfasta_filename);
@@ -174,10 +171,10 @@ fn stats(matches: &ArgMatches) {
     let mut seqs = seqs.into_compressed_sequences();
     let ec = seqs.next().unwrap();
 
-    let seq = ec.clone().decompress();
+    /*let seq = ec.clone().decompress();
     let len = if seq.len < 500 { seq.len as usize } else { 500 };
     println!("{}", std::str::from_utf8(&seq.seq[0..len]).unwrap());
-    println!("{} {}", seq.len, ec.compressed_seq.len());
+    println!("{} {}", seq.len, ec.compressed_seq.len());*/
 }
 
 fn index(matches: &ArgMatches) {

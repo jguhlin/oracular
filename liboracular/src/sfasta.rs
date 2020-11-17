@@ -3,7 +3,7 @@ use std::convert::From;
 use std::convert::TryFrom;
 use std::fs::{metadata, File};
 use std::io::prelude::*;
-use std::io::{BufRead, BufReader, BufWriter, Read, SeekFrom, Write};
+use std::io::{BufReader, BufWriter, Read, SeekFrom, Write};
 use std::path::Path;
 use std::time::Instant;
 
@@ -69,7 +69,7 @@ impl Entry {
         self,
         compression_type: CompressionType,
         compression_level: i32,
-    ) -> EntryCompressed {
+    ) -> (EntryCompressedHeader, Vec<EntryCompressedBlock>) {
         let Entry {
             id,
             seq,
@@ -77,79 +77,60 @@ impl Entry {
             len,
         } = self;
 
-        let mut compressed_seq = Vec::with_capacity(self.len as usize);
-        let mut block_locs: Vec<(u64, u64)> = Vec::with_capacity(256);
+        let mut block_count = 0;
+        let mut compressed_blocks: Vec<EntryCompressedBlock> = Vec::new();
 
         let blocks = seq.chunks(BLOCK_SIZE);
         let mut compressor = zstd::block::Compressor::new();
 
         for block in blocks {
-            let block_start = compressed_seq.len() as u64;
-            let compressed = compressor.compress(&block, compression_level).expect("Unable to write to compression buffer");
-            compressed_seq.extend_from_slice(&compressed);
-            let block_end = compressed_seq.len() as u64;
-            block_locs.push((block_start, block_end));
+            let compressed = compressor
+                .compress(&block, compression_level)
+                .expect("Unable to write to compression buffer");
+            compressed_blocks.push(EntryCompressedBlock {
+                id: id.clone(),
+                block_id: block_count,
+                compressed_seq: compressed,
+            });
+
+            block_count = match block_count.checked_add(1) {
+                Some(x) => x,
+                None => panic!("That's too many blocks...."),
+            };
         }
 
-        EntryCompressed {
-            id,
-            compression_type,
-            compressed_seq,
-            block_locs,
-            comment,
-            len,
-        }
+        (
+            EntryCompressedHeader {
+                id,
+                compression_type,
+                block_count,
+                comment,
+                len,
+            },
+            compressed_blocks,
+        )
     }
 }
 
 /// SFASTA files stored on disk are bincoded, with the sequence being
-/// compressed. Decompression does not occur unless EntryCompressed is converted
-/// to an Entry. This allows faster searching of SFASTA files without spending
+/// stored in separate entries following the EntryCompressedHEader.
+/// This allows faster searching of SFASTA files without spending
 /// CPU cycles on decompression prematurely.
 #[derive(PartialEq, Serialize, Deserialize, Clone)]
-pub struct EntryCompressed {
+pub struct EntryCompressedHeader {
     pub id: String,
     pub compression_type: CompressionType,
-
-    #[serde(with = "serde_bytes")]
-    pub compressed_seq: Vec<u8>,
-    pub block_locs: Vec<(u64, u64)>,
+    pub block_count: u64,
     pub comment: Option<String>,
     pub len: u64,
 }
 
-/// Destroys EntryCompressed struct and returns owned id as String
-impl EntryCompressed {
-    pub fn take_id(self) -> String {
-        self.id
-    }
-
-    pub fn decompress(self) -> Entry {
-        let EntryCompressed {
-            id,
-            compression_type,
-            compressed_seq,
-            block_locs,
-            comment,
-            len,
-        } = self;
-        
-        let mut seq: Vec<u8> = Vec::with_capacity(len as usize);
-
-        let mut decompressor = zstd::block::Decompressor::new();
-
-        for loc in block_locs {
-            let decompressed = decompressor.decompress(&compressed_seq[loc.0 as usize..loc.1 as usize], BLOCK_SIZE).expect("Unable to decompress");
-            seq.extend_from_slice(&decompressed);
-        }
-
-        Entry {
-            id,
-            seq,
-            comment,
-            len,
-        }
-    }
+#[derive(PartialEq, Serialize, Deserialize, Clone)]
+pub struct EntryCompressedBlock {
+    pub id: String,
+    pub block_id: u64,
+    #[serde(with = "serde_bytes")]
+    pub compressed_seq: Vec<u8>,
 }
 
 /// Converts an SFASTA::Entry into io::Sequence for further processing
@@ -228,23 +209,42 @@ impl Sequences {
         self.get_at(file_pos)
     }
 
+    // Decompresses the entire sequence...
     pub fn get_at(&mut self, file_pos: u64) -> Option<io::Sequence> {
         self.reader
             .seek(SeekFrom::Start(file_pos))
             .expect("Unable to work with seek API");
 
-        let ec: EntryCompressed = match bincode::deserialize_from(&mut self.reader) {
+        let ec: EntryCompressedHeader = match bincode::deserialize_from(&mut self.reader) {
             Ok(x) => x,
             Err(_) => return None, // panic!("Error at SFASTA::Sequences::next: {}", y)
         };
 
-        // Have to convert from EntryCompressed to Entry, this handles that middle
-        // conversion.
-        let middle: Entry = ec.decompress();
-        let mut seq: io::Sequence = middle.into();
-        seq.make_uppercase();
+        let mut sequence = Vec::new();
+        let mut decompressor = zstd::block::Decompressor::new();
 
-        Some(seq)
+        for _i in 0..ec.block_count as usize {
+            let entry: EntryCompressedBlock = match bincode::deserialize_from(&mut self.reader) {
+                Ok(x) => x,
+                Err(_) => panic!("Error decoding compressed block"),
+            };
+
+            let seq = match decompressor.decompress(&entry.compressed_seq, BLOCK_SIZE) {
+                Ok(x) => x,
+                Err(_) => panic!("Unable to decompress"),
+            };
+
+            sequence.extend_from_slice(&seq);
+        }
+
+        sequence.make_ascii_uppercase();
+
+        Some(io::Sequence {
+            seq: sequence,
+            end: ec.len as usize,
+            id: ec.id,
+            location: 0,
+        })
     }
 
     // Convert to iterator that only returns EntryCompressed...
@@ -287,26 +287,44 @@ impl Iterator for Sequences {
                 .expect("Unable to work with seek API");
         }
 
-        let ec: EntryCompressed = match bincode::deserialize_from(&mut self.reader) {
+        let ec: EntryCompressedHeader = match bincode::deserialize_from(&mut self.reader) {
             Ok(x) => x,
             Err(_) => return None, // panic!("Error at SFASTA::Sequences::next: {}", y)
         };
 
-        // Have to convert from EntryCompressed to Entry, this handles that middle
-        // conversion.
-        let middle: Entry = ec.decompress();
-        let mut seq: io::Sequence = middle.into();
-        seq.make_uppercase();
+        let mut sequence = Vec::new();
+        let mut decompressor = zstd::block::Decompressor::new();
 
-        Some(seq)
+        for _i in 0..ec.block_count as usize {
+            let entry: EntryCompressedBlock = match bincode::deserialize_from(&mut self.reader) {
+                Ok(x) => x,
+                Err(_) => panic!("Error decoding compressed block"),
+            };
+
+            let seq = match decompressor.decompress(&entry.compressed_seq, BLOCK_SIZE) {
+                Ok(x) => x,
+                Err(_) => panic!("Unable to decompress"),
+            };
+
+            sequence.extend_from_slice(&seq);
+        }
+
+        sequence.make_ascii_uppercase();
+
+        Some(io::Sequence {
+            seq: sequence,
+            end: ec.len as usize,
+            id: ec.id,
+            location: 0,
+        })
     }
 }
 
 impl Iterator for CompressedSequences {
-    type Item = EntryCompressed;
+    type Item = EntryCompressedHeader;
 
     /// Get the next SFASTA entry as an EntryCompressed struct
-    fn next(&mut self) -> Option<EntryCompressed> {
+    fn next(&mut self) -> Option<EntryCompressedHeader> {
         if self.access == SeqMode::Random {
             assert!(self.random_list.is_some());
             let rl = self.random_list.as_mut().unwrap();
@@ -317,7 +335,7 @@ impl Iterator for CompressedSequences {
                 .expect("Unable to work with seek API");
         }
 
-        let ec: EntryCompressed = match bincode::deserialize_from(&mut self.reader) {
+        let ec: EntryCompressedHeader = match bincode::deserialize_from(&mut self.reader) {
             Ok(x) => x,
             Err(_) => return None, // panic!("Error at SFASTA::Sequences::next: {}", y)
         };
@@ -341,7 +359,7 @@ fn generate_sfasta_compressed_entry(
     seq: Vec<u8>,
     compression_type: CompressionType,
     compression_level: i32,
-) -> EntryCompressed {
+) -> (EntryCompressedHeader, Vec<EntryCompressedBlock>) {
     let len: u64 =
         u64::try_from(seq.len()).expect("Unlikely as it is, sequence length exceeds u64::MAX...");
     let entry = Entry {
@@ -404,6 +422,9 @@ pub fn convert_fasta_file(filename: &str, output: &str)
     let mut ids = Vec::with_capacity(starting_size);
     let mut locations = Vec::with_capacity(starting_size);
 
+    let mut block_ids = Vec::with_capacity(starting_size * 1024);
+    let mut block_locations: Vec<u64> = Vec::with_capacity(starting_size * 1024);
+
     let mut pos = out_fh
         .seek(SeekFrom::Current(0))
         .expect("Unable to work with seek API");
@@ -420,7 +441,8 @@ pub fn convert_fasta_file(filename: &str, output: &str)
     let written_entries = Arc::new(AtomicUsize::new(0));
 
     let queue: Arc<ArrayQueue<fasta::Sequence>> = Arc::new(ArrayQueue::new(queue_size));
-    let output_queue: Arc<ArrayQueue<EntryCompressed>> = Arc::new(ArrayQueue::new(queue_size));
+    let output_queue: Arc<ArrayQueue<(EntryCompressedHeader, Vec<EntryCompressedBlock>)>> =
+        Arc::new(ArrayQueue::new(queue_size));
 
     let mut worker_handles = Vec::new();
 
@@ -451,7 +473,7 @@ pub fn convert_fasta_file(filename: &str, output: &str)
                     }
                     Some(x) => {
                         // let x = result.unwrap();
-                        let mut entry: EntryCompressed = generate_sfasta_compressed_entry(
+                        let mut entry = generate_sfasta_compressed_entry(
                             x.id.clone(),
                             None,
                             x.seq.to_vec(),
@@ -477,6 +499,7 @@ pub fn convert_fasta_file(filename: &str, output: &str)
     let q = Arc::clone(&queue);
     let te = Arc::clone(&total_entries);
 
+    // This thread does the writing...
     let output_thread = thread::spawn(move || {
         let shutdown = shutdown_copy;
         let output_queue = oq;
@@ -496,15 +519,25 @@ pub fn convert_fasta_file(filename: &str, output: &str)
                         && shutdown.load(Ordering::Relaxed)
                     {
                         drop(out_fh);
-                        create_index(&output_filename, ids, locations);
+                        create_index(&output_filename, ids, locations, block_ids, block_locations);
                         return;
                     }
                 }
                 Some(cs) => {
-                    ids.push(cs.id.clone());
+                    ids.push(cs.0.id.clone());
                     locations.push(pos);
-                    bincode::serialize_into(&mut out_fh, &cs)
+                    bincode::serialize_into(&mut out_fh, &cs.0)
                         .expect("Unable to write to bincode output");
+
+                    for block in cs.1 {
+                        pos = out_fh
+                            .seek(SeekFrom::Current(0))
+                            .expect("Unable to work with seek API");
+                        block_ids.push((block.id.clone(), block.block_id));
+                        bincode::serialize_into(&mut out_fh, &block)
+                            .expect("Unable to write to bincode output");
+                    }
+
                     pos = out_fh
                         .seek(SeekFrom::Current(0))
                         .expect("Unable to work with seek API");
@@ -548,8 +581,11 @@ pub fn get_headers_from_sfasta(filename: String) -> Vec<String> {
 
     let mut ids: Vec<String> = Vec::with_capacity(2048);
 
-    while let Ok(entry) = bincode::deserialize_from::<_, EntryCompressed>(&mut reader) {
+    while let Ok(entry) = bincode::deserialize_from::<_, EntryCompressedHeader>(&mut reader) {
         ids.push(entry.id);
+        for _i in 0..entry.block_count as usize {
+            let _x: EntryCompressedBlock = bincode::deserialize_from(&mut reader).unwrap();
+        }
     }
 
     ids
@@ -569,10 +605,14 @@ pub fn test_sfasta(filename: String) {
 
     loop {
         seqnum += 1;
-        match bincode::deserialize_from::<_, EntryCompressed>(&mut reader) {
-            Ok(_) => println!("OK SEQ: {}", seqnum),
+        let entry = match bincode::deserialize_from::<_, EntryCompressedHeader>(&mut reader) {
+            Ok(x) => x,
             Err(x) => panic!("Found error: {}", x),
         };
+
+        for _i in 0..entry.block_count as usize {
+            let _x: EntryCompressedBlock = bincode::deserialize_from(&mut reader).unwrap();
+        }
     }
 }
 
@@ -599,6 +639,9 @@ pub fn index(filename: &str) -> String {
     let mut ids = Vec::with_capacity(starting_size);
     let mut locations = Vec::with_capacity(starting_size);
 
+    let mut block_ids = Vec::with_capacity(starting_size);
+    let mut block_locations = Vec::with_capacity(starting_size);
+
     let fh = match File::open(&filename) {
         Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
         Ok(file) => file,
@@ -618,7 +661,7 @@ pub fn index(filename: &str) -> String {
         Err(_) => panic!("Header missing or malformed in SFASTA file"),
     };
 
-    while let Ok(entry) = bincode::deserialize_from::<_, EntryCompressed>(&mut fh) {
+    while let Ok(entry) = bincode::deserialize_from::<_, EntryCompressedHeader>(&mut fh) {
         i += 1;
         if i % 100_000 == 0 {
             println!("100k at {} ms.", now.elapsed().as_millis()); //Maxalloc {} bytes", now.elapsed().as_secs(), maxalloc);
@@ -631,17 +674,33 @@ pub fn index(filename: &str) -> String {
             now = Instant::now();
         }
 
-        ids.push(entry.take_id());
+        ids.push(entry.id.clone());
         locations.push(pos);
-        //        idx.insert(entry.id.clone(), pos);
+
         pos = fh
             .seek(SeekFrom::Current(0))
             .expect("Unable to work with seek API");
-        //        maxalloc = std::cmp::max(maxalloc, bump.allocated_bytes());
-        //        bump.reset();
+
+        for i in 0..entry.block_count as usize {
+            pos = fh
+                .seek(SeekFrom::Current(0))
+                .expect("Unable to work with seek API");
+
+            let entry: EntryCompressedBlock = match bincode::deserialize_from(&mut fh) {
+                Ok(x) => x,
+                Err(_) => panic!("Error decoding compressed block"),
+            };
+
+            block_ids.push((entry.id.clone(), i as u64));
+            block_locations.push(pos as u64);
+        }
+
+        pos = fh
+            .seek(SeekFrom::Current(0))
+            .expect("Unable to work with seek API");
     }
 
-    create_index(filename, ids, locations)
+    create_index(filename, ids, locations, block_ids, block_locations)
 }
 
 fn get_index_filename(filename: &str) -> String {
@@ -724,7 +783,13 @@ fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>)> {
     Some((keys, vals))
 }
 
-fn create_index(filename: &str, ids: Vec<String>, locations: Vec<u64>) -> String {
+fn create_index(
+    filename: &str,
+    ids: Vec<String>,
+    locations: Vec<u64>,
+    block_ids: Vec<(String, u64)>,
+    block_locations: Vec<u64>,
+) -> String {
     let idx: HashMap<String, u64> = ids.into_iter().zip(locations).collect();
 
     let mut sorted: Vec<_> = idx.into_iter().collect();
@@ -742,6 +807,15 @@ fn create_index(filename: &str, ids: Vec<String>, locations: Vec<u64>) -> String
     // bincode::serialize_into(&mut out_fh, &idx).expect("Unable to write index");
 
     bincode::serialize_into(&mut out_fh, &(keys.len() as u64)).expect("Unable to write index");
+    bincode::serialize_into(&mut out_fh, &keys).expect("Unable to write index");
+    bincode::serialize_into(&mut out_fh, &vals).expect("Unable to write index");
+
+    let idx: HashMap<(String, u64), u64> = block_ids.into_iter().zip(block_locations).collect();
+
+    let mut sorted: Vec<_> = idx.into_iter().collect();
+    sorted.sort_by(|x, y| x.0.cmp(&y.0));
+    let keys: Vec<_> = sorted.iter().map(|x| x.0.clone()).collect();
+    let vals: Vec<_> = sorted.iter().map(|x| x.1.clone()).collect();
     bincode::serialize_into(&mut out_fh, &keys).expect("Unable to write index");
     bincode::serialize_into(&mut out_fh, &vals).expect("Unable to write index");
 
@@ -765,9 +839,9 @@ mod tests {
         };
 
         let ec = e.compress(CompressionType::ZSTD, 3);
-        let e = ec.decompress();
+        //        let e = ec.decompress();
 
-        assert!(e.seq == oseq);
+        //        assert!(e.seq == oseq);
     }
 
     #[test]
@@ -800,7 +874,7 @@ mod tests {
         reader
             .seek(SeekFrom::Start(*i[0]))
             .expect("Unable to work with seek API");
-        match bincode::deserialize_from::<_, EntryCompressed>(&mut reader) {
+        match bincode::deserialize_from::<_, EntryCompressedHeader>(&mut reader) {
             Ok(x) => x,
             Err(_) => panic!("Unable to read indexed SFASTA after jumping"),
         };
