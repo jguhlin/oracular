@@ -511,7 +511,6 @@ pub fn convert_fasta_file(filename: &str, output: &str)
         let handle = thread::spawn(move || {
             let shutdown = shutdown_copy;
             let backoff = Backoff::new();
-            let header = header_copy;
             let mut result;
             loop {
                 result = q.pop();
@@ -633,6 +632,11 @@ pub fn get_headers_from_sfasta(filename: String) -> Vec<String> {
     };
 
     let mut reader = BufReader::with_capacity(512 * 1024, file);
+
+    let header: Header = match bincode::deserialize_from(&mut reader) {
+        Ok(x) => x,
+        Err(_) => panic!("Header missing or malformed in SFASTA file"),
+    };
 
     let mut ids: Vec<String> = Vec::with_capacity(2048);
 
