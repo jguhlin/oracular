@@ -1003,7 +1003,7 @@ mod tests {
          let entry = EntryCompressedBlock {
              id: "Example".to_string(),
              block_id: 0,
-             compressed_seq: b"AAAAAAAAAAA"
+             compressed_seq: b"AAAAAAAAAAA".to_vec()
           };
 
           bincode::serialize_into(&mut out_fh, &entry).expect("Unable to write first block");
@@ -1011,7 +1011,7 @@ mod tests {
           let entry = EntryCompressedBlock {
             id: "Example".to_string(),
             block_id: 1,
-            compressed_seq: b"AAAAAAAAAAA"
+            compressed_seq: b"AAAAAAAAAAA".to_vec()
          };
 
           bincode::serialize_into(&mut out_fh, &entry).expect("Unable to write first block");
