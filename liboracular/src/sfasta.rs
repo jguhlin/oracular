@@ -19,7 +19,9 @@ use crate::io;
 
 use once_cell::sync::OnceCell;
 use std::sync::{Arc, RwLock};
-static IDXCACHE: OnceCell<Arc<RwLock<HashMap<String, (Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)>>>> = OnceCell::new();
+static IDXCACHE: OnceCell<
+    Arc<RwLock<HashMap<String, (Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)>>>,
+> = OnceCell::new();
 
 // SuperTrait
 pub trait ReadAndSeek: Read + Seek + Send {}
@@ -154,6 +156,7 @@ pub struct CompressedSequences {
     pub idx: Option<(Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)>,
     access: SeqMode,
     random_list: Option<Vec<u64>>,
+    filesize: u64,
 }
 
 /// Iterator to return io::Sequences
@@ -163,12 +166,14 @@ pub struct Sequences {
     pub idx: Option<(Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)>,
     access: SeqMode,
     random_list: Option<Vec<u64>>,
+    filesize: u64,
 }
 
 impl Sequences {
     /// Given a filename, returns a Sequences variable.
     /// Can be used as an iterator.
     pub fn new(filename: &str) -> Sequences {
+        let filesize = metadata(&filename).expect("Unable to open file").len();
         let (mut reader, idx) = open_file(filename);
         let header: Header = match bincode::deserialize_from(&mut reader) {
             Ok(x) => x,
@@ -181,6 +186,7 @@ impl Sequences {
             idx,
             access: SeqMode::Linear,
             random_list: None,
+            filesize,
         }
     }
 
@@ -213,7 +219,7 @@ impl Sequences {
         self.reader
             .seek(SeekFrom::Start(file_pos))
             .expect("Unable to work with seek API");
-        
+
         let ec: EntryCompressedHeader = match bincode::deserialize_from(&mut self.reader) {
             Ok(x) => x,
             Err(_) => return Err("Unable to get header via get_header_at"),
@@ -222,7 +228,12 @@ impl Sequences {
         Ok(ec)
     }
 
-    pub fn get_seq_slice(&mut self, id: String, start: u64, end: u64) -> Result<Vec<u8>, &'static str> {
+    pub fn get_seq_slice(
+        &mut self,
+        id: String,
+        start: u64,
+        end: u64,
+    ) -> Result<Vec<u8>, &'static str> {
         let start_block = start as f64 / BLOCK_SIZE as f64;
         let start_block = start_block.floor() as usize;
 
@@ -234,7 +245,13 @@ impl Sequences {
         let mut decompressor = zstd::block::Decompressor::new();
 
         for i in start_block..end_block {
-            let block_loc = match self.idx.as_ref().unwrap().2.binary_search(&(id.clone(), i as u64)) {
+            let block_loc = match self
+                .idx
+                .as_ref()
+                .unwrap()
+                .2
+                .binary_search(&(id.clone(), i as u64))
+            {
                 Ok(x) => x as u64,
                 Err(_) => return Err("Unable to find block"),
             };
@@ -254,13 +271,12 @@ impl Sequences {
             };
 
             sequence.extend_from_slice(&seq);
-
         }
 
         let mut start = start as usize - (BLOCK_SIZE as usize * start_block);
         let mut end = end as usize - (BLOCK_SIZE as usize * start_block);
 
-        return Ok(sequence[start..end].to_vec())
+        return Ok(sequence[start..end].to_vec());
     }
 
     // Decompresses the entire sequence...
@@ -309,6 +325,7 @@ impl Sequences {
             idx,
             access,
             random_list,
+            filesize,
         } = self;
 
         CompressedSequences {
@@ -317,6 +334,7 @@ impl Sequences {
             idx,
             access,
             random_list,
+            filesize,
         }
     }
 }
@@ -339,11 +357,20 @@ impl Iterator for Sequences {
             self.reader
                 .seek(SeekFrom::Start(next_loc))
                 .expect("Unable to work with seek API");
+        } else {
+            let pos = self
+                .reader
+                .seek(SeekFrom::Current(0))
+                .expect("Unable to work with seek API");
+
+            if pos == self.filesize {
+                return None;
+            }
         }
 
         let ec: EntryCompressedHeader = match bincode::deserialize_from(&mut self.reader) {
             Ok(x) => x,
-            Err(y) => panic!("Error at SFASTA::Sequences::next: {:#?}", y)
+            Err(y) => panic!("Error at SFASTA::Sequences::next: {:#?}", y),
         };
 
         let mut sequence = Vec::new();
@@ -387,6 +414,15 @@ impl Iterator for CompressedSequences {
             self.reader
                 .seek(SeekFrom::Start(next_loc.unwrap()))
                 .expect("Unable to work with seek API");
+        } else {
+            let pos = self
+                .reader
+                .seek(SeekFrom::Current(0))
+                .expect("Unable to work with seek API");
+
+            if pos == self.filesize {
+                return None;
+            }
         }
 
         let ec: EntryCompressedHeader = match bincode::deserialize_from(&mut self.reader) {
@@ -428,7 +464,12 @@ fn generate_sfasta_compressed_entry(
 
 /// Opens an SFASTA file and an index and returns a Box<dyn Read>,
 /// HashMap<String, usize> type
-pub fn open_file(filename: &str) -> (Box<dyn ReadAndSeek + Send>, Option<(Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)>) {
+pub fn open_file(
+    filename: &str,
+) -> (
+    Box<dyn ReadAndSeek + Send>,
+    Option<(Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)>,
+) {
     let filename = check_extension(filename);
 
     let file = match File::open(Path::new(&filename)) {
@@ -675,9 +716,9 @@ pub fn test_sfasta(filename: String) {
         pos = reader
             .seek(SeekFrom::Current(0))
             .expect("Unable to work with seek API");
-        
+
         if pos == filesize {
-            break
+            break;
         }
 
         seqnum += 1;
@@ -859,7 +900,15 @@ fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>, Vec<(String, u64
     block_vals = bincode::deserialize_from(&mut idxfh).expect("Unable to read idx values");
 
     let mut idxcache = IDXCACHE.get().unwrap().write().unwrap();
-    idxcache.insert(idx_filename.clone(), (keys.clone(), vals.clone(), block_keys.clone(), block_vals.clone()));
+    idxcache.insert(
+        idx_filename.clone(),
+        (
+            keys.clone(),
+            vals.clone(),
+            block_keys.clone(),
+            block_vals.clone(),
+        ),
+    );
 
     Some((keys, vals, block_keys, block_vals))
 }
@@ -946,7 +995,7 @@ mod tests {
 
         clear_idxcache();
         convert_fasta_file(input_filename, output_filename);
-        
+
         test_sfasta("test_data/test_sfasta_fn.sfasta".to_string());
     }
 
@@ -993,71 +1042,67 @@ mod tests {
 
         let out_file = File::create(output_filename.clone()).expect("Unable to write to file");
         let mut out_fh = BufWriter::new(out_file);
-    
+
         let header = Header {
             citation: None,
             comment: None,
             id: Some(output_filename.to_string()),
         };
-    
+
         bincode::serialize_into(&mut out_fh, &header).expect("Unable to write to bincode output");
 
-        let entryheader = EntryCompressedHeader { 
+        let entryheader = EntryCompressedHeader {
             id: "Example".to_string(),
             compression_type: CompressionType::ZSTD,
             block_count: 2,
             comment: None,
-            len: 100
-         };
+            len: 100,
+        };
 
-         bincode::serialize_into(&mut out_fh, &entryheader).expect("Unable to write EntryCompressedHeader");
+        bincode::serialize_into(&mut out_fh, &entryheader)
+            .expect("Unable to write EntryCompressedHeader");
 
-         let entry = EntryCompressedBlock {
-             id: "Example".to_string(),
-             block_id: 0,
-             compressed_seq: b"AAAAAAAAAAA".to_vec()
-          };
+        let entry = EntryCompressedBlock {
+            id: "Example".to_string(),
+            block_id: 0,
+            compressed_seq: b"AAAAAAAAAAA".to_vec(),
+        };
 
-          bincode::serialize_into(&mut out_fh, &entry).expect("Unable to write first block");
+        bincode::serialize_into(&mut out_fh, &entry).expect("Unable to write first block");
 
-          let entry = EntryCompressedBlock {
+        let entry = EntryCompressedBlock {
             id: "Example".to_string(),
             block_id: 1,
-            compressed_seq: b"AAAAAAAAAAA".to_vec()
-         };
+            compressed_seq: b"AAAAAAAAAAA".to_vec(),
+        };
 
-          bincode::serialize_into(&mut out_fh, &entry).expect("Unable to write first block");
+        bincode::serialize_into(&mut out_fh, &entry).expect("Unable to write first block");
 
-          drop(out_fh);
+        drop(out_fh);
 
-          let file = match File::open(&output_filename) {
+        let file = match File::open(&output_filename) {
             Err(why) => panic!("Couldn't open: {}", why.to_string()),
             Ok(file) => file,
-          };
-    
-            let mut reader = BufReader::with_capacity(512 * 1024, file);
-    
-            let header: Header = match bincode::deserialize_from(&mut reader) {
-                Ok(x) => x,
-                Err(_) => panic!("Header missing or malformed in SFASTA file"),
-            };
+        };
 
-            let entry: EntryCompressedHeader = match bincode::deserialize_from(&mut reader) {
-                Ok(x) => x,
-                Err(x) => panic!("Found error: {}", x),
-            };
+        let mut reader = BufReader::with_capacity(512 * 1024, file);
 
-            for _i in 0..entry.block_count as usize {
-                let _x: EntryCompressedBlock = bincode::deserialize_from(&mut reader).unwrap();
-            }
-    
-    
+        let header: Header = match bincode::deserialize_from(&mut reader) {
+            Ok(x) => x,
+            Err(_) => panic!("Header missing or malformed in SFASTA file"),
+        };
 
-            println!("{:#?}", header);
-        
+        let entry: EntryCompressedHeader = match bincode::deserialize_from(&mut reader) {
+            Ok(x) => x,
+            Err(x) => panic!("Found error: {}", x),
+        };
 
-          test_sfasta(output_filename.to_string());
+        for _i in 0..entry.block_count as usize {
+            let _x: EntryCompressedBlock = bincode::deserialize_from(&mut reader).unwrap();
+        }
+
+        println!("{:#?}", header);
+
+        test_sfasta(output_filename.to_string());
     }
-
-
 }
