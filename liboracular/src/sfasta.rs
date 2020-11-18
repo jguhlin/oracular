@@ -974,4 +974,52 @@ mod tests {
         println!("Seq Len: {}", q.end);
         assert!(q.end > 0);
     }
+
+    #[test]
+    pub fn test_gen_sfasta_manually_and_read() {
+        let output_filename = "test_bincode.sfasta";
+
+        let out_file = File::create(output_filename.clone()).expect("Unable to write to file");
+        let mut out_fh = BufWriter::new(out_file);
+    
+        let header = Header {
+            citation: None,
+            comment: None,
+            id: Some(filename.to_string()),
+        };
+    
+        bincode::serialize_into(&mut out_fh, &header).expect("Unable to write to bincode output");
+
+        let entryheader = EntryCompressedHeader { 
+            id: "Example".to_string(),
+            compression_type: CompressionType::ZSTD,
+            block_count: 2,
+            comment: None,
+            len: 100
+         };
+
+         bincode::serialize_into(&mut out_fh, &entryheader).expect("Unable to write EntryCompressedHeader");
+
+         let entry = EntryCompressedBlock {
+             id: "Example".to_string(),
+             block_id: 0,
+             compressed_seq: b"AAAAAAAAAAA"
+          };
+
+          bincode::serialize_into(&mut out_fh, &entry).expect("Unable to write first block");
+
+          let entry = EntryCompressedBlock {
+            id: "Example".to_string(),
+            block_id: 1,
+            compressed_seq: b"AAAAAAAAAAA"
+         };
+
+          bincode::serialize_into(&mut out_fh, &entry).expect("Unable to write first block");
+
+          drop(out_fh);
+
+          test_sfasta(output_filename.to_string());
+    }
+
+
 }
