@@ -116,7 +116,7 @@ impl Entry {
 /// stored in separate entries following the EntryCompressedHEader.
 /// This allows faster searching of SFASTA files without spending
 /// CPU cycles on decompression prematurely.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(PartialEq, Serialize, Deserialize, Clone)]
 pub struct EntryCompressedHeader {
     pub id: String,
     pub compression_type: CompressionType,
@@ -658,6 +658,8 @@ pub fn test_sfasta(filename: String) {
         Ok(file) => file,
     };
 
+    let filesize = metadata(&filename).expect("Unable to open file").len();
+
     let mut reader = BufReader::with_capacity(512 * 1024, file);
 
     let mut seqnum: usize = 0;
@@ -667,7 +669,17 @@ pub fn test_sfasta(filename: String) {
         Err(_) => panic!("Header missing or malformed in SFASTA file"),
     };
 
+    let mut pos = 0;
+
     loop {
+        pos = reader
+            .seek(SeekFrom::Current(0))
+            .expect("Unable to work with seek API");
+        
+        if pos == filesize {
+            break
+        }
+
         seqnum += 1;
         let entry: EntryCompressedHeader = match bincode::deserialize_from(&mut reader) {
             Ok(x) => x,
@@ -1017,6 +1029,32 @@ mod tests {
           bincode::serialize_into(&mut out_fh, &entry).expect("Unable to write first block");
 
           drop(out_fh);
+
+          let file = match File::open(&output_filename) {
+            Err(why) => panic!("Couldn't open: {}", why.to_string()),
+            Ok(file) => file,
+          };
+    
+            let mut reader = BufReader::with_capacity(512 * 1024, file);
+    
+            let header: Header = match bincode::deserialize_from(&mut reader) {
+                Ok(x) => x,
+                Err(_) => panic!("Header missing or malformed in SFASTA file"),
+            };
+
+            let entry: EntryCompressedHeader = match bincode::deserialize_from(&mut reader) {
+                Ok(x) => x,
+                Err(x) => panic!("Found error: {}", x),
+            };
+
+            for _i in 0..entry.block_count as usize {
+                let _x: EntryCompressedBlock = bincode::deserialize_from(&mut reader).unwrap();
+            }
+    
+    
+
+            println!("{:#?}", header);
+        
 
           test_sfasta(output_filename.to_string());
     }
