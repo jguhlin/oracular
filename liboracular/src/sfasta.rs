@@ -985,7 +985,7 @@ mod tests {
         let header = Header {
             citation: None,
             comment: None,
-            id: Some(foutput_ilename.to_string()),
+            id: Some(output_filename.to_string()),
         };
     
         bincode::serialize_into(&mut out_fh, &header).expect("Unable to write to bincode output");
