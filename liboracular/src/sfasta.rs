@@ -64,7 +64,7 @@ pub struct Entry {
     pub len: u64,
 }
 
-const BLOCK_SIZE: usize = 256 * 1024;
+const BLOCK_SIZE: usize = 8 * 1024 * 1024;
 
 impl Entry {
     pub fn compress(
