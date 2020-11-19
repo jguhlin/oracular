@@ -905,9 +905,11 @@ impl<Q> QueueImpl<Q> {
                 exhausted_c.store(true, Ordering::SeqCst);
                 shutdown_c.store(true, Ordering::SeqCst);
             });
+            
+            handles.append(handle);
+
         }
 
-        handles.append(handle);
         
         QueueImpl {
             shutdown,
