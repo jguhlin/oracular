@@ -931,7 +931,7 @@ impl<Q> QueueImpl<Q> {
 
     #[inline]
     fn unpark(&self) {
-        for i in self.handles {
+        for i in &self.handles {
             i.thread().unpark();
         }
     }
