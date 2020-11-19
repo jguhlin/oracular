@@ -402,10 +402,10 @@ impl Iterator for Sequences {
 }
 
 impl Iterator for CompressedSequences {
-    type Item = EntryCompressedHeader;
+    type Item = (EntryCompressedHeader, Vec<EntryCompressedBlock>);
 
     /// Get the next SFASTA entry as an EntryCompressed struct
-    fn next(&mut self) -> Option<EntryCompressedHeader> {
+    fn next(&mut self) -> Option<(EntryCompressedHeader, Vec<EntryCompressedBlock>)> {
         if self.access == SeqMode::Random {
             assert!(self.random_list.is_some());
             let rl = self.random_list.as_mut().unwrap();
@@ -430,9 +430,15 @@ impl Iterator for CompressedSequences {
             Err(_) => return None, // panic!("Error at SFASTA::Sequences::next: {}", y)
         };
 
+        let mut blocks = Vec::with_capacity(ec.block_count as usize);
+        for _i in 0..ec.block_count as usize {
+            let x: EntryCompressedBlock = bincode::deserialize_from(&mut self.reader).unwrap();
+            blocks.push(x);
+        }
+
         // Have to convert from EntryCompressed to Entry, this handles that middle
         // conversion.
-        Some(ec)
+        Some((ec, blocks))
     }
 }
 
@@ -839,18 +845,16 @@ fn get_index_filename(filename: &str) -> String {
 }
 
 pub fn clear_idxcache() {
-    IDXCACHE.get_or_init(|| {
-        Arc::new(RwLock::new(HashMap::new()))
-    });
-//            .expect("Unable to set IDXCACHE");
-//    }
+    IDXCACHE.get_or_init(|| Arc::new(RwLock::new(HashMap::new())));
+    //            .expect("Unable to set IDXCACHE");
+    //    }
 
     let mut idxcache = IDXCACHE.get().unwrap().write().unwrap();
     *idxcache = HashMap::new();
 }
 
 fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)> {
-    IDXCACHE.get_or_init(|| { Arc::new(RwLock::new(HashMap::new())) });
+    IDXCACHE.get_or_init(|| Arc::new(RwLock::new(HashMap::new())));
 
     let idx_filename = get_index_filename(filename);
 
@@ -909,7 +913,7 @@ fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>, Vec<(String, u64
     Some((keys, vals, block_keys, block_vals))
 }
 
-fn create_index(
+pub fn create_index(
     filename: &str,
     ids: Vec<String>,
     locations: Vec<u64>,

@@ -23,13 +23,13 @@ use rand_xoshiro::Xoshiro256PlusPlus;
 // NOTE: New naming convention
 // Rust-y stuff is "iter" Python is "Generator"
 
+use liboracular::io;
 use liboracular::kmers::KmerWindow;
 use liboracular::kmers::{
     rc_kmerwindow, replace_random, DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3Kmers,
     Gff3KmersIter, KmerCoordsWindow, KmerCoordsWindowIter, KmerWindowGenerator,
 };
 use liboracular::sfasta;
-use liboracular::io as io;
 
 use pyo3::prelude::*;
 // use pyo3::wrap_pyfunction;
@@ -796,13 +796,15 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
         end = seq.len;
     }
 
-    let sequence = sfasta.get_seq_slice(seq.id.clone(), start, end).expect("Unable to get seq slice");
+    let sequence = sfasta
+        .get_seq_slice(seq.id.clone(), start, end)
+        .expect("Unable to get seq slice");
 
     let mut workseq = io::Sequence {
         seq: sequence,
         end: end as usize,
         location: start as usize,
-        id: seq.id.clone()
+        id: seq.id.clone(),
     };
 
     let mut iter2 = match KmerWindowGenerator::from_sequence(
@@ -893,7 +895,6 @@ impl<Q> QueueImpl<Q> {
         let fc = Arc::new(func);
 
         for _i in 0..threads {
-
             let shutdown_c = Arc::clone(&shutdown);
             let exhausted_c = Arc::clone(&exhausted);
             let queue_c = Arc::clone(&queue);
@@ -909,12 +910,10 @@ impl<Q> QueueImpl<Q> {
                 exhausted_c.store(true, Ordering::SeqCst);
                 shutdown_c.store(true, Ordering::SeqCst);
             });
-            
-            handles.push(handle);
 
+            handles.push(handle);
         }
 
-        
         QueueImpl {
             shutdown,
             exhausted,
