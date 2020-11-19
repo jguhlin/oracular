@@ -252,7 +252,7 @@ impl Sequences {
                 .2
                 .binary_search(&(id.clone(), i as u64))
             {
-                Ok(x) => x as u64,
+                Ok(x) => self.idx.as_ref().unwrap().3[x] as u64,
                 Err(_) => return Err("Unable to find block"),
             };
 
