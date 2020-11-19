@@ -549,7 +549,7 @@ impl TripleLossKmersGenerator {
         window_size: usize,
         queue_size: usize,
     ) -> Self {
-        let queueimpl = QueueImpl::new(queue_size, move |shutdown, exhausted, queue| {
+        let queueimpl = QueueImpl::new(queue_size, 16, move |shutdown, exhausted, queue| {
             let mut offset = 0;
             let mut rc = false;
             let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
@@ -871,7 +871,7 @@ impl PyIterProtocol for TripleLossKmersGenerator {
 /// Queue Impl
 struct QueueImpl<Q> {
     // iter: Box<dyn Iterator<Item = I> + Send>,
-    handle: JoinHandle<()>,
+    handles: Vec<JoinHandle<()>>,
     shutdown: Arc<AtomicBool>,
     exhausted: Arc<AtomicBool>,
     pub queue: Arc<ArrayQueue<Q>>,
@@ -879,7 +879,7 @@ struct QueueImpl<Q> {
 
 impl<Q> QueueImpl<Q> {
     // fn new(iter: Box<dyn Iterator<Item = I> + Send>) -> Self {
-    fn new<F>(queue_size: usize, func: F) -> Self
+    fn new<F>(queue_size: usize, threads: usize, func: F) -> Self
     where
         F: Fn(Arc<AtomicBool>, Arc<AtomicBool>, Arc<ArrayQueue<Q>>) + Sync + 'static + Send,
         Q: Send + 'static + Sync,
@@ -888,25 +888,32 @@ impl<Q> QueueImpl<Q> {
         let exhausted = Arc::new(AtomicBool::new(false));
         let queue = Arc::new(ArrayQueue::new(queue_size));
 
-        let shutdown_c = Arc::clone(&shutdown);
-        let exhausted_c = Arc::clone(&exhausted);
-        let queue_c = Arc::clone(&queue);
+        let mut handles = Vec::new();
 
-        let handle = thread::spawn(move || {
-            func(
-                Arc::clone(&shutdown_c),
-                Arc::clone(&exhausted_c),
-                Arc::clone(&queue_c),
-            );
-            exhausted_c.store(true, Ordering::SeqCst);
-            shutdown_c.store(true, Ordering::SeqCst);
-        });
+        for _i in 0..threads {
 
+            let shutdown_c = Arc::clone(&shutdown);
+            let exhausted_c = Arc::clone(&exhausted);
+            let queue_c = Arc::clone(&queue);
+
+            let handle = thread::spawn(move || {
+                func(
+                    Arc::clone(&shutdown_c),
+                    Arc::clone(&exhausted_c),
+                    Arc::clone(&queue_c),
+                );
+                exhausted_c.store(true, Ordering::SeqCst);
+                shutdown_c.store(true, Ordering::SeqCst);
+            });
+        }
+
+        handles.append(handle);
+        
         QueueImpl {
             shutdown,
             exhausted,
             queue,
-            handle,
+            handles,
         }
     }
 
@@ -922,7 +929,9 @@ impl<Q> QueueImpl<Q> {
 
     #[inline]
     fn unpark(&self) {
-        self.handle.thread().unpark();
+        for i in self.handles {
+            i.thread().unpark();
+        }
     }
 }
 
