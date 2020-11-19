@@ -890,14 +890,18 @@ impl<Q> QueueImpl<Q> {
 
         let mut handles = Vec::new();
 
+        let fc = Arc::new(func);
+
         for _i in 0..threads {
 
             let shutdown_c = Arc::clone(&shutdown);
             let exhausted_c = Arc::clone(&exhausted);
             let queue_c = Arc::clone(&queue);
 
+            let f = Arc::clone(&fc);
+
             let handle = thread::spawn(move || {
-                func(
+                f(
                     Arc::clone(&shutdown_c),
                     Arc::clone(&exhausted_c),
                     Arc::clone(&queue_c),
