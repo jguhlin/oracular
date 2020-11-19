@@ -839,22 +839,18 @@ fn get_index_filename(filename: &str) -> String {
 }
 
 pub fn clear_idxcache() {
-    if IDXCACHE.get().is_none() {
-        IDXCACHE
-            .set(Arc::new(RwLock::new(HashMap::new())))
-            .expect("Unable to set IDXCACHE");
-    }
+    IDXCACHE.get_or_init(|| {
+        Arc::new(RwLock::new(HashMap::new()))
+    });
+//            .expect("Unable to set IDXCACHE");
+//    }
 
     let mut idxcache = IDXCACHE.get().unwrap().write().unwrap();
     *idxcache = HashMap::new();
 }
 
 fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)> {
-    if IDXCACHE.get().is_none() {
-        IDXCACHE
-            .set(Arc::new(RwLock::new(HashMap::new())))
-            .expect("Unable to set IDXCACHE");
-    }
+    IDXCACHE.get_or_init(|| { Arc::new(RwLock::new(HashMap::new())) });
 
     let idx_filename = get_index_filename(filename);
 
