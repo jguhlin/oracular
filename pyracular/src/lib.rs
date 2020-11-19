@@ -539,6 +539,7 @@ type Truths = Vec<bool>;
 
 type TripleLossSubmission = (MatchedKmers, (Truths, Truths, Matches, ReverseComplement));
 
+// TODO: Multiple threads is good, make it actually divide the work instead of just repeating the work...
 #[pymethods]
 impl TripleLossKmersGenerator {
     #[new]

@@ -173,7 +173,7 @@ mod tests {
         sfasta::convert_fasta_file("test_data/test.fna", "test_data/test_sequences.sfasta");
         let mut sequences = Box::new(sfasta::Sequences::new("test_data/test_sequences.sfasta"));
         let sequence = sequences.next().unwrap();
-        // println!("{:#?}", sequence);
+        println!("{:#?}", sequence);
         assert!(sequence.id == "test");
         assert!(sequence.end == 670);
         assert!(sequence.location == 0);

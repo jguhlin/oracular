@@ -16,6 +16,7 @@ extern crate snap;
 extern crate t1ha;
 extern crate thincollections;
 extern crate zstd;
+extern crate lz4;
 
 // #[macro_use]
 extern crate static_assertions; // I don't think this is being used anymore...
