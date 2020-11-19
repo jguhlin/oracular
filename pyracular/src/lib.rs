@@ -897,7 +897,7 @@ impl<Q> QueueImpl<Q> {
             let queue_c = Arc::clone(&queue);
 
             let handle = thread::spawn(move || {
-                &func(
+                func(
                     Arc::clone(&shutdown_c),
                     Arc::clone(&exhausted_c),
                     Arc::clone(&queue_c),
