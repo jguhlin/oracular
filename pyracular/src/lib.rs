@@ -223,7 +223,7 @@ impl MaskedKmersGenerator {
         rand: bool,
         queue_size: usize,
     ) -> Self {
-        let queueimpl = QueueImpl::new(queue_size, move |shutdown, exhausted, queue| {
+        let queueimpl = QueueImpl::new(queue_size, 16, move |shutdown, exhausted, queue| {
             let mut offset = 0;
             let mut rc = false;
 
@@ -347,7 +347,7 @@ type MatchedSubmission = (MatchedKmers, Matches);
 impl MatchedKmersGenerator {
     #[new]
     fn new(k: usize, filename: String, window_size: usize, queue_size: usize) -> Self {
-        let queueimpl = QueueImpl::new(queue_size, move |shutdown, exhausted, queue| {
+        let queueimpl = QueueImpl::new(queue_size, 16, move |shutdown, exhausted, queue| {
             let mut offset = 0;
             let mut rc = false;
             let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
