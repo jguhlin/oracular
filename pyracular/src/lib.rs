@@ -906,7 +906,7 @@ impl<Q> QueueImpl<Q> {
                 shutdown_c.store(true, Ordering::SeqCst);
             });
             
-            handles.append(handle);
+            handles.push(handle);
 
         }
 
