@@ -70,7 +70,6 @@ fn write_entry_to_file(
     ),
 ) {
     let mut pos = get_pos(fh);
-    pos = get_pos(fh);
     ids.push(s.0.id.clone());
     locations.push(pos);
 
@@ -138,7 +137,9 @@ fn split(matches: &ArgMatches) {
     let mut out_valid: Box<dyn WriteAndSeek> = Box::new(BufWriter::new(out_valid));
 
     let mut seqs = sfasta::Sequences::new(&sfasta_filename);
-    seqs.set_mode(sfasta::SeqMode::Random);
+    if !length_mode {
+        seqs.set_mode(sfasta::SeqMode::Random);
+    }
     let seqs = seqs.into_compressed_sequences();
 
     let mut total_len = 0;
@@ -169,7 +170,6 @@ fn split(matches: &ArgMatches) {
 
     if !length_mode {
         // Can't do this without an index!
-
         let npct = (n as f32 * training_split) as usize;
         let idx = write_to_file(&mut out_train, seqs.by_ref().take(npct));
         drop(out_train);

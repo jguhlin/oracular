@@ -50,7 +50,7 @@ subcommands:
                 long: training-split
             - length_mode:
                 short: l
-                help: Split by length of sequence rather than number of samples
+                help: Split by length of sequence rather than number of samples. Prefer this one.
                 long: length
             - seed:
                 short: s
