@@ -7,6 +7,7 @@ extern crate itertools;
 extern crate jetscii;
 extern crate lazy_static;
 extern crate linked_hash_set;
+extern crate lz4;
 extern crate ndarray;
 extern crate once_cell;
 extern crate rand;
@@ -16,7 +17,6 @@ extern crate snap;
 extern crate t1ha;
 extern crate thincollections;
 extern crate zstd;
-extern crate lz4;
 
 // #[macro_use]
 extern crate static_assertions; // I don't think this is being used anymore...

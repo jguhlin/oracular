@@ -1,7 +1,7 @@
 extern crate mimalloc;
 
-use liboracular::sfasta;
 use crate::sfasta::create_index;
+use liboracular::sfasta;
 use mimalloc::MiMalloc;
 
 #[global_allocator]
@@ -90,11 +90,16 @@ impl<T: Write + Seek + Send> WriteAndSeek for T {}
 
 fn write_to_file<I>(
     fh: &mut Box<dyn WriteAndSeek>,
-    seqs: I) -> (Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>) 
-    where 
-      I: Iterator<Item = (sfasta::EntryCompressedHeader, Vec<sfasta::EntryCompressedBlock>)>
-    
-    {
+    seqs: I,
+) -> (Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)
+where
+    I: Iterator<
+        Item = (
+            sfasta::EntryCompressedHeader,
+            Vec<sfasta::EntryCompressedBlock>,
+        ),
+    >,
+{
     let starting_size = 1024;
     let mut ids = Vec::with_capacity(starting_size);
     let mut locations = Vec::with_capacity(starting_size);
@@ -128,12 +133,10 @@ fn split(matches: &ArgMatches) {
     let train_filename = output_prefix.to_string() + "_train.sfasta";
     let valid_filename = output_prefix.to_string() + "_validation.sfasta";
 
-    let out_train =
-        File::create(&train_filename).expect("Unable to write to file");
+    let out_train = File::create(&train_filename).expect("Unable to write to file");
     let mut out_train: Box<dyn WriteAndSeek> = Box::new(BufWriter::new(out_train));
 
-    let out_valid = File::create(&valid_filename)
-        .expect("Unable to write to file");
+    let out_valid = File::create(&valid_filename).expect("Unable to write to file");
     let mut out_valid: Box<dyn WriteAndSeek> = Box::new(BufWriter::new(out_valid));
 
     let mut seqs = sfasta::Sequences::new(&sfasta_filename);
@@ -193,7 +196,7 @@ fn split(matches: &ArgMatches) {
         let mut locations_valid = Vec::with_capacity(starting_size);
         let mut block_ids_valid = Vec::with_capacity(starting_size * 1024);
         let mut block_locations_valid: Vec<u64> = Vec::with_capacity(starting_size * 1024);
-    
+
         for entry in seqs {
             total_len += entry.0.len;
             let training_goal = (total_len as f32 * training_split) as usize;
@@ -201,22 +204,24 @@ fn split(matches: &ArgMatches) {
             let tchance = (training_goal as f32 - training as f32) / entry.0.len as f32;
             if rng.gen::<f32>() < tchance {
                 training += entry.0.len;
-                write_entry_to_file(&mut out_train,
+                write_entry_to_file(
+                    &mut out_train,
                     &mut ids_train,
                     &mut locations_train,
                     &mut block_ids_train,
                     &mut block_locations_train,
-                    entry
-                 );
+                    entry,
+                );
             } else {
                 validation += entry.0.len;
-                write_entry_to_file(&mut out_valid,
+                write_entry_to_file(
+                    &mut out_valid,
                     &mut ids_valid,
                     &mut locations_valid,
                     &mut block_ids_valid,
                     &mut block_locations_valid,
-                    entry
-                 );
+                    entry,
+                );
             }
 
             pb.set_message(&format!(
@@ -229,8 +234,20 @@ fn split(matches: &ArgMatches) {
         // Drop (to close the files properly)
         drop(out_train);
         drop(out_valid);
-        create_index(&train_filename, ids_train, locations_train, block_ids_train, block_locations_train);
-        create_index(&valid_filename, ids_valid, locations_valid, block_ids_valid, block_locations_valid);
+        create_index(
+            &train_filename,
+            ids_train,
+            locations_train,
+            block_ids_train,
+            block_locations_train,
+        );
+        create_index(
+            &valid_filename,
+            ids_valid,
+            locations_valid,
+            block_ids_valid,
+            block_locations_valid,
+        );
 
         println!(
             "Training Seq Length: {}\tValidation Seq Length:{}",

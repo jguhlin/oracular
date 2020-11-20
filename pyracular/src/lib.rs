@@ -539,7 +539,8 @@ type Truths = Vec<bool>;
 
 type TripleLossSubmission = (MatchedKmers, (Truths, Truths, Matches, ReverseComplement));
 
-// TODO: Multiple threads is good, make it actually divide the work instead of just repeating the work...
+// TODO: Multiple threads is good, make it actually divide the work instead of
+// just repeating the work...
 #[pymethods]
 impl TripleLossKmersGenerator {
     #[new]
@@ -791,7 +792,7 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
     if seqlen == 0 {
         return None;
     }
-    
+
     let mut start = rng.gen_range(0, seqlen);
     let mut end = start + needed_length;
     assert!(end < seq.len);

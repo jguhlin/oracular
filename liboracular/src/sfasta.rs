@@ -1,13 +1,13 @@
 use hashbrown::HashMap;
+use lz4::{Decoder, EncoderBuilder};
 use std::convert::From;
 use std::convert::TryFrom;
 use std::fs::{metadata, File};
+use std::io::copy;
 use std::io::prelude::*;
 use std::io::{BufReader, BufWriter, Read, SeekFrom};
 use std::path::Path;
-use std::io::copy;
 use std::time::Instant;
-use lz4::{Decoder, EncoderBuilder};
 
 use crate::fasta;
 use crate::utils::generic_open_file;
@@ -36,8 +36,8 @@ impl<T: Read + Seek + Send> ReadAndSeek for T {}
 // TODO: Also make BufWriter bufsize global, but ok to leave larger.
 #[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub enum CompressionType {
-    ZSTD, // 19 should be default compression ratio
-    LZ4, // 9 should be default compression ratio
+    ZSTD,   // 19 should be default compression ratio
+    LZ4,    // 9 should be default compression ratio
     SNAPPY, // Not yet implemented -- IMPLEMENT
     GZIP,   // Please don't use this -- IMPLEMENT
     NAF,    // Not yet supported -- IMPLEMENT
@@ -48,7 +48,7 @@ const fn default_compression_level(ct: CompressionType) -> i32 {
     match ct {
         CompressionType::ZSTD => 19,
         CompressionType::LZ4 => 9,
-        _ => 3
+        _ => 3,
     }
 }
 
@@ -109,38 +109,39 @@ impl Entry {
                         block_id: block_count,
                         compressed_seq: compressed,
                     });
-        
+
                     block_count = match block_count.checked_add(1) {
                         Some(x) => x,
                         None => panic!("That's too many blocks...."),
                     };
                 }
-            },
+            }
             CompressionType::LZ4 => {
                 for block in blocks {
                     let mut output_buffer = Vec::new();
                     let mut encoder = EncoderBuilder::new()
                         .level(9)
-                        .build(output_buffer).expect("Unable to create LZ4 encoder");
+                        .build(output_buffer)
+                        .expect("Unable to create LZ4 encoder");
 
-                    encoder.write(block).expect("Unable to write to compression buffer");
+                    encoder
+                        .write(block)
+                        .expect("Unable to write to compression buffer");
                     let output_buffer = encoder.finish().0;
-                    
+
                     compressed_blocks.push(EntryCompressedBlock {
                         id: id.clone(),
                         block_id: block_count,
                         compressed_seq: output_buffer,
                     });
-        
+
                     block_count = match block_count.checked_add(1) {
                         Some(x) => x,
                         None => panic!("That's too many blocks...."),
                     };
                 }
-                
-
-            },
-            _ => panic!("Unsupported compression")
+            }
+            _ => panic!("Unsupported compression"),
         };
 
         (
@@ -299,24 +300,25 @@ impl Sequences {
                         Ok(x) => self.idx.as_ref().unwrap().3[x] as u64,
                         Err(_) => return Err("Unable to find block"),
                     };
-        
+
                     self.reader
                         .seek(SeekFrom::Start(block_loc))
                         .expect("Unable to work with seek API");
-        
-                    let ec: EntryCompressedBlock = match bincode::deserialize_from(&mut self.reader) {
+
+                    let ec: EntryCompressedBlock = match bincode::deserialize_from(&mut self.reader)
+                    {
                         Ok(x) => x,
                         Err(_) => return Err("Unable to get block in get_seq_slice"),
                     };
-        
+
                     let seq = match decompressor.decompress(&ec.compressed_seq, BLOCK_SIZE) {
                         Ok(x) => x,
                         Err(_) => panic!("Unable to decompress"),
                     };
-        
+
                     sequence.extend_from_slice(&seq);
                 }
-            },
+            }
             CompressionType::LZ4 => {
                 // let mut decompression_buffer = Vec::new();
 
@@ -331,23 +333,25 @@ impl Sequences {
                         Ok(x) => self.idx.as_ref().unwrap().3[x] as u64,
                         Err(_) => return Err("Unable to find block"),
                     };
-        
+
                     self.reader
                         .seek(SeekFrom::Start(block_loc))
                         .expect("Unable to work with seek API");
-        
-                    let ec: EntryCompressedBlock = match bincode::deserialize_from(&mut self.reader) {
+
+                    let ec: EntryCompressedBlock = match bincode::deserialize_from(&mut self.reader)
+                    {
                         Ok(x) => x,
                         Err(_) => return Err("Unable to get block in get_seq_slice"),
                     };
 
-                    let mut decompressor = Decoder::new(&ec.compressed_seq[..]).expect("Unable to create LZ4 decoder");
+                    let mut decompressor =
+                        Decoder::new(&ec.compressed_seq[..]).expect("Unable to create LZ4 decoder");
                     let mut output = Vec::new();
                     decompressor.read_to_end(&mut output);
                     sequence.extend_from_slice(&output[..]);
                     decompressor.finish();
                 }
-            },
+            }
             _ => panic!("Unsupported compression type"),
         }
 
@@ -375,33 +379,36 @@ impl Sequences {
                 let mut decompressor = zstd::block::Decompressor::new();
 
                 for _i in 0..ec.block_count as usize {
-                    let entry: EntryCompressedBlock = match bincode::deserialize_from(&mut self.reader) {
-                        Ok(x) => x,
-                        Err(_) => panic!("Error decoding compressed block"),
-                    };
-        
+                    let entry: EntryCompressedBlock =
+                        match bincode::deserialize_from(&mut self.reader) {
+                            Ok(x) => x,
+                            Err(_) => panic!("Error decoding compressed block"),
+                        };
+
                     let seq = match decompressor.decompress(&entry.compressed_seq, BLOCK_SIZE) {
                         Ok(x) => x,
                         Err(_) => panic!("Unable to decompress"),
                     };
-        
+
                     sequence.extend_from_slice(&seq);
                 }
-             },
-            CompressionType::LZ4 => { 
+            }
+            CompressionType::LZ4 => {
                 for _i in 0..ec.block_count as usize {
-                    let entry: EntryCompressedBlock = match bincode::deserialize_from(&mut self.reader) {
-                        Ok(x) => x,
-                        Err(_) => panic!("Error decoding compressed block"),
-                    };
-        
-                    let mut decompressor = Decoder::new(&entry.compressed_seq[..]).expect("Unable to create LZ4 decoder");
+                    let entry: EntryCompressedBlock =
+                        match bincode::deserialize_from(&mut self.reader) {
+                            Ok(x) => x,
+                            Err(_) => panic!("Error decoding compressed block"),
+                        };
+
+                    let mut decompressor = Decoder::new(&entry.compressed_seq[..])
+                        .expect("Unable to create LZ4 decoder");
                     let mut output = Vec::new();
                     decompressor.read_to_end(&mut output);
                     sequence.extend_from_slice(&output[..]);
                     decompressor.finish();
                 }
-            },
+            }
             _ => panic!("Unsupported compression type"),
         };
 
@@ -486,20 +493,20 @@ impl Iterator for Sequences {
                         Ok(x) => x,
                         Err(_) => panic!("Unable to decompress"),
                     };
-        
+
                     sequence.extend_from_slice(&seq);
-                 },
-                
+                }
+
                 CompressionType::LZ4 => {
-                    let mut decompressor = Decoder::new(&entry.compressed_seq[..]).expect("Unable to create LZ4 decoder");
+                    let mut decompressor = Decoder::new(&entry.compressed_seq[..])
+                        .expect("Unable to create LZ4 decoder");
                     let mut output = Vec::new();
                     decompressor.read_to_end(&mut output);
                     sequence.extend_from_slice(&output[..]);
                     &decompressor.finish();
-                 },
+                }
                 _ => panic!("Unsupported compression type"),
             };
-
         }
 
         sequence.make_ascii_uppercase();
@@ -1012,8 +1019,10 @@ fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>, Vec<(String, u64
     let keys: Vec<String> = bincode::deserialize_from(&mut idxfh).expect("Unable to read idx keys");
     let vals: Vec<u64> = bincode::deserialize_from(&mut idxfh).expect("Unable to read idx values");
 
-    let block_keys: Vec<(String, u64)> = bincode::deserialize_from(&mut idxfh).expect("Unable to read idx keys");
-    let block_vals: Vec<u64> = bincode::deserialize_from(&mut idxfh).expect("Unable to read idx values");
+    let block_keys: Vec<(String, u64)> =
+        bincode::deserialize_from(&mut idxfh).expect("Unable to read idx keys");
+    let block_vals: Vec<u64> =
+        bincode::deserialize_from(&mut idxfh).expect("Unable to read idx values");
 
     let mut idxcache = IDXCACHE.get().unwrap().write().unwrap();
     idxcache.insert(

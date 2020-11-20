@@ -281,16 +281,8 @@ impl KmerWindowGenerator {
             rc,
         })
     }
-}
 
-impl Iterator for KmerWindowGenerator {
-    type Item = KmerWindow;
-
-    fn next(&mut self) -> Option<KmerWindow> {
-        // While instead of if, because if we get a too short sequence we should skip
-        // it...
-        // and HERE! Need to return small sequences unless < window_size, and let the
-        // generators deal with removing them or not...
+    pub fn next_seq(&mut self) -> bool {
         while (self.kmer_generator.len - self.kmer_generator.curpos - self.offset)
             <= self.needed_sequence
         {
@@ -298,7 +290,7 @@ impl Iterator for KmerWindowGenerator {
                 Some(x) => x,
                 None => {
                     // println!("No more seqs...");
-                    return None;
+                    return false;
                 } // That's it... no more!
             };
 
@@ -325,26 +317,43 @@ impl Iterator for KmerWindowGenerator {
             let kmer_generator = Kmers::new(curseq.seq.clone(), self.k, self.offset, self.rc);
             self.kmer_generator = kmer_generator;
         }
+        true
+    }
+}
+
+impl Iterator for KmerWindowGenerator {
+    type Item = KmerWindow;
+
+    fn next(&mut self) -> Option<KmerWindow> {
+        // While instead of if, because if we get a too short sequence we should skip
+        // it...
+        // and HERE! Need to return small sequences unless < window_size, and let the
+        // generators deal with removing them or not...
 
         let mut kmers: Vec<Vec<u8>> = Vec::with_capacity(self.window_size);
         let mut coords: Vec<Coords> = Vec::with_capacity(self.window_size);
-        for _ in 0..self.window_size {
-            match self.kmer_generator.next() {
-                Some((x, c)) => {
-                    if x.len() == self.k {
-                        kmers.push(x);
-                        coords.push(c);
-                    } else {
-                        panic!("Invalid Kmer");
-                    }
-                }
-                None => break,
-            };
-        }
 
-        if kmers.len() == 0 {
-            //return self.next();
-            panic!("Should never hit this part... kmers kmer window len == 0");
+        while kmers.len() == 0 {
+
+            for _ in 0..self.window_size {
+                match self.kmer_generator.next() {
+                    Some((x, c)) => {
+                        if x.len() == self.k {
+                            kmers.push(x);
+                            coords.push(c);
+                        } else {
+                            panic!("Invalid Kmer");
+                        }
+                    }
+                    None => break,
+                };
+            }
+
+            if kmers.len() == 0 {
+                if !self.next_seq() {
+                    return None // We are finished!
+                }
+            }
         }
 
         Some(KmerWindow {
