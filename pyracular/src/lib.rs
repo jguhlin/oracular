@@ -788,6 +788,10 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
 
     let seqlen = seq.len.saturating_sub(needed_length);
 
+    if seqlen == 0 {
+        return None;
+    }
+    
     let mut start = rng.gen_range(0, seqlen);
     let mut end = start + needed_length;
     assert!(end < seq.len);
