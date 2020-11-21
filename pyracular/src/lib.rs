@@ -223,7 +223,7 @@ impl MaskedKmersGenerator {
         rand: bool,
         queue_size: usize,
     ) -> Self {
-        let queueimpl = QueueImpl::new(queue_size, 16, move |shutdown, exhausted, queue| {
+        let queueimpl = QueueImpl::new(queue_size, 16, move |shutdown, _exhausted, queue| {
             let mut offset = 0;
             let mut rc = false;
 
@@ -288,7 +288,7 @@ impl PyIterProtocol for MaskedKmersGenerator {
         Ok(mypyself.into_py(py))
     }
 
-    fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
+    fn __next__(mypyself: PyRef<Self>) -> PyResult<Option<PyObject>> {
         if mypyself.queueimpl.is_finished() {
             return Ok(None);
         }
@@ -347,7 +347,7 @@ type MatchedSubmission = (MatchedKmers, Matches);
 impl MatchedKmersGenerator {
     #[new]
     fn new(k: usize, filename: String, window_size: usize, queue_size: usize) -> Self {
-        let queueimpl = QueueImpl::new(queue_size, 16, move |shutdown, exhausted, queue| {
+        let queueimpl = QueueImpl::new(queue_size, 16, move |shutdown, _exhausted, queue| {
             let mut offset = 0;
             let mut rc = false;
             let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
@@ -480,7 +480,7 @@ impl PyIterProtocol for MatchedKmersGenerator {
         Ok(mypyself.into_py(py))
     }
 
-    fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
+    fn __next__(mypyself: PyRef<Self>) -> PyResult<Option<PyObject>> {
         if mypyself.queueimpl.is_finished() {
             return Ok(None);
         }
@@ -553,6 +553,7 @@ impl TripleLossKmersGenerator {
     ) -> Self {
         // Load the index before having 16 threads try and load it simultaneously...
         sfasta::load_index(&filename);
+        // let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
 
         let queueimpl = QueueImpl::new(queue_size, 16, move |shutdown, exhausted, queue| {
             let mut offset = 0;
@@ -1001,7 +1002,7 @@ impl SequenceOrderKmersGenerator {
             let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
 
             loop {
-                let mut finished = false;
+                let finished = false;
 
                 while !finished {
                     let item = match iter.next() {

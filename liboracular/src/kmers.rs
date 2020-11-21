@@ -756,7 +756,7 @@ mod tests {
             println!("{}", i.id);
         }
 
-        let mut kmers = KmerWindowGenerator::new(
+        let kmers = KmerWindowGenerator::new(
             "test_data/test_kmer_window_generator.sfasta",
             5,
             5,

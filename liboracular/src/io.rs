@@ -17,6 +17,14 @@ pub struct Sequence {
     pub end: usize,
 }
 
+// TODO: This is the right place to do this, but I feel it's happening somewhere
+// else and wasting CPU cycles...
+impl Sequence {
+    pub fn make_uppercase(&mut self) {
+        self.seq.make_ascii_uppercase();
+    }
+}
+
 pub struct SequenceSplitter3N {
     sequences: Box<dyn Iterator<Item = io::Sequence> + Send>,
     curseq: Sequence,
@@ -42,14 +50,21 @@ impl SequenceSplitter3N {
             curlen,
         }
     }
-}
 
-// TODO: This is the right place to do this, but I feel it's happening somewhere
-// else and wasting CPU cycles...
-impl Sequence {
-    pub fn make_uppercase(&mut self) {
-        self.seq.make_ascii_uppercase();
+    fn next_seq(&mut self) -> bool {
+        self.curpos = 0;
+        let curseq = match self.sequences.next() {
+            Some(x) => x,
+            None => {
+                // println!("Stop1");
+                return false;
+            }
+        };
+        self.curlen = curseq.seq.len();
+        self.curseq = curseq;
+        return true;
     }
+
 }
 
 impl Iterator for SequenceSplitter3N {
@@ -57,53 +72,53 @@ impl Iterator for SequenceSplitter3N {
 
     fn next(&mut self) -> Option<Sequence> {
         if self.curlen == self.curpos {
-            self.curpos = 0;
-            let curseq = match self.sequences.next() {
-                Some(x) => x,
-                None => {
-                    // println!("Stop1");
-                    return None;
-                }
-            };
-            self.curlen = curseq.seq.len();
-            self.curseq = curseq;
+            if !self.next_seq() {
+                return None;
+            }
         }
 
         let startloc;
         let mut endloc;
 
-        if bytecount::count(&self.curseq.seq, b'N') < 3 {
-            startloc = 0;
-            endloc = self.curlen;
-        } else {
-            startloc = self.curpos
-                + match self.curseq.seq[self.curpos..]
-                    .windows(3)
-                    .enumerate()
-                    .filter(|(_y, x)| bytecount::count(&x, b'N') < 3)
-                    .map(|(y, _x)| y)
-                    .nth(0)
-                {
-                    Some(x) => x,
-                    None => {
-                        // println!("Stop2");
-                        return None;
-                    }
-                };
+        loop {
 
-            endloc = startloc
-                + 1
-                + self.curseq.seq[startloc + 1..]
-                    .windows(3)
-                    .enumerate()
-                    .filter(|(_y, x)| bytecount::count(&x, b'N') == 3)
-                    .map(|(y, _x)| y)
-                    .nth(0)
-                    .unwrap_or(self.curlen - startloc);
-        }
+            if bytecount::count(&self.curseq.seq, b'N') < 3 {
+                startloc = 0;
+                endloc = self.curlen;
+            } else {
+                startloc = self.curpos
+                    + match self.curseq.seq[self.curpos..]
+                        .windows(3)
+                        .enumerate()
+                        .filter(|(_y, x)| bytecount::count(&x, b'N') < 3)
+                        .map(|(y, _x)| y)
+                        .nth(0)
+                    {
+                        Some(x) => x,
+                        None => {
+                            if !self.next_seq() {
+                                return None;
+                            }
+                            continue
+                        }
+                    };
 
-        if endloc > self.curseq.seq.len() {
-            endloc = self.curseq.seq.len();
+                endloc = startloc
+                    + 1
+                    + self.curseq.seq[startloc + 1..]
+                        .windows(3)
+                        .enumerate()
+                        .filter(|(_y, x)| bytecount::count(&x, b'N') == 3)
+                        .map(|(y, _x)| y)
+                        .nth(0)
+                        .unwrap_or(self.curlen - startloc);
+            }
+
+            if endloc > self.curseq.seq.len() {
+                endloc = self.curseq.seq.len();
+            }
+            
+            break
         }
 
         // println!("{} {} {}", startloc, endloc, self.curseq.seq.len());
