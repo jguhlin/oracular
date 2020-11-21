@@ -19,7 +19,7 @@ num-traits = "0.2.14"
 wyhash = "0.4.2"
 num_cpus = "1.13.0"
 # jemallocator = "0.3.2"
-snap = "1.0.1"
+snap = "1.0.3"
 
 # [target.'cfg(unix)'.dependencies]
 # mimalloc = { version = "0.1.9", default-features = false }
