@@ -980,7 +980,7 @@ pub fn clear_idxcache() {
     *idxcache = HashMap::new();
 }
 
-fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)> {
+pub fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)> {
     IDXCACHE.get_or_init(|| Arc::new(RwLock::new(HashMap::new())));
 
     let idx_filename = get_index_filename(filename);
@@ -1014,7 +1014,7 @@ fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>, Vec<(String, u64
     // let idx: HashMap<String, u64>;
     // idx = bincode::deserialize_from(&mut idxfh).expect("Unable to open Index
     // file");
-    let length: u64 =
+    let _length: u64 =
         bincode::deserialize_from(&mut idxfh).expect("Unable to read length of index");
     let keys: Vec<String> = bincode::deserialize_from(&mut idxfh).expect("Unable to read idx keys");
     let vals: Vec<u64> = bincode::deserialize_from(&mut idxfh).expect("Unable to read idx values");

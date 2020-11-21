@@ -551,6 +551,9 @@ impl TripleLossKmersGenerator {
         window_size: usize,
         queue_size: usize,
     ) -> Self {
+        // Load the index before having 16 threads try and load it simultaneously...
+        sfasta::load_index(&filename);
+
         let queueimpl = QueueImpl::new(queue_size, 16, move |shutdown, exhausted, queue| {
             let mut offset = 0;
             let mut rc = false;
@@ -692,6 +695,7 @@ impl TripleLossKmersGenerator {
                 offset += 1;
 
                 if (k == offset) && rc {
+                    exhausted.store(true, Ordering::SeqCst);
                     return;
                 } else if k == offset {
                     offset = 0;
@@ -707,6 +711,55 @@ impl TripleLossKmersGenerator {
 
     fn len(mypyself: PyRef<Self>) -> usize {
         mypyself.queueimpl.queue.len()
+    }
+}
+
+#[pyproto]
+impl PyIterProtocol for TripleLossKmersGenerator {
+    fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        Ok(mypyself.into_py(py))
+    }
+
+    fn __next__(mypyself: PyRef<Self>) -> PyResult<Option<PyObject>> {
+        if mypyself.queueimpl.is_finished() {
+            return Ok(None);
+        }
+
+        // Unpark the threads...
+        // mypyself.queueimpl.unpark();
+
+        let mut result = mypyself.queueimpl.queue.pop();
+        let backoff = Backoff::new();
+
+        while result == None {
+            mypyself.queueimpl.unpark();
+            backoff.snooze();
+
+            // Check for exhaustion (or shutdown)...
+            if mypyself.queueimpl.is_finished() {
+                return Ok(None);
+            }
+
+            result = mypyself.queueimpl.queue.pop();
+        }
+
+        let result = result.unwrap();
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        let pyout = PyDict::new(py);
+        pyout
+            .set_item("kmers", result.0)
+            .expect("Error with Python");
+        pyout
+            .set_item("triple", result.1)
+            .expect("Error with Python");
+
+        // One last unparking...
+        mypyself.queueimpl.unpark();
+
+        Ok(Some(pyout.to_object(py)))
     }
 }
 
@@ -777,12 +830,10 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
 ) -> Option<KmerWindow> {
     let needed_length = ((k * window_size) + k) as u64;
 
-    let mut seqlen = 0;
-
     let mut loc = locs.choose(&mut rng).unwrap().clone();
     let mut seq = sfasta.get_header_at(loc).expect("Unable to get header");
 
-    while (seq.len < needed_length) {
+    while seq.len < needed_length {
         loc = locs.choose(&mut rng).unwrap().clone();
         seq = sfasta.get_header_at(loc).unwrap();
     }
@@ -793,7 +844,7 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
         return None;
     }
 
-    let mut start = rng.gen_range(0, seqlen);
+    let start = rng.gen_range(0, seqlen);
     let mut end = start + needed_length;
     assert!(end < seq.len);
     if seq.len >= end + 1000 {
@@ -806,7 +857,7 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
         .get_seq_slice(seq.id.clone(), start, end)
         .expect("Unable to get seq slice");
 
-    let mut workseq = io::Sequence {
+    let workseq = io::Sequence {
         seq: sequence,
         end: end as usize,
         location: start as usize,
@@ -827,61 +878,12 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
     iter2.next()
 }
 
-#[pyproto]
-impl PyIterProtocol for TripleLossKmersGenerator {
-    fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        Ok(mypyself.into_py(py))
-    }
-
-    fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
-        if mypyself.queueimpl.is_finished() {
-            return Ok(None);
-        }
-
-        // Unpark the thread...
-        mypyself.queueimpl.unpark();
-
-        let mut result = mypyself.queueimpl.queue.pop();
-        let backoff = Backoff::new();
-
-        while result == None {
-            mypyself.queueimpl.unpark();
-            backoff.snooze();
-
-            // Check for exhaustion (or shutdown)...
-            if mypyself.queueimpl.is_finished() {
-                return Ok(None);
-            }
-
-            result = mypyself.queueimpl.queue.pop();
-        }
-
-        let result = result.unwrap();
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        let pyout = PyDict::new(py);
-        pyout
-            .set_item("kmers", result.0)
-            .expect("Error with Python");
-        pyout
-            .set_item("triple", result.1)
-            .expect("Error with Python");
-
-        // One last unparking...
-        mypyself.queueimpl.unpark();
-
-        Ok(Some(pyout.to_object(py)))
-    }
-}
-
 /// Queue Impl
 struct QueueImpl<Q> {
     // iter: Box<dyn Iterator<Item = I> + Send>,
     handles: Vec<JoinHandle<()>>,
     shutdown: Arc<AtomicBool>,
-    exhausted: Arc<AtomicBool>,
+    exhausted: Vec<Arc<AtomicBool>>,
     pub queue: Arc<ArrayQueue<Q>>,
 }
 
@@ -893,7 +895,7 @@ impl<Q> QueueImpl<Q> {
         Q: Send + 'static + Sync,
     {
         let shutdown = Arc::new(AtomicBool::new(false));
-        let exhausted = Arc::new(AtomicBool::new(false));
+        let mut exhausted = Vec::new();
         let queue = Arc::new(ArrayQueue::new(queue_size));
 
         let mut handles = Vec::new();
@@ -901,9 +903,12 @@ impl<Q> QueueImpl<Q> {
         let fc = Arc::new(func);
 
         for _i in 0..threads {
+            let exhausted_handle = Arc::new(AtomicBool::new(false));
             let shutdown_c = Arc::clone(&shutdown);
-            let exhausted_c = Arc::clone(&exhausted);
+            let exhausted_c = Arc::clone(&exhausted_handle);
             let queue_c = Arc::clone(&queue);
+
+            exhausted.push(exhausted_handle);
 
             let f = Arc::clone(&fc);
 
@@ -930,8 +935,17 @@ impl<Q> QueueImpl<Q> {
 
     #[inline]
     fn is_finished(&self) -> bool {
+
+        let mut exhausted = true;
+        // Are all exhausted?
+        for handle in &self.exhausted {
+            if !handle.load(Ordering::Relaxed) {
+                exhausted = false;
+            }
+        }
+
         if self.queue.len() == 0
-            && (self.exhausted.load(Ordering::Relaxed) || self.shutdown.load(Ordering::Relaxed))
+            && (exhausted || self.shutdown.load(Ordering::Relaxed))
         {
             return true;
         }
@@ -1081,7 +1095,7 @@ impl PyIterProtocol for SequenceOrderKmersGenerator {
         Ok(mypyself.into_py(py))
     }
 
-    fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
+    fn __next__(mypyself: PyRef<Self>) -> PyResult<Option<PyObject>> {
         if mypyself.queue.len() == 0
             && (mypyself.exhausted.load(Ordering::Relaxed)
                 || mypyself.shutdown.load(Ordering::Relaxed))
