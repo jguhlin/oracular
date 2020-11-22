@@ -223,7 +223,7 @@ impl MaskedKmersGenerator {
         rand: bool,
         queue_size: usize,
     ) -> Self {
-        let queueimpl = QueueImpl::new(queue_size, 16, move |shutdown, _exhausted, queue| {
+        let queueimpl = QueueImpl::new(queue_size, 24, move |shutdown, _exhausted, queue| {
             let mut offset = 0;
             let mut rc = false;
 
@@ -731,7 +731,7 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
         }
 
         // Unpark the threads...
-        // mypyself.queueimpl.unpark();
+        mypyself.queueimpl.unpark();
 
         let mut result = mypyself.queueimpl.queue.pop();
         let backoff = Backoff::new();
