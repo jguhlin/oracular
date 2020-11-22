@@ -718,12 +718,12 @@ impl TripleLossKmersGenerator {
 // https://github.com/PyO3/pyo3/issues/1085#issuecomment-670835739
 #[pyproto]
 impl<'p> PyIterProtocol for TripleLossKmersGenerator {
-/*    fn __iter__(mypyself: PyRef<'p, Self>) -> PyRef<'p, Self> {
+    fn __iter__(mypyself: PyRef<'p, Self>) -> PyRef<'p, Self> {
         // let gil = Python::acquire_gil();
         // let py = gil.python();
         // Ok(mypyself.into_py(py))
         mypyself
-    } */
+    } 
 
     fn __next__(mypyself: PyRef<'p, Self>) -> IterNextOutput<PyObject, &'static str> {
         if mypyself.queueimpl.is_finished() {
@@ -751,6 +751,9 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
         let result = result.unwrap();
         let gil = Python::acquire_gil();
         let py = gil.python();
+        let pool = unsafe { py.new_pool() };
+        let py = unsafe { pool.python() };
+
         let pyout = PyDict::new(py);
         pyout
             .set_item("kmers", result.0)
