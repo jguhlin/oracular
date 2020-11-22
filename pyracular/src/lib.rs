@@ -34,7 +34,7 @@ use liboracular::sfasta;
 use pyo3::prelude::*;
 // use pyo3::wrap_pyfunction;
 use pyo3::types::PyDict;
-use pyo3::PyIterProtocol;
+use pyo3::class::iter::{IterNextOutput, PyIterProtocol};
 
 // use pyo3::wrap_pyfunction;
 
@@ -715,17 +715,19 @@ impl TripleLossKmersGenerator {
     }
 }
 
+// https://github.com/PyO3/pyo3/issues/1085#issuecomment-670835739
 #[pyproto]
-impl PyIterProtocol for TripleLossKmersGenerator {
-    fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        Ok(mypyself.into_py(py))
-    }
+impl<'p> PyIterProtocol for TripleLossKmersGenerator {
+/*    fn __iter__(mypyself: PyRef<'p, Self>) -> PyRef<'p, Self> {
+        // let gil = Python::acquire_gil();
+        // let py = gil.python();
+        // Ok(mypyself.into_py(py))
+        mypyself
+    } */
 
-    fn __next__(mypyself: PyRef<Self>) -> PyResult<Option<PyObject>> {
+    fn __next__(mypyself: PyRef<'p, Self>) -> IterNextOutput<PyObject, &'static str> {
         if mypyself.queueimpl.is_finished() {
-            return Ok(None);
+            return IterNextOutput::Return("Finished");
         }
 
         // Unpark the threads...
@@ -740,7 +742,7 @@ impl PyIterProtocol for TripleLossKmersGenerator {
 
             // Check for exhaustion (or shutdown)...
             if mypyself.queueimpl.is_finished() {
-                return Ok(None);
+                return IterNextOutput::Return("Finished");
             }
 
             result = mypyself.queueimpl.queue.pop();
@@ -760,7 +762,8 @@ impl PyIterProtocol for TripleLossKmersGenerator {
         // One last unparking...
         mypyself.queueimpl.unpark();
 
-        Ok(Some(pyout.to_object(py)))
+//        Ok(Some(pyout.to_object(py)))
+        return IterNextOutput::Yield(pyout.to_object(py));
     }
 }
 
