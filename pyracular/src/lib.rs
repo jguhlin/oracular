@@ -551,11 +551,11 @@ impl TripleLossKmersGenerator {
         window_size: usize,
         queue_size: usize,
     ) -> Self {
-        // Load the index before having 16 threads try and load it simultaneously...
+        // Load the index before having 8 threads try to load it simultaneously...
         sfasta::load_index(&filename);
         // let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
 
-        let queueimpl = QueueImpl::new(queue_size, 16, move |shutdown, exhausted, queue| {
+        let queueimpl = QueueImpl::new(queue_size, 8, move |shutdown, exhausted, queue| {
             let mut offset = 0;
             let mut rc = false;
             let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
@@ -737,6 +737,7 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
         let backoff = Backoff::new();
 
         while result == None {
+            
             mypyself.queueimpl.unpark();
             backoff.snooze();
 
@@ -751,8 +752,9 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
         let result = result.unwrap();
         let gil = Python::acquire_gil();
         let py = gil.python();
+
         let pool = unsafe { py.new_pool() };
-        let py = unsafe { pool.python() };
+        let py = pool.python();
 
         let pyout = PyDict::new(py);
         pyout
@@ -761,9 +763,6 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
         pyout
             .set_item("triple", result.1)
             .expect("Error with Python");
-
-        // One last unparking...
-        mypyself.queueimpl.unpark();
 
 //        Ok(Some(pyout.to_object(py)))
         return IterNextOutput::Yield(pyout.to_object(py));
