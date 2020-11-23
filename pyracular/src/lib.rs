@@ -35,6 +35,9 @@ use pyo3::prelude::*;
 // use pyo3::wrap_pyfunction;
 use pyo3::types::PyDict;
 use pyo3::class::iter::{IterNextOutput, PyIterProtocol};
+use pyo3::class::PyGCProtocol;
+use pyo3::class::PyTraverseError;
+use pyo3::class::PyVisit;
 
 // use pyo3::wrap_pyfunction;
 
@@ -529,7 +532,7 @@ impl PyIterProtocol for MatchedKmersGenerator {
 /// (thus the second output is going to be 1 as well!) All can have up to 15%
 /// replaced
 
-#[pyclass]
+#[pyclass(gc)]
 struct TripleLossKmersGenerator {
     queueimpl: QueueImpl<TripleLossSubmission>,
 }
@@ -713,6 +716,16 @@ impl TripleLossKmersGenerator {
     fn len(mypyself: PyRef<Self>) -> usize {
         mypyself.queueimpl.queue.len()
     }
+}
+
+#[pyproto]
+impl PyGCProtocol for TripleLossKmersGenerator {
+    fn __traverse__(&self, visit: PyVisit) -> Result<(), PyTraverseError> {
+        println!("---\n\n\n---This is likely never called---\n\n\n---");
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {}
 }
 
 // https://github.com/PyO3/pyo3/issues/1085#issuecomment-670835739
