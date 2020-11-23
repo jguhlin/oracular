@@ -720,8 +720,7 @@ impl TripleLossKmersGenerator {
 
 #[pyproto]
 impl PyGCProtocol for TripleLossKmersGenerator {
-    fn __traverse__(&self, visit: PyVisit) -> Result<(), PyTraverseError> {
-        println!("---\n\n\n---This is likely never called---\n\n\n---");
+    fn __traverse__(&self, _visit: PyVisit) -> Result<(), PyTraverseError> {
         Ok(())
     }
 
