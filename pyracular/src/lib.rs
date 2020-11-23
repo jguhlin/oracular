@@ -720,7 +720,7 @@ impl TripleLossKmersGenerator {
 
 impl Drop for TripleLossKmersGenerator {
     fn drop(&mut self) {
-
+        self.queueimpl.shutdown();
     }
 }
 
