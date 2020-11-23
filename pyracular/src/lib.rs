@@ -769,16 +769,17 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
         let pool = unsafe { py.new_pool() };
         let py = pool.python();
 
-        let pyout = PyDict::new(py);
+/*        let pyout = PyDict::new(py);
         pyout
             .set_item("kmers", result.0)
             .expect("Error with Python");
         pyout
             .set_item("triple", result.1)
-            .expect("Error with Python");
+            .expect("Error with Python");*/
 
 //        Ok(Some(pyout.to_object(py)))
-        return IterNextOutput::Yield(pyout.to_object(py));
+        // Return tuple instead of dict is way faster...
+        return IterNextOutput::Yield(result.to_object(py));
     }
 }
 
