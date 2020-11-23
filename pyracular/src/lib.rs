@@ -718,6 +718,12 @@ impl TripleLossKmersGenerator {
     }
 }
 
+impl Drop for TripleLossKmersGenerator {
+    fn drop(&mut self) {
+
+    }
+}
+
 #[pyproto]
 impl PyGCProtocol for TripleLossKmersGenerator {
     fn __traverse__(&self, _visit: PyVisit) -> Result<(), PyTraverseError> {
@@ -725,7 +731,9 @@ impl PyGCProtocol for TripleLossKmersGenerator {
         Ok(())
     }
 
-    fn __clear__(&mut self) {}
+    fn __clear__(&mut self) {
+        self.queueimpl.shutdown();
+    }
 }
 
 // https://github.com/PyO3/pyo3/issues/1085#issuecomment-670835739
@@ -738,7 +746,7 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
         mypyself
     } 
 
-    fn __next__(mypyself: PyRef<'p, Self>) -> IterNextOutput<PyObject, &'static str> {
+    fn __next__(mut mypyself: PyRefMut<'p, Self>) -> IterNextOutput<PyObject, &'static str> {
         if mypyself.queueimpl.is_finished() {
             return IterNextOutput::Return("Finished");
         }
@@ -756,6 +764,7 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
 
             // Check for exhaustion (or shutdown)...
             if mypyself.queueimpl.is_finished() {
+                mypyself.queueimpl.shutdown();
                 return IterNextOutput::Return("Finished");
             }
 
@@ -763,6 +772,7 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
         }
 
         let result = result.unwrap();
+
         let gil = Python::acquire_gil();
         let py = gil.python();
 
@@ -779,6 +789,7 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
 
 //        Ok(Some(pyout.to_object(py)))
         // Return tuple instead of dict is way faster...
+        mypyself.queueimpl.shutdown();
         return IterNextOutput::Yield(result.to_object(py));
     }
 }
@@ -976,6 +987,13 @@ impl<Q> QueueImpl<Q> {
     fn unpark(&self) {
         for i in &self.handles {
             i.thread().unpark();
+        }
+    }
+
+    fn shutdown(&mut self) {
+        self.shutdown.store(true, Ordering::SeqCst);
+        for i in self.handles.drain(..) {
+            i.join();
         }
     }
 }
