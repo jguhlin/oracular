@@ -35,9 +35,6 @@ use pyo3::prelude::*;
 // use pyo3::wrap_pyfunction;
 use pyo3::types::PyDict;
 use pyo3::class::iter::{IterNextOutput, PyIterProtocol};
-use pyo3::class::PyGCProtocol;
-use pyo3::class::PyTraverseError;
-use pyo3::class::PyVisit;
 
 // use pyo3::wrap_pyfunction;
 
@@ -532,7 +529,7 @@ impl PyIterProtocol for MatchedKmersGenerator {
 /// (thus the second output is going to be 1 as well!) All can have up to 15%
 /// replaced
 
-#[pyclass(gc)]
+#[pyclass]
 struct TripleLossKmersGenerator {
     queueimpl: QueueImpl<TripleLossSubmission>,
 }
@@ -724,18 +721,6 @@ impl Drop for TripleLossKmersGenerator {
     }
 }
 
-#[pyproto]
-impl PyGCProtocol for TripleLossKmersGenerator {
-    fn __traverse__(&self, _visit: PyVisit) -> Result<(), PyTraverseError> {
-        // This is called, but not sure what to do with it
-        Ok(())
-    }
-
-    fn __clear__(&mut self) {
-        self.queueimpl.shutdown();
-    }
-}
-
 // https://github.com/PyO3/pyo3/issues/1085#issuecomment-670835739
 #[pyproto]
 impl<'p> PyIterProtocol for TripleLossKmersGenerator {
@@ -748,6 +733,7 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
 
     fn __next__(mut mypyself: PyRefMut<'p, Self>) -> IterNextOutput<PyObject, &'static str> {
         if mypyself.queueimpl.is_finished() {
+            mypyself.queueimpl.shutdown();
             return IterNextOutput::Return("Finished");
         }
 
@@ -789,7 +775,7 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
 
 //        Ok(Some(pyout.to_object(py)))
         // Return tuple instead of dict is way faster...
-        mypyself.queueimpl.shutdown();
+        // mypyself.queueimpl.shutdown();
         return IterNextOutput::Yield(result.to_object(py));
     }
 }
