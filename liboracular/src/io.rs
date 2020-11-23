@@ -64,7 +64,6 @@ impl SequenceSplitter3N {
         self.curseq = curseq;
         return true;
     }
-
 }
 
 impl Iterator for SequenceSplitter3N {
@@ -81,7 +80,6 @@ impl Iterator for SequenceSplitter3N {
         let mut endloc;
 
         loop {
-
             if bytecount::count(&self.curseq.seq, b'N') < 3 {
                 startloc = 0;
                 endloc = self.curlen;
@@ -99,7 +97,7 @@ impl Iterator for SequenceSplitter3N {
                             if !self.next_seq() {
                                 return None;
                             }
-                            continue
+                            continue;
                         }
                     };
 
@@ -117,8 +115,8 @@ impl Iterator for SequenceSplitter3N {
             if endloc > self.curseq.seq.len() {
                 endloc = self.curseq.seq.len();
             }
-            
-            break
+
+            break;
         }
 
         // println!("{} {} {}", startloc, endloc, self.curseq.seq.len());

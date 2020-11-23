@@ -334,7 +334,6 @@ impl Iterator for KmerWindowGenerator {
         let mut coords: Vec<Coords> = Vec::with_capacity(self.window_size);
 
         while kmers.len() == 0 {
-
             for _ in 0..self.window_size {
                 match self.kmer_generator.next() {
                     Some((x, c)) => {
@@ -351,7 +350,7 @@ impl Iterator for KmerWindowGenerator {
 
             if kmers.len() == 0 {
                 if !self.next_seq() {
-                    return None // We are finished!
+                    return None; // We are finished!
                 }
             }
         }

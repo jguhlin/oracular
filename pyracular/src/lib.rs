@@ -33,8 +33,8 @@ use liboracular::sfasta;
 
 use pyo3::prelude::*;
 // use pyo3::wrap_pyfunction;
-use pyo3::types::PyDict;
 use pyo3::class::iter::{IterNextOutput, PyIterProtocol};
+use pyo3::types::PyDict;
 
 // use pyo3::wrap_pyfunction;
 
@@ -729,7 +729,7 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
         // let py = gil.python();
         // Ok(mypyself.into_py(py))
         mypyself
-    } 
+    }
 
     fn __next__(mut mypyself: PyRefMut<'p, Self>) -> IterNextOutput<PyObject, &'static str> {
         if mypyself.queueimpl.is_finished() {
@@ -744,7 +744,6 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
         let backoff = Backoff::new();
 
         while result == None {
-            
             mypyself.queueimpl.unpark();
             backoff.snooze();
 
@@ -765,7 +764,7 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
         let pool = unsafe { py.new_pool() };
         let py = pool.python();
 
-/*        let pyout = PyDict::new(py);
+        /*        let pyout = PyDict::new(py);
         pyout
             .set_item("kmers", result.0)
             .expect("Error with Python");
@@ -773,7 +772,7 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
             .set_item("triple", result.1)
             .expect("Error with Python");*/
 
-//        Ok(Some(pyout.to_object(py)))
+        //        Ok(Some(pyout.to_object(py)))
         // Return tuple instead of dict is way faster...
         // mypyself.queueimpl.shutdown();
         return IterNextOutput::Yield(result.to_object(py));
@@ -952,7 +951,6 @@ impl<Q> QueueImpl<Q> {
 
     #[inline]
     fn is_finished(&self) -> bool {
-
         let mut exhausted = true;
         // Are all exhausted?
         for handle in &self.exhausted {
@@ -961,9 +959,7 @@ impl<Q> QueueImpl<Q> {
             }
         }
 
-        if self.queue.len() == 0
-            && (exhausted || self.shutdown.load(Ordering::Relaxed))
-        {
+        if self.queue.len() == 0 && (exhausted || self.shutdown.load(Ordering::Relaxed)) {
             return true;
         }
         return false;
