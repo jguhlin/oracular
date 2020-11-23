@@ -721,6 +721,7 @@ impl TripleLossKmersGenerator {
 #[pyproto]
 impl PyGCProtocol for TripleLossKmersGenerator {
     fn __traverse__(&self, _visit: PyVisit) -> Result<(), PyTraverseError> {
+        // This is called, but not sure what to do with it
         Ok(())
     }
 
