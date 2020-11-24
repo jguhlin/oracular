@@ -761,8 +761,8 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        let pool = unsafe { py.new_pool() };
-        let py = pool.python();
+/*        let pool = unsafe { py.new_pool() };
+        let py = pool.python(); */
 
         /*        let pyout = PyDict::new(py);
         pyout
@@ -974,6 +974,7 @@ impl<Q> QueueImpl<Q> {
 
     fn shutdown(&mut self) {
         self.shutdown.store(true, Ordering::SeqCst);
+        self.unpark();
         for i in self.handles.drain(..) {
             i.join();
         }

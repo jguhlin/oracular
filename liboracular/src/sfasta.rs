@@ -972,20 +972,18 @@ fn get_index_filename(filename: &str) -> String {
 }
 
 pub fn clear_idxcache() {
-    IDXCACHE.get_or_init(|| Arc::new(RwLock::new(HashMap::new())));
-    //            .expect("Unable to set IDXCACHE");
-    //    }
+ //   IDXCACHE.get_or_init(|| Arc::new(RwLock::new(HashMap::new())));
 
-    let mut idxcache = IDXCACHE.get().unwrap().write().unwrap();
-    *idxcache = HashMap::new();
+//    let mut idxcache = IDXCACHE.get().unwrap().write().unwrap();
+//    *idxcache = HashMap::new();
 }
 
 pub fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>, Vec<(String, u64)>, Vec<u64>)> {
-    IDXCACHE.get_or_init(|| Arc::new(RwLock::new(HashMap::new())));
+//    IDXCACHE.get_or_init(|| Arc::new(RwLock::new(HashMap::new())));
 
     let idx_filename = get_index_filename(filename);
 
-    if IDXCACHE
+/*    if IDXCACHE
         .get()
         .unwrap()
         .read()
@@ -1002,7 +1000,7 @@ pub fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>, Vec<(String,
                 .unwrap()
                 .clone(),
         );
-    }
+    }*/
 
     if !Path::new(&idx_filename).exists() {
         println!("IdxFile does not exist! {} {}", filename, idx_filename);
@@ -1024,7 +1022,7 @@ pub fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>, Vec<(String,
     let block_vals: Vec<u64> =
         bincode::deserialize_from(&mut idxfh).expect("Unable to read idx values");
 
-    let mut idxcache = IDXCACHE.get().unwrap().write().unwrap();
+/*    let mut idxcache = IDXCACHE.get().unwrap().write().unwrap();
     idxcache.insert(
         idx_filename.clone(),
         (
@@ -1033,7 +1031,7 @@ pub fn load_index(filename: &str) -> Option<(Vec<String>, Vec<u64>, Vec<(String,
             block_keys.clone(),
             block_vals.clone(),
         ),
-    );
+    ); */
 
     Some((keys, vals, block_keys, block_vals))
 }
