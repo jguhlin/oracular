@@ -1428,14 +1428,12 @@ struct FastaKmersGenerator {
 }
 
 #[pyproto]
-impl PyIterProtocol for FastaKmersGenerator {
-    fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        Ok(mypyself.into_py(py))
+impl<'p> PyIterProtocol for FastaKmersGenerator {
+    fn __iter__(mypyself: PyRef<'p, Self>) -> PyRef<'p, Self> {
+        mypyself
     }
 
-    fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
+    fn __next__(mut mypyself: PyRefMut<'p, Self>) -> IterNextOutput<PyObject, &'static str> {
         let mut finished = false;
         let mut item = None;
 
@@ -1448,7 +1446,7 @@ impl PyIterProtocol for FastaKmersGenerator {
                 None => {
                     mypyself.offset += 1;
                     if (mypyself.k == mypyself.offset && mypyself.rc) || !mypyself.sliding {
-                        return Ok(None);
+                        return IterNextOutput::Return("Finished");
                     } else {
                         if mypyself.k == mypyself.offset {
                             mypyself.rc = true;
@@ -1486,15 +1484,16 @@ impl PyIterProtocol for FastaKmersGenerator {
 
                 let gil = Python::acquire_gil();
                 let py = gil.python();
-                let pyout = PyDict::new(py);
+//                let pyout = PyDict::new(py);
                 // let pyout = PyTuple::new(py, [kmers, truth]);
-                pyout.set_item("kmers", kmers).expect("Py Error");
-                pyout.set_item("coords", coords).expect("Py Error");
-                pyout.set_item("ids", id).expect("Py Error");
-                pyout.set_item("rc", rc).expect("Py Error");
-                Ok(Some(pyout.to_object(py)))
+//                pyout.set_item("kmers", kmers).expect("Py Error");
+//                pyout.set_item("coords", coords).expect("Py Error");
+//                pyout.set_item("ids", id).expect("Py Error");
+//                pyout.set_item("rc", rc).expect("Py Error");
+                let result = (kmers, coords, id, rc);
+                return IterNextOutput::Yield(result.to_object(py));
             }
-            None => Ok(None),
+            None => IterNextOutput::Return("Finished"),
         }
     }
 }
