@@ -660,7 +660,7 @@ pub fn convert_fasta_file(filename: &str, output: &str)
         thread_count = 64;
     }
 
-    let queue_size = 1024;
+    let queue_size = 64;
 
     // multi-threading...
     let shutdown = Arc::new(AtomicBool::new(false));
