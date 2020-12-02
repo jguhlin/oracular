@@ -24,4 +24,6 @@ mimalloc = { version = "0.1.22", default-features = false }
 rand = "0.7.3"
 rand_xoshiro = "0.4.0"
 
-
+[package.metadata.maturin]
+classifier = ["Programming Language :: Python"]
+project-url = "https://github.com/jguhlin/oracular"
