@@ -5,7 +5,6 @@ extern crate rand_xoshiro;
 
 use crossbeam::queue::ArrayQueue;
 use crossbeam::utils::Backoff;
-use mimalloc::MiMalloc;
 use std::sync::atomic::Ordering;
 use std::thread;
 use std::thread::{park, JoinHandle};
@@ -14,6 +13,7 @@ use rand::prelude::*;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+use mimalloc::MiMalloc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
@@ -761,7 +761,7 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-/*        let pool = unsafe { py.new_pool() };
+        /*        let pool = unsafe { py.new_pool() };
         let py = pool.python(); */
 
         /*        let pyout = PyDict::new(py);
@@ -1484,12 +1484,12 @@ impl<'p> PyIterProtocol for FastaKmersGenerator {
 
                 let gil = Python::acquire_gil();
                 let py = gil.python();
-//                let pyout = PyDict::new(py);
+                //                let pyout = PyDict::new(py);
                 // let pyout = PyTuple::new(py, [kmers, truth]);
-//                pyout.set_item("kmers", kmers).expect("Py Error");
-//                pyout.set_item("coords", coords).expect("Py Error");
-//                pyout.set_item("ids", id).expect("Py Error");
-//                pyout.set_item("rc", rc).expect("Py Error");
+                //                pyout.set_item("kmers", kmers).expect("Py Error");
+                //                pyout.set_item("coords", coords).expect("Py Error");
+                //                pyout.set_item("ids", id).expect("Py Error");
+                //                pyout.set_item("rc", rc).expect("Py Error");
                 let result = (kmers, coords, id, rc);
                 return IterNextOutput::Yield(result.to_object(py));
             }
