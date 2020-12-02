@@ -3,6 +3,7 @@ name = "pyracular"
 version = "0.1.0"
 authors = ["Joseph Guhlin <joseph.guhlin@gmail.com>"]
 edition = "2018"
+readme = "README.md"
 
 [lib]
 name = "pyracular"
@@ -25,5 +26,8 @@ rand = "0.7.3"
 rand_xoshiro = "0.4.0"
 
 [package.metadata.maturin]
-classifier = ["Programming Language :: Python"]
+classifier = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python"
+    ]
 project-url = "https://github.com/jguhlin/oracular"
