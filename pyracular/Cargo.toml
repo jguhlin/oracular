@@ -30,4 +30,4 @@ classifier = [
     "Programming Language :: Rust",
     "Programming Language :: Python"
     ]
-project-url = "https://github.com/jguhlin/oracular"
+project-url = ["https://github.com/jguhlin/oracular"]
