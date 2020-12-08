@@ -1425,6 +1425,7 @@ struct FastaKmersGenerator {
     rc: bool,
     sliding: bool,
     start_rc: bool,
+    rand: bool,
 }
 
 #[pyproto]
@@ -1459,7 +1460,7 @@ impl<'p> PyIterProtocol for FastaKmersGenerator {
                             mypyself.window_size,
                             mypyself.offset,
                             mypyself.rc,
-                            false,
+                            mypyself.rand,
                         );
 
                         mypyself.iter = Box::new(iter);
@@ -1510,9 +1511,9 @@ impl FastaKmersGenerator {
     /// not doing sliding windows...
     /// TODO: Need to give this a chance to return less than window_size kmer's
     #[new]
-    fn new(k: usize, filename: String, window_size: usize, sliding: bool, start_rc: bool) -> Self {
+    fn new(k: usize, filename: String, window_size: usize, sliding: bool, start_rc: bool, rand: bool) -> Self {
         // Create KmerWindowGenerator
-        let iter = KmerCoordsWindowIter::new(&filename.clone(), k, window_size, 0, start_rc, false);
+        let iter = KmerCoordsWindowIter::new(&filename.clone(), k, window_size, 0, start_rc, rand);
 
         FastaKmersGenerator {
             iter: Box::new(iter),
@@ -1523,6 +1524,7 @@ impl FastaKmersGenerator {
             rc: false,
             sliding,
             start_rc,
+            rand,
         }
     }
 }
