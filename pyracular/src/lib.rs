@@ -1527,6 +1527,12 @@ impl FastaKmersGenerator {
             rand,
         }
     }
+/*
+    fn get_next_seq(&mut self) {
+        self.iter.get_next_seq();
+    }*/
+
+
 }
 
 /// Provides functions for python dealing with Kmers from fasta and sfasta
