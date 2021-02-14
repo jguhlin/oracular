@@ -20,3 +20,5 @@ work/*
 .vstags
 test_data/*sfasta
 *.sfai
+.lsp*
+.clj-kondo*
