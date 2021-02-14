@@ -435,6 +435,39 @@ impl KmerCoordsWindowIter {
             rc,
         }
     }
+
+    pub fn next_seq(&mut self) -> bool {
+
+        let mut curseq: io::Sequence = match self.sequences.next() {
+            Some(x) => x,
+            None => return false, // That's it... no more!
+        };
+
+        if self.rc {
+            let io::Sequence {
+                id,
+                mut seq,
+                location,
+                end,
+            } = curseq;
+
+            utils::complement_nucleotides(&mut seq);
+            seq.reverse();
+
+            curseq = io::Sequence {
+                id,
+                seq,
+                location,
+                end,
+            };
+        }
+
+        self.curseq = curseq.clone();
+        let kmer_generator = Kmers::new(curseq.seq.clone(), self.k, self.offset, self.rc);
+        self.kmer_generator = kmer_generator;
+
+        true
+    }
 }
 
 impl Iterator for KmerCoordsWindowIter {
@@ -444,33 +477,7 @@ impl Iterator for KmerCoordsWindowIter {
         // While instead of if, because if we get a too short sequence we should skip
         // it...
         while (self.kmer_generator.len - self.kmer_generator.curpos) <= self.needed_sequence {
-            let mut curseq: io::Sequence = match self.sequences.next() {
-                Some(x) => x,
-                None => return None, // That's it... no more!
-            };
-
-            if self.rc {
-                let io::Sequence {
-                    id,
-                    mut seq,
-                    location,
-                    end,
-                } = curseq;
-
-                utils::complement_nucleotides(&mut seq);
-                seq.reverse();
-
-                curseq = io::Sequence {
-                    id,
-                    seq,
-                    location,
-                    end,
-                };
-            }
-
-            self.curseq = curseq.clone();
-            let kmer_generator = Kmers::new(curseq.seq.clone(), self.k, self.offset, self.rc);
-            self.kmer_generator = kmer_generator;
+            self.next_seq();
         }
 
         let mut kmers: Vec<Vec<u8>> = Vec::with_capacity(self.window_size);
