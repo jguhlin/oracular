@@ -1446,6 +1446,7 @@ impl<'p> PyIterProtocol for FastaKmersGenerator {
                 }
                 None => {
                     mypyself.offset += 1;
+                    println!("Starting a new one... {:#?} {:#?} {:#?} {:#?}", mypyself.k, mypyself.offset, mypyself.rc, mypyself.sliding);
                     if (mypyself.k == mypyself.offset && mypyself.rc) || !mypyself.sliding {
                         return IterNextOutput::Return("Finished");
                     } else {
@@ -1464,6 +1465,7 @@ impl<'p> PyIterProtocol for FastaKmersGenerator {
                         );
 
                         mypyself.iter = Box::new(iter);
+                        println!("Getting next...");
                         continue;
                     }
                 }
