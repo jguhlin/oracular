@@ -305,6 +305,11 @@ mod tests {
 
         let first_landmark = intervals.landmarks.keys().next().unwrap();
 
+        println!(
+            "{:#?}",
+            intervals.landmarks.get(first_landmark).unwrap()
+        );
+
         assert!(first_landmark == "NC_004354.4");
         println!(
             "{:#?}",

@@ -573,7 +573,7 @@ impl Iterator for Kmers {
 pub struct Gff3Kmers {
     pub kmers: Vec<Vec<u8>>,
     pub id: String,
-    pub classifications: Vec<Vec<u8>>,
+    pub classifications: Vec<Vec<Vec<u8>>>,
     pub coords: Vec<Coords>,
     pub rc: bool,
 }
@@ -616,7 +616,7 @@ impl Iterator for Gff3KmersIter {
 
         let mut classifications = Vec::new();
 
-        let blank: Vec<u8> = vec![0; self.types.len()];
+        let blank: Vec<Vec<u8>> = vec![vec![0; self.types.len()]; self.k];
 
         for (n, _) in kmers.iter().enumerate() {
             let found = match self.intervals.landmarks.get(&id) {
@@ -630,18 +630,32 @@ impl Iterator for Gff3KmersIter {
                 for x in found {
                     let lower: u32 = std::cmp::max(x.start as u32, coords[n].0 as u32);
                     let upper: u32 = std::cmp::min(x.stop as u32, coords[n].1 as u32);
+                    //let start: usize = lower as usize - coords[n].0;
+                    //let end: usize = upper as usize - coords[n].0;
 
-                    let len = upper - lower;
-                    if len as f32 > (self.k as f32 * 0.8) {
+                    assert!(upper-lower <= self.k as u32);
+
+                    for i in lower as usize..upper as usize {
+                         for (j, m) in (*x).val.iter().enumerate() {
+                             if *m == 1 {
+                                 kmer_classification[i-coords[n].0][j] = 1;
+                             }
+                         }
+                    }
+                    // let lower: u32 = std::cmp::max(x.start as u32, coords[n].0 as u32);
+                    // let upper: u32 = std::cmp::min(x.stop as u32, coords[n].1 as u32);
+
+                    // let len = upper - lower;
+                    // if len as f32 > (self.k as f32 * 0.8) {
                         // TODO: Make overlap (0.8) configurable...
                         // Intervals are a set of [0 0 0 0 1 1 1 1 1] etc... for when classes are
                         // false or true...
-                        for (i, m) in (*x).val.iter().enumerate() {
-                            if *m == 1 {
-                                kmer_classification[i] = 1;
-                            }
-                        }
-                    }
+                    //     for (i, m) in (*x).val.iter().enumerate() {
+                    //         if *m == 1 {
+                    //             kmer_classification[i] = 1;
+                    //         }
+                    //     }
+                    // }
                 }
             }
 
@@ -1065,5 +1079,40 @@ mod tests {
         println!("Coords1 {:#?}", coords[1]);
         assert!(coords[0] == [(12, 19), (4, 11)]);
         assert!(coords[1] == [(79, 86), (71, 78)]);
+    }
+
+    #[test]
+    pub fn test_gff3_iter() {
+        crate::sfasta::clear_idxcache();
+        crate::sfasta::convert_fasta_file(
+            "test_data/Dmel_part.fna",
+            "test_data/Dmel_part_test_gff3_iter.sfasta",
+        );
+
+        let kmercoords_window_iter = KmerCoordsWindowIter::new(
+            "test_data/Dmel_part_test_gff3_iter.sfasta",
+            21,
+            6,
+            0,
+            false,
+            false,
+        );
+
+        let mut iter = Gff3KmersIter::new(
+            "test_data/Dmel_head30.gff3",
+            kmercoords_window_iter,
+            21
+        );
+
+        // println!("{:#?}", iter.next());
+        let x = iter.next().unwrap();
+        for i in x.classifications {
+            println!("{:#?}", i.len());
+            for j in i {
+                println!("{:#?}", j.len());
+            }
+        }
+
+        panic!();
     }
 }
