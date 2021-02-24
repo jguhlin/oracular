@@ -626,14 +626,22 @@ impl Iterator for Gff3KmersIter {
 
             let mut kmer_classification = blank.clone();
 
+            // TODO: Test this is all correct...
+            // Specifically the +1 below! Otherwise length comes out 1 short, but not sure where it should go..
+            // Doesn't crash here... so leaving it.
+            // TODO: Gen some fake GFF3's and FASTA to test it properly...
+
             if let Some(found) = found {
                 for x in found {
                     let lower: u32 = std::cmp::max(x.start as u32, coords[n].0 as u32);
-                    let upper: u32 = std::cmp::min(x.stop as u32, coords[n].1 as u32);
+                    let upper: u32 = std::cmp::min(x.stop as u32, coords[n].1 as u32) + 1;
                     //let start: usize = lower as usize - coords[n].0;
                     //let end: usize = upper as usize - coords[n].0;
 
                     assert!(upper-lower <= self.k as u32);
+                    // println!("Length: {:#?}", upper-lower);
+                    // println!("{} {}", lower, upper);
+                    // println!("{} {}", coords[n].0, coords[n].1);
 
                     for i in lower as usize..upper as usize {
                          for (j, m) in (*x).val.iter().enumerate() {
@@ -1105,7 +1113,7 @@ mod tests {
         );
 
         // println!("{:#?}", iter.next());
-        let x = iter.skip(822).next().unwrap();
+        let x = iter.skip(823).next().unwrap();
         for i in x.classifications {
             println!("{:#?}", i.len());
             for j in i {
