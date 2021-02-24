@@ -7,11 +7,11 @@ use rust_lapper::Lapper;
 // Struct
 // Landmark
 
-pub struct IntervalMap<T: Eq + Clone> {
-    pub landmarks: HashMap<String, Lapper<T>>,
+pub struct IntervalMap<T: Eq + Clone + Sync + Send> {
+    pub landmarks: HashMap<String, Lapper<u32, T>>,
 }
 
-impl<T: Eq + Clone> Default for IntervalMap<T> {
+impl<T: Eq + Clone + Sync + Send> Default for IntervalMap<T> {
     fn default() -> Self {
         IntervalMap {
             landmarks: Default::default(),
@@ -19,7 +19,7 @@ impl<T: Eq + Clone> Default for IntervalMap<T> {
     }
 }
 
-impl<T: Eq + Clone> IntervalMap<T> {
+impl<T: Eq + Clone + Sync + Send> IntervalMap<T> {
     pub fn new() -> IntervalMap<T> {
         IntervalMap::default()
     }
