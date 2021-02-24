@@ -9,6 +9,8 @@ use std::io::{BufReader, BufWriter, Read, SeekFrom};
 use std::path::Path;
 use std::time::Instant;
 
+use rand_chacha::rand_core::SeedableRng;
+
 use crate::fasta;
 use crate::utils::generic_open_file;
 

@@ -10,7 +10,7 @@ name = "pyracular"
 crate-type = ["cdylib"]
 
 [dependencies.pyo3]
-version = "0.12.3"
+version = "0.13.2"
 
 [features]
 extension-module = ["pyo3/extension-module"]
@@ -21,7 +21,7 @@ bytecount = "0.6.1"
 twox-hash = "1.5.0"
 liboracular = { path = "../liboracular/" }
 crossbeam = "0.8.0"
-mimalloc = { version = "0.1.22", default-features = false }
+mimalloc = { version = "0.1.24", default-features = false }
 rand = "0.7.3"
 rand_xoshiro = "0.4.0"
 
