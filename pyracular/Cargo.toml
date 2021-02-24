@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 
 [dependencies.pyo3]
 version = "0.13.2"
+# abi3-py38 = true
 
 [features]
 extension-module = ["pyo3/extension-module"]
@@ -30,4 +31,4 @@ classifier = [
     "Programming Language :: Rust",
     "Programming Language :: Python"
     ]
-project-url = ["https://github.com/jguhlin/oracular"]
+# project-url = ["https://github.com/jguhlin/oracular"]
