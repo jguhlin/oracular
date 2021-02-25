@@ -79,13 +79,17 @@ struct Gff3KmerGenerator {
 
 #[pyproto]
 impl PyIterProtocol for Gff3KmerGenerator {
-    fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
+    /* fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
         let gil = Python::acquire_gil();
         let py = gil.python();
         Ok(mypyself.into_py(py))
+    } */
+
+    fn __iter__(mypyself: PyRef<'p, Self>) -> PyRef<'p, Self> {
+        mypyself
     }
 
-    fn __next__(mut mypyself: PyRefMut<Self>) -> IterNextOutput<PyObject, &'static str> {
+    fn __next__(mut mypyself: PyRefMut<'p, Self>) -> IterNextOutput<PyObject, &'static str> {
         let mut finished = false;
         let mut item = None;
 
