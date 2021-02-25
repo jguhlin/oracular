@@ -146,16 +146,18 @@ impl PyIterProtocol for Gff3KmerGenerator {
                 let py = gil.python();
                 let pyout = PyDict::new(py);
                 // let pyout = PyTuple::new(py, [kmers, truth]);
-                pyout.set_item("kmers", kmers).expect("Py Error");
+                /*pyout.set_item("kmers", kmers).expect("Py Error");
                 pyout
                     .set_item("classifications", classifications)
                     .expect("Py Error");
                 pyout.set_item("id", id).expect("Py Error");
                 pyout.set_item("rc", rc).expect("Py Error");
                 pyout.set_item("coords", coords).expect("Py Error");
-                Ok(Some(pyout.to_object(py)))
+                Ok(Some(pyout.to_object(py))) */
+                let result = (kmers, classifications, coords, id, rc);
+                return IterNextOutput::Yield(result.to_object(py));
             }
-            None => Ok(None),
+            None => IterNextOutput::Return("Finished"),
         }
     }
 }
