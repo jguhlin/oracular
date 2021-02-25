@@ -85,7 +85,7 @@ impl PyIterProtocol for Gff3KmerGenerator {
         Ok(mypyself.into_py(py))
     }
 
-    fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
+    fn __next__(mut mypyself: PyRefMut<Self>) -> IterNextOutput<PyObject, &'static str> {
         let mut finished = false;
         let mut item = None;
 
@@ -99,7 +99,7 @@ impl PyIterProtocol for Gff3KmerGenerator {
                     mypyself.offset += 1;
                     if mypyself.k == mypyself.offset && mypyself.rc {
                         println!("Finished, at the correct step...");
-                        return Ok(None);
+                        return IterNextOutput::Return("Finished");
                     } else {
                         if mypyself.k == mypyself.offset {
                             mypyself.rc = true;
