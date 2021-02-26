@@ -622,9 +622,9 @@ impl Iterator for Gff3KmersIter {
 
         for (n, _) in kmers.iter().enumerate() {
             if last_query > coords[n].0 {
-                cursor = 0;
+                cursor = cursor.saturating_sub(20);
             }
-            
+
             let found = match self.intervals.landmarks.get(&id) {
                 Some(x) => Some(x.seek(coords[n].0 as u32, coords[n].1 as u32, &mut cursor)),
                 None => None,
