@@ -126,7 +126,8 @@ pub fn get_gff3_intervals(filename: &str) -> (intervals::IntervalMap<Vec<u8>>, V
                 .expect("Missing type!")
                 .clone(),
         });
-        let lapper = Lapper::new(data.collect());
+        let mut lapper = Lapper::new(data.collect());
+        lapper.merge_overlaps();
         intervals.landmarks.insert(landmark.to_string(), lapper);
     }
 

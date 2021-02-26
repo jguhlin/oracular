@@ -614,17 +614,23 @@ impl Iterator for Gff3KmersIter {
             rc,
         } = next_item;
 
-        let mut classifications = Vec::new();
+        let mut classifications = Vec::with_capacity(self.k);
+        let mut cursor: usize =  0;
+        let mut last_query: usize = 0;
 
-        let blank: Vec<Vec<u8>> = vec![vec![0; self.types.len()]; self.k];
+        // let blank: Vec<Vec<u8>> = vec![vec![0; self.types.len()]; self.k];
 
         for (n, _) in kmers.iter().enumerate() {
+            if last_query > coords[n].0 {
+                cursor = 0;
+            }
+            
             let found = match self.intervals.landmarks.get(&id) {
-                Some(x) => Some(x.find(coords[n].0 as u32, coords[n].1 as u32)),
+                Some(x) => Some(x.seek(coords[n].0 as u32, coords[n].1 as u32, &mut cursor)),
                 None => None,
             };
 
-            let mut kmer_classification = blank.clone();
+            let mut kmer_classification: Vec<Vec<u8>> = vec![vec![0; self.types.len()]; self.k];
 
             // TODO: Test this is all correct...
             // Specifically the +1 below! Otherwise length comes out 1 short, but not sure where it should go..
@@ -632,6 +638,8 @@ impl Iterator for Gff3KmersIter {
             // TODO: Gen some fake GFF3's and FASTA to test it properly...
 
             if let Some(found) = found {
+                last_query = coords[n].0;
+
                 for x in found {
                     let lower: u32 = std::cmp::max(x.start as u32, coords[n].0 as u32);
                     let upper: u32 = std::cmp::min(x.stop as u32, coords[n].1 as u32) + 1;
