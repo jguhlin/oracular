@@ -1452,7 +1452,10 @@ impl<'p> PyIterProtocol for FastaKmersGenerator {
                 }
                 None => {
                     mypyself.offset += 1;
-                    println!("Starting a new one... {:#?} {:#?} {:#?} {:#?}", mypyself.k, mypyself.offset, mypyself.rc, mypyself.sliding);
+                    println!(
+                        "Starting a new one... {:#?} {:#?} {:#?} {:#?}",
+                        mypyself.k, mypyself.offset, mypyself.rc, mypyself.sliding
+                    );
                     if (mypyself.k == mypyself.offset && mypyself.rc) || !mypyself.sliding {
                         return IterNextOutput::Return("Finished");
                     } else {
@@ -1519,7 +1522,14 @@ impl FastaKmersGenerator {
     /// not doing sliding windows...
     /// TODO: Need to give this a chance to return less than window_size kmer's
     #[new]
-    fn new(k: usize, filename: String, window_size: usize, sliding: bool, start_rc: bool, rand: bool) -> Self {
+    fn new(
+        k: usize,
+        filename: String,
+        window_size: usize,
+        sliding: bool,
+        start_rc: bool,
+        rand: bool,
+    ) -> Self {
         // Create KmerWindowGenerator
         let iter = KmerCoordsWindowIter::new(&filename.clone(), k, window_size, 0, start_rc, rand);
 
@@ -1535,12 +1545,10 @@ impl FastaKmersGenerator {
             rand,
         }
     }
-/*
+    /*
     fn get_next_seq(&mut self) {
         self.iter.get_next_seq();
     }*/
-
-
 }
 
 /// Provides functions for python dealing with Kmers from fasta and sfasta
