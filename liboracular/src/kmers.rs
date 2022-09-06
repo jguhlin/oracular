@@ -5,7 +5,6 @@ use std::fmt;
 use crate::gff3;
 use crate::intervals;
 use crate::io;
-use crate::sfasta;
 use crate::utils;
 
 type Kmer = Vec<u8>;

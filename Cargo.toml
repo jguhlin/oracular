@@ -1,9 +1,7 @@
 [workspace]
 members = [
-    "./oracular",
     "./liboracular",
     "./pyracular",
-    "./sfa",
 ]
 
 [profile.release]

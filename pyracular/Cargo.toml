@@ -10,7 +10,7 @@ name = "pyracular"
 crate-type = ["cdylib"]
 
 [dependencies.pyo3]
-version = "0.13.2"
+version = "0.17.1"
 # abi3-py38 = true
 
 [features]
@@ -21,10 +21,10 @@ default = ["extension-module"]
 bytecount = "0.6.1"
 twox-hash = "1.5.0"
 liboracular = { path = "../liboracular/" }
-crossbeam = "0.8.0"
+crossbeam = "0.8.2"
 mimalloc = { version = "0.1.24", default-features = false }
-rand = "0.7.3"
-rand_xoshiro = "0.4.0"
+rand = "0.8.5"
+rand_xoshiro = "0.6.0"
 
 [package.metadata.maturin]
 classifier = [
