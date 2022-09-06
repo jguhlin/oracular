@@ -1,15 +1,13 @@
 use std::fs::File;
 use std::io::{BufReader, Read};
 
-use serde::{Deserialize, Serialize};
-
 use crate::io;
 
 pub struct Sequences {
     reader: Box<dyn Read + Send>,
 }
 
-#[derive(PartialEq, Serialize, Deserialize, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct Sequence {
     pub seq: Vec<u8>,
     pub id: String,
