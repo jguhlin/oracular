@@ -1,5 +1,7 @@
 use rand::prelude::*;
 use rand::Rng;
+use libsfasta::prelude::*;
+
 use std::fmt;
 
 use crate::gff3;
@@ -69,7 +71,7 @@ pub struct KmerWindow {
 }
 
 pub struct KmerWindowGenerator {
-    sequences: Box<dyn Iterator<Item = io::Sequence> + Send>,
+    sequences: Box<dyn Iterator<Item = Sequence> + Send>,
     window_size: usize,
     k: usize,
     kmer_generator: Kmers,
@@ -171,10 +173,10 @@ impl KmerWindowGenerator {
         rc: bool,
         rand: bool, // Mostly for debugging, but also for synteny plots and such...
     ) -> KmerWindowGenerator {
-        let mut sequences = Box::new(sfasta::Sequences::new(filename));
+        let mut sequences = Box::new(Sequences::from_file(filename));
 
         if rand {
-            sequences.set_mode(sfasta::SeqMode::Random);
+            sequences.set_mode(SeqMode::Random);
         }
 
         let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
@@ -186,25 +188,25 @@ impl KmerWindowGenerator {
         if rc {
             let io::Sequence {
                 id,
-                mut seq,
-                location,
-                end,
+                sequence: mut seq,
+                scores,
+                header,               
             } = curseq;
 
-            utils::complement_nucleotides(&mut seq);
-            seq.reverse();
+            utils::complement_nucleotides(&mut seq.as_mut().unwrap());
+            seq.as_mut().unwrap().reverse();
 
             // TODO: How to deal with rc?
 
             curseq = io::Sequence {
                 id,
-                seq,
-                location,
-                end,
+                sequence: seq,
+                scores,
+                header,
             };
         }
 
-        let kmer_generator = Kmers::new(curseq.seq.clone(), k, offset, rc);
+        let kmer_generator = Kmers::new(curseq.sequence.as_ref().unwrap().clone(), k, offset, rc);
         // TODO: Should be able to handle between min_seq and max_seq
         // So instead of only 20 or 30 kmers at a time, get 10 - 100 (prefer more)
         //let needed_sequence = k * window_size;
