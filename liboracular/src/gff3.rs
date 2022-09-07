@@ -1,15 +1,12 @@
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
-//use std::collections::HashSet;
 use hashbrown::HashMap;
 
 use crate::intervals;
 
 use linked_hash_set::LinkedHashSet;
 use rust_lapper::{Interval, Lapper};
-
-// use std::collections::HashMap;
 
 use itertools::Itertools;
 

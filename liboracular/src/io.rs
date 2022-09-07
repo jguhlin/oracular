@@ -3,10 +3,6 @@ use std::io::{BufReader, Read};
 
 use crate::io;
 
-pub struct Sequences {
-    reader: Box<dyn Read + Send>,
-}
-
 #[derive(PartialEq, Clone, Debug)]
 pub struct Sequence {
     pub seq: Vec<u8>,
@@ -130,58 +126,16 @@ impl Iterator for SequenceSplitter3N {
     }
 }
 
-fn open_file(filename: String) -> Box<dyn Read + Send> {
-    let file = match File::open(&filename) {
-        Err(why) => panic!("Couldn't open {}: {}", filename, why.to_string()),
-        Ok(file) => file,
-    };
-
-    let file = BufReader::with_capacity(64 * 1024 * 1024, file);
-
-    let fasta: Box<dyn Read + Send> = if filename.ends_with("gz") {
-        Box::new(flate2::read::GzDecoder::new(file))
-    } else if filename.ends_with("snappy") || filename.ends_with("sz") {
-        Box::new(snap::read::FrameDecoder::new(file))
-    } else {
-        Box::new(file)
-    };
-
-    let reader = BufReader::with_capacity(32 * 1024 * 1024, fasta);
-    Box::new(reader)
-}
-
-impl Iterator for Sequences {
-    type Item = Sequence;
-
-    fn next(&mut self) -> Option<Sequence> {
-        let seq: Sequence = match bincode::deserialize_from(&mut self.reader) {
-            Ok(x) => x,
-            Err(_) => {
-                println!("SeqStop");
-                return None;
-            }
-        };
-        Some(seq)
-    }
-}
-
-impl Sequences {
-    pub fn new(filename: String) -> Sequences {
-        Sequences {
-            reader: open_file(filename),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::sfasta;
+    use libsfasta::prelude::*;
 
     #[test]
     pub fn test_iosequences() {
-        sfasta::clear_idxcache();
-        sfasta::convert_fasta_file("test_data/test.fna", "test_data/test_sequences.sfasta");
+        convert_fasta_file("test_data/test.fna", "test_data/test_sequences.sfasta");
+        
         let mut sequences = Box::new(sfasta::Sequences::new("test_data/test_sequences.sfasta"));
         let sequence = sequences.next().unwrap();
         println!("{:#?}", sequence);
