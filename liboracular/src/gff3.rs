@@ -1,7 +1,7 @@
+use hashbrown::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
-use hashbrown::HashMap;
 
 use crate::intervals;
 
@@ -303,10 +303,7 @@ mod tests {
 
         let first_landmark = intervals.landmarks.keys().next().unwrap();
 
-        println!(
-            "{:#?}",
-            intervals.landmarks.get(first_landmark).unwrap()
-        );
+        println!("{:#?}", intervals.landmarks.get(first_landmark).unwrap());
 
         assert!(first_landmark == "NC_004354.4");
         println!(

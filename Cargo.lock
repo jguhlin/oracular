@@ -862,6 +862,7 @@ dependencies = [
  "bytecount",
  "crossbeam",
  "liboracular",
+ "libsfasta",
  "mimalloc",
  "pyo3",
  "rand",

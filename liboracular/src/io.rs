@@ -109,21 +109,18 @@ impl Iterator for SequenceSplitter3N {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sfasta;
-    use crate::io::*;
-    use libsfasta::prelude::*;
 
     #[test]
     pub fn test_iosequences() {
         convert_fasta_file("test_data/test.fna", "test_data/test_sequences.sfasta");
-        
+
         let mut sequences = Box::new(Sequences::from_file("test_data/test_sequences.sfasta"));
         let sequence = sequences.next().unwrap();
         println!("{:#?}", sequence);
-        assert!(sequence.id.unwrap() == "test");
+        assert!(sequence.id.as_ref().unwrap() == "test");
         assert!(sequence.len() == 670);
     }
-    
+
     #[test]
     #[should_panic]
     pub fn test_empty() {
@@ -142,33 +139,51 @@ mod tests {
         let mut sequences = Box::new(SequenceSplitter3N::new(sequences));
         let x = sequences.next().unwrap();
         println!("{}", x.len());
-        println!("{}", std::str::from_utf8(&x.sequence.as_ref().unwrap()).unwrap());
+        println!(
+            "{}",
+            std::str::from_utf8(&x.sequence.as_ref().unwrap()).unwrap()
+        );
         assert!(x.len() == 20);
 
         let x = sequences.next().unwrap();
         println!("{}", x.len());
-        println!("{}", std::str::from_utf8(&x.sequence.as_ref().unwrap()).unwrap());
+        println!(
+            "{}",
+            std::str::from_utf8(&x.sequence.as_ref().unwrap()).unwrap()
+        );
         assert!(x.len() == 50);
 
         let x = sequences.next().unwrap();
         println!("{}", x.len());
-        println!("{}", std::str::from_utf8(&x.sequence.as_ref().unwrap()).unwrap());
+        println!(
+            "{}",
+            std::str::from_utf8(&x.sequence.as_ref().unwrap()).unwrap()
+        );
         assert!(x.len() == 50);
 
         let x = sequences.next().unwrap();
         println!("{}", x.len());
-        println!("{}", std::str::from_utf8(&x.sequence.as_ref().unwrap()).unwrap());
+        println!(
+            "{}",
+            std::str::from_utf8(&x.sequence.as_ref().unwrap()).unwrap()
+        );
         assert!(x.len() == 50);
 
         let x = sequences.next().unwrap();
         println!("{}", x.len());
-        println!("{}", std::str::from_utf8(&x.sequence.as_ref().unwrap()).unwrap());
+        println!(
+            "{}",
+            std::str::from_utf8(&x.sequence.as_ref().unwrap()).unwrap()
+        );
         assert!(x.len() == 50);
 
         let mut therest: Vec<Sequence> = sequences.collect();
         let x = therest.pop().unwrap();
         println!("{}", x.len());
-        println!("{}", std::str::from_utf8(&x.sequence.as_ref().unwrap()).unwrap());
+        println!(
+            "{}",
+            std::str::from_utf8(&x.sequence.as_ref().unwrap()).unwrap()
+        );
         assert!(x.len() == 30);
 
         convert_fasta_file(
@@ -197,9 +212,7 @@ mod tests {
             "test_data/test_multiple.fna",
             "test_data/test_sequences_impl.sfasta",
         );
-        let seqs = Box::new(Sequences::from_file(
-            "test_data/test_sequences_impl.sfasta",
-        ));
+        let seqs = Box::new(Sequences::from_file("test_data/test_sequences_impl.sfasta"));
         let count = seqs.count();
         println!("Sequences Impl Count {}", count);
         assert!(count == 8);

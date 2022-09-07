@@ -1,6 +1,6 @@
+use libsfasta::prelude::*;
 use rand::prelude::*;
 use rand::Rng;
-use libsfasta::prelude::*;
 
 use std::fmt;
 
@@ -190,7 +190,7 @@ impl KmerWindowGenerator {
                 id,
                 sequence: mut seq,
                 scores,
-                header,               
+                header,
             } = curseq;
 
             utils::complement_nucleotides(&mut seq.as_mut().unwrap());
@@ -250,25 +250,25 @@ impl KmerWindowGenerator {
         if rc {
             let io::Sequence {
                 id,
-                mut seq,
-                location,
-                end,
+                sequence: mut seq,
+                scores,
+                header,
             } = curseq;
 
-            utils::complement_nucleotides(&mut seq);
-            seq.reverse();
+            utils::complement_nucleotides(&mut seq.as_mut().unwrap());
+            seq.as_mut().unwrap().reverse();
 
             // TODO: How to deal with rc?
 
             curseq = io::Sequence {
                 id,
-                seq,
-                location,
-                end,
+                sequence: seq,
+                scores,
+                header,
             };
         }
 
-        let kmer_generator = Kmers::new(curseq.seq.clone(), k, offset, rc);
+        let kmer_generator = Kmers::new(curseq.sequence.as_ref().unwrap().clone(), k, offset, rc);
         let needed_sequence = k;
 
         Some(KmerWindowGenerator {
@@ -298,24 +298,29 @@ impl KmerWindowGenerator {
             if self.rc {
                 let io::Sequence {
                     id,
-                    mut seq,
-                    location,
-                    end,
+                    sequence: mut seq,
+                    scores,
+                    header,
                 } = curseq;
 
-                utils::complement_nucleotides(&mut seq);
-                seq.reverse();
+                utils::complement_nucleotides(&mut seq.as_mut().unwrap());
+                seq.as_mut().unwrap().reverse();
 
                 curseq = io::Sequence {
                     id,
-                    seq,
-                    location,
-                    end,
+                    sequence: seq,
+                    scores,
+                    header,
                 };
             }
 
             self.curseq = curseq.clone();
-            let kmer_generator = Kmers::new(curseq.seq.clone(), self.k, self.offset, self.rc);
+            let kmer_generator = Kmers::new(
+                curseq.sequence.as_ref().unwrap().clone(),
+                self.k,
+                self.offset,
+                self.rc,
+            );
             self.kmer_generator = kmer_generator;
         }
         true
@@ -349,16 +354,14 @@ impl Iterator for KmerWindowGenerator {
                 };
             }
 
-            if kmers.len() == 0 {
-                if !self.next_seq() {
-                    return None; // We are finished!
-                }
+            if kmers.len() == 0 && !self.next_seq() {
+                return None; // We are finished!
             }
         }
 
         Some(KmerWindow {
             kmers,
-            id: self.curseq.id.clone(),
+            id: self.curseq.id.clone().unwrap(),
             rc: self.rc,
         })
     }
@@ -392,9 +395,9 @@ impl KmerCoordsWindowIter {
         rc: bool,
         rand: bool,
     ) -> KmerCoordsWindowIter {
-        let mut sequences = Box::new(sfasta::Sequences::new(filename));
+        let mut sequences = Box::new(Sequences::from_file(filename));
         if rand {
-            sequences.set_mode(sfasta::SeqMode::Random);
+            sequences.set_mode(SeqMode::Random);
         }
 
         let mut sequences = Box::new(io::SequenceSplitter3N::new(sequences));
@@ -406,23 +409,23 @@ impl KmerCoordsWindowIter {
         if rc {
             let io::Sequence {
                 id,
-                mut seq,
-                location,
-                end,
+                sequence: mut seq,
+                header,
+                scores,
             } = curseq;
 
-            utils::complement_nucleotides(&mut seq);
-            seq.reverse();
+            utils::complement_nucleotides(&mut seq.as_mut().unwrap());
+            seq.as_mut().unwrap().reverse();
 
             curseq = io::Sequence {
                 id,
-                seq,
-                location,
-                end,
+                sequence: seq,
+                header,
+                scores,
             };
         }
 
-        let kmer_generator = Kmers::new(curseq.seq.clone(), k, offset, rc);
+        let kmer_generator = Kmers::new(curseq.sequence.as_ref().unwrap().clone(), k, offset, rc);
         let needed_sequence = k * window_size;
 
         KmerCoordsWindowIter {
@@ -438,7 +441,6 @@ impl KmerCoordsWindowIter {
     }
 
     pub fn next_seq(&mut self) -> bool {
-
         let mut curseq: io::Sequence = match self.sequences.next() {
             Some(x) => x,
             None => return false, // That's it... no more!
@@ -447,24 +449,29 @@ impl KmerCoordsWindowIter {
         if self.rc {
             let io::Sequence {
                 id,
-                mut seq,
-                location,
-                end,
+                sequence: mut seq,
+                scores,
+                header,
             } = curseq;
 
-            utils::complement_nucleotides(&mut seq);
-            seq.reverse();
+            utils::complement_nucleotides(&mut seq.as_mut().unwrap());
+            seq.as_mut().unwrap().reverse();
 
             curseq = io::Sequence {
                 id,
-                seq,
-                location,
-                end,
+                sequence: seq,
+                scores,
+                header,
             };
         }
 
         self.curseq = curseq.clone();
-        let kmer_generator = Kmers::new(curseq.seq.clone(), self.k, self.offset, self.rc);
+        let kmer_generator = Kmers::new(
+            curseq.sequence.as_ref().unwrap().clone(),
+            self.k,
+            self.offset,
+            self.rc,
+        );
         self.kmer_generator = kmer_generator;
 
         true
@@ -490,28 +497,22 @@ impl Iterator for KmerCoordsWindowIter {
                         kmers.push(x);
                         coords.push(c);
                     } else {
-                        panic!("Invalid KMER");
+                        panic!("Invalid Kmer");
                     }
                 }
                 None => return None,
             };
         }
 
-        /*        if self.rc {
-            coords = coords.iter().map(
-                |(x, y)|
-                (self.curseq.location+self.curseq.end-y,
-                 self.curseq.location+self.curseq.end-x-1,)).collect();
-        } else { */
-        coords = coords
-            .iter()
-            .map(|(x, y)| (x + self.curseq.location, y + self.curseq.location))
-            .collect();
-        //}
+        // Not sure this is relevant anymore...
+        /*coords = coords
+        .iter()
+        .map(|(x, y)| (x + self.curseq.location, y + self.curseq.location))
+        .collect();*/
 
         Some(KmerCoordsWindow {
             kmers,
-            id: self.curseq.id.clone(),
+            id: self.curseq.id.clone().unwrap(),
             coords,
             rc: self.rc,
         })
@@ -616,7 +617,7 @@ impl Iterator for Gff3KmersIter {
         } = next_item;
 
         let mut classifications = Vec::with_capacity(self.k);
-        let mut cursor: usize =  0;
+        let mut cursor: usize = 0;
         let mut last_query: usize = 0;
 
         // let blank: Vec<Vec<u8>> = vec![vec![0; self.types.len()]; self.k];
@@ -634,8 +635,8 @@ impl Iterator for Gff3KmersIter {
             let mut kmer_classification: Vec<Vec<u8>> = vec![vec![0; self.types.len()]; self.k];
 
             // TODO: Test this is all correct...
-            // Specifically the +1 below! Otherwise length comes out 1 short, but not sure where it should go..
-            // Doesn't crash here... so leaving it.
+            // Specifically the +1 below! Otherwise length comes out 1 short, but not sure
+            // where it should go.. Doesn't crash here... so leaving it.
             // TODO: Gen some fake GFF3's and FASTA to test it properly...
 
             if let Some(found) = found {
@@ -647,26 +648,27 @@ impl Iterator for Gff3KmersIter {
                     //let start: usize = lower as usize - coords[n].0;
                     //let end: usize = upper as usize - coords[n].0;
 
-                    assert!(upper-lower <= self.k as u32);
+                    assert!(upper - lower <= self.k as u32);
                     // println!("Length: {:#?}", upper-lower);
                     // println!("{} {}", lower, upper);
                     // println!("{} {}", coords[n].0, coords[n].1);
 
                     for i in lower as usize..upper as usize {
-                         for (j, m) in (*x).val.iter().enumerate() {
-                             if *m == 1 {
-                                 kmer_classification[i-coords[n].0][j] = 1;
-                             }
-                         }
+                        for (j, m) in (*x).val.iter().enumerate() {
+                            if *m == 1 {
+                                kmer_classification[i - coords[n].0][j] = 1;
+                            }
+                        }
                     }
-                    // let lower: u32 = std::cmp::max(x.start as u32, coords[n].0 as u32);
-                    // let upper: u32 = std::cmp::min(x.stop as u32, coords[n].1 as u32);
+                    // let lower: u32 = std::cmp::max(x.start as u32,
+                    // coords[n].0 as u32); let upper: u32 =
+                    // std::cmp::min(x.stop as u32, coords[n].1 as u32);
 
                     // let len = upper - lower;
                     // if len as f32 > (self.k as f32 * 0.8) {
-                        // TODO: Make overlap (0.8) configurable...
-                        // Intervals are a set of [0 0 0 0 1 1 1 1 1] etc... for when classes are
-                        // false or true...
+                    // TODO: Make overlap (0.8) configurable...
+                    // Intervals are a set of [0 0 0 0 1 1 1 1 1] etc... for
+                    // when classes are false or true...
                     //     for (i, m) in (*x).val.iter().enumerate() {
                     //         if *m == 1 {
                     //             kmer_classification[i] = 1;
@@ -719,8 +721,7 @@ mod tests {
 
     #[test]
     pub fn test_kmer_window_generator() {
-        crate::sfasta::clear_idxcache();
-        crate::sfasta::convert_fasta_file(
+        convert_fasta_file(
             "test_data/test.fna",
             "test_data/test_kmer_window_generator.sfasta",
         );
@@ -740,8 +741,7 @@ mod tests {
         println!("Count: {}", count);
         assert!(count == 58);
 
-        crate::sfasta::clear_idxcache();
-        crate::sfasta::convert_fasta_file(
+        convert_fasta_file(
             "test_data/test.fna",
             "test_data/test_kmer_window_generator.sfasta",
         );
@@ -759,8 +759,7 @@ mod tests {
         println!("{:#?}", std::str::from_utf8(&skipped.kmers[0]).unwrap());
         assert!(skipped.kmers[0] == b"NNA");
 
-        crate::sfasta::clear_idxcache();
-        crate::sfasta::convert_fasta_file(
+        convert_fasta_file(
             "test_data/test_single.fna",
             "test_data/test_kmer_window_generator.sfasta",
         );
@@ -775,8 +774,7 @@ mod tests {
         );
         kmers.next().expect("Unable to get KmerWindow");
 
-        crate::sfasta::clear_idxcache();
-        crate::sfasta::convert_fasta_file(
+        convert_fasta_file(
             "test_data/test_multiple.fna",
             "test_data/test_kmer_window_generator.sfasta",
         );
@@ -809,13 +807,9 @@ mod tests {
 
     #[test]
     pub fn test_large_kmer_windows() {
-        crate::sfasta::clear_idxcache();
-        crate::sfasta::convert_fasta_file(
-            "test_data/test_large.fna",
-            "test_data/test_large.sfasta",
-        );
+        convert_fasta_file("test_data/test_large.fna", "test_data/test_large.sfasta");
 
-        crate::sfasta::convert_fasta_file(
+        convert_fasta_file(
             "test_data/test_large_multiple.fna",
             "test_data/test_large_multiple.sfasta",
         );
@@ -827,27 +821,27 @@ mod tests {
         println!("{}", window.kmers.len());
         assert!(window.kmers.len() == 44);
 
-        let mut sfasta = sfasta::Sequences::new("test_data/test_large.sfasta");
-        let locs = sfasta.idx.as_ref().unwrap().1.clone();
-        let seq = sfasta.get_at(locs[0]).unwrap();
+        let mut sfasta = SfastaParser::open("test_data/test_large.sfasta").unwrap();
+        let sequence = sfasta.get_sequence_by_index(0);
 
-        let mut iter = KmerWindowGenerator::from_sequence(seq, 9, 6, 0, false).unwrap();
-
-        let y = iter.next().unwrap();
-        println!("{}", y.kmers.len());
-        assert!(y.kmers.len() == 6);
-
-        let seq = sfasta.get("NC_004354.4").unwrap();
-
-        let mut iter = KmerWindowGenerator::from_sequence(seq, 9, 6, 0, false).unwrap();
+        let mut iter =
+            KmerWindowGenerator::from_sequence(sequence.unwrap().into(), 9, 6, 0, false).unwrap();
 
         let y = iter.next().unwrap();
         println!("{}", y.kmers.len());
         assert!(y.kmers.len() == 6);
 
-        let seq = sfasta.get("NC_004354.4").unwrap();
+        let seq = sfasta.get_by_id("NC_004354.4").unwrap();
 
-        let mut iter = KmerWindowGenerator::from_sequence(seq, 9, 6, 8, false).unwrap();
+        let mut iter = KmerWindowGenerator::from_sequence(seq.unwrap(), 9, 6, 0, false).unwrap();
+
+        let y = iter.next().unwrap();
+        println!("{}", y.kmers.len());
+        assert!(y.kmers.len() == 6);
+
+        let seq = sfasta.get_by_id("NC_004354.4").unwrap();
+
+        let mut iter = KmerWindowGenerator::from_sequence(seq.unwrap(), 9, 6, 8, false).unwrap();
 
         let y = iter.next().unwrap();
         println!("{}", y.kmers.len());
@@ -857,8 +851,8 @@ mod tests {
         println!("Len: {}", y.len());
         assert!(y.len() == 215);
 
-        let seq = sfasta.get("NC_004354.4").unwrap();
-        let mut iter = KmerWindowGenerator::from_sequence(seq, 9, 6, 4, true).unwrap();
+        let seq = sfasta.get_by_id("NC_004354.4").unwrap();
+        let mut iter = KmerWindowGenerator::from_sequence(seq.unwrap(), 9, 6, 4, true).unwrap();
 
         let y = iter.next().unwrap();
         println!("{}", y.kmers.len());
@@ -972,8 +966,7 @@ mod tests {
 
     #[test]
     pub fn test_convert_kmerwindow_to_rc() {
-        crate::sfasta::clear_idxcache();
-        crate::sfasta::convert_fasta_file(
+        convert_fasta_file(
             "test_data/test_single.fna",
             "test_data/test_convert_kmerwindow_to_rc.sfasta",
         );
@@ -1047,8 +1040,7 @@ mod tests {
 
     #[test]
     pub fn test_kmer_coords_window_generator() {
-        crate::sfasta::clear_idxcache();
-        crate::sfasta::convert_fasta_file(
+        convert_fasta_file(
             "test_data/test.fna",
             "test_data/test_kmer_coords_window_generator.sfasta",
         );
@@ -1100,8 +1092,7 @@ mod tests {
 
     #[test]
     pub fn test_gff3_iter() {
-        crate::sfasta::clear_idxcache();
-        crate::sfasta::convert_fasta_file(
+        convert_fasta_file(
             "test_data/Dmel_part.fna",
             "test_data/Dmel_part_test_gff3_iter.sfasta",
         );
@@ -1115,11 +1106,7 @@ mod tests {
             false,
         );
 
-        let mut iter = Gff3KmersIter::new(
-            "test_data/Dmel_head30.gff3",
-            kmercoords_window_iter,
-            21
-        );
+        let mut iter = Gff3KmersIter::new("test_data/Dmel_head30.gff3", kmercoords_window_iter, 21);
 
         // println!("{:#?}", iter.next());
         let x = iter.skip(823).next().unwrap();

@@ -29,11 +29,11 @@ use liboracular::kmers::{
     rc_kmerwindow, replace_random, DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3Kmers,
     Gff3KmersIter, KmerCoordsWindow, KmerCoordsWindowIter, KmerWindowGenerator,
 };
-use liboracular::sfasta;
+use libsfasta::prelude::*;
 
 use pyo3::prelude::*;
 // use pyo3::wrap_pyfunction;
-use pyo3::class::iter::{IterNextOutput, PyIterProtocol};
+use pyo3::class::iter::IterNextOutput;
 use pyo3::types::PyDict;
 
 // use pyo3::wrap_pyfunction;
@@ -77,19 +77,19 @@ struct Gff3KmerGenerator {
     rand: bool,
 }
 
-#[pyproto]
-impl PyIterProtocol for Gff3KmerGenerator {
+#[pymethods]
+impl Gff3KmerGenerator {
     /* fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
         let gil = Python::acquire_gil();
         let py = gil.python();
         Ok(mypyself.into_py(py))
     } */
 
-    fn __iter__(mypyself: PyRef<'p, Self>) -> PyRef<'p, Self> {
+    fn __iter__(mypyself: PyRef<Self>) -> PyRef<Self> {
         mypyself
     }
 
-    fn __next__(mut mypyself: PyRefMut<'p, Self>) -> IterNextOutput<PyObject, &'static str> {
+    fn __next__(mut mypyself: PyRefMut<Self>) -> IterNextOutput<PyObject, &'static str> {
         let mut finished = false;
         let mut item = None;
 
@@ -146,28 +146,17 @@ impl PyIterProtocol for Gff3KmerGenerator {
                     .map(|x| convert_string_to_array(mypyself.k, x))
                     .collect();
 
-                let gil = Python::acquire_gil();
-                let py = gil.python();
-                let pyout = PyDict::new(py);
-                // let pyout = PyTuple::new(py, [kmers, truth]);
-                /*pyout.set_item("kmers", kmers).expect("Py Error");
-                pyout
-                    .set_item("classifications", classifications)
-                    .expect("Py Error");
-                pyout.set_item("id", id).expect("Py Error");
-                pyout.set_item("rc", rc).expect("Py Error");
-                pyout.set_item("coords", coords).expect("Py Error");
-                Ok(Some(pyout.to_object(py))) */
-                let result = (kmers, classifications, coords, id, rc);
-                return IterNextOutput::Yield(result.to_object(py));
+                Python::with_gil(|py| -> IterNextOutput<pyo3::Py<pyo3::PyAny>, &str> {
+                    let pyout = PyDict::new(py);
+
+                    let result = (kmers, classifications, coords, id, rc);
+                    IterNextOutput::Yield(result.to_object(py))
+                })
             }
             None => IterNextOutput::Return("Finished"),
         }
     }
-}
 
-#[pymethods]
-impl Gff3KmerGenerator {
     #[new]
     fn new(
         k: usize,
@@ -284,14 +273,9 @@ impl MaskedKmersGenerator {
     fn len(mypyself: PyRef<Self>) -> usize {
         mypyself.queueimpl.queue.len()
     }
-}
 
-#[pyproto]
-impl PyIterProtocol for MaskedKmersGenerator {
     fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        Ok(mypyself.into_py(py))
+        Python::with_gil(|py| -> PyResult<PyObject> { Ok(mypyself.into_py(py)) })
     }
 
     fn __next__(mypyself: PyRef<Self>) -> PyResult<Option<PyObject>> {
@@ -318,21 +302,21 @@ impl PyIterProtocol for MaskedKmersGenerator {
         }
 
         let result = result.unwrap();
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        let pyout = PyDict::new(py);
-        pyout
-            .set_item("kmers", result.0)
-            .expect("Error with Python");
-        pyout.set_item("id", result.1).expect("Error with Python");
-        pyout
-            .set_item("truth", result.2)
-            .expect("Error with Python");
+        Python::with_gil(|py| -> PyResult<Option<PyObject>> {
+            let pyout = PyDict::new(py);
+            pyout
+                .set_item("kmers", result.0)
+                .expect("Error with Python");
+            pyout.set_item("id", result.1).expect("Error with Python");
+            pyout
+                .set_item("truth", result.2)
+                .expect("Error with Python");
 
-        // One last unparking...
-        mypyself.queueimpl.unpark();
+            // One last unparking...
+            mypyself.queueimpl.unpark();
 
-        Ok(Some(pyout.to_object(py)))
+            Ok(Some(pyout.to_object(py)))
+        })
     }
 }
 
@@ -476,14 +460,9 @@ impl MatchedKmersGenerator {
     fn len(mypyself: PyRef<Self>) -> usize {
         mypyself.queueimpl.queue.len()
     }
-}
 
-#[pyproto]
-impl PyIterProtocol for MatchedKmersGenerator {
     fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        Ok(mypyself.into_py(py))
+        Python::with_gil(|py| -> PyResult<PyObject> { Ok(mypyself.into_py(py)) })
     }
 
     fn __next__(mypyself: PyRef<Self>) -> PyResult<Option<PyObject>> {
@@ -510,20 +489,20 @@ impl PyIterProtocol for MatchedKmersGenerator {
         }
 
         let result = result.unwrap();
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        let pyout = PyDict::new(py);
-        pyout
-            .set_item("kmers", result.0)
-            .expect("Error with Python");
-        pyout
-            .set_item("matched", result.1)
-            .expect("Error with Python");
+        Python::with_gil(|py| -> PyResult<_> {
+            let pyout = PyDict::new(py);
+            pyout
+                .set_item("kmers", result.0)
+                .expect("Error with Python");
+            pyout
+                .set_item("matched", result.1)
+                .expect("Error with Python");
 
-        // One last unparking...
-        mypyself.queueimpl.unpark();
+            // One last unparking...
+            mypyself.queueimpl.unpark();
 
-        Ok(Some(pyout.to_object(py)))
+            Ok(Some(pyout.to_object(py)))
+        })
     }
 }
 
@@ -547,6 +526,7 @@ type TripleLossSubmission = (MatchedKmers, (Truths, Truths, Matches, ReverseComp
 
 // TODO: Multiple threads is good, make it actually divide the work instead of
 // just repeating the work...
+
 #[pymethods]
 impl TripleLossKmersGenerator {
     #[new]
@@ -557,18 +537,13 @@ impl TripleLossKmersGenerator {
         window_size: usize,
         queue_size: usize,
     ) -> Self {
-        // Load the index before having 8 threads try to load it simultaneously...
-        sfasta::load_index(&filename);
-        // let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
-
         let queueimpl = QueueImpl::new(queue_size, 8, move |shutdown, exhausted, queue| {
             let mut offset = 0;
             let mut rc = false;
             let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
 
-            let mut sfasta = sfasta::Sequences::new(&filename);
+            let mut sfasta = Sequences::from_file(&filename);
 
-            // let headers = sfasta.idx.as_ref().unwrap().0.clone();
             let locs = sfasta.idx.as_ref().unwrap().1.clone();
 
             // TODO: Make even smarter -- Load up 1k windows and pick from there matching
@@ -595,7 +570,7 @@ impl TripleLossKmersGenerator {
                     // Matched sequence -- So kmer window 1 and 2 from the same sequence
                     // Matched Sequence -- RC -- Kmer window 1 and it's reverse complement
                     // Non-matched sequence -- Kmer window 1 and 2 from completely different seqs...
-                    let choice: u8 = rng.gen_range(0, 3); // Give us a number between 0 and 2
+                    let choice: u8 = rng.gen_range(0..3); // Give us a number between 0 and 2
 
                     // Always need a starting window...
                     item1 = match iter1.next() {
@@ -719,25 +694,14 @@ impl TripleLossKmersGenerator {
     fn len(mypyself: PyRef<Self>) -> usize {
         mypyself.queueimpl.queue.len()
     }
-}
-
-impl Drop for TripleLossKmersGenerator {
-    fn drop(&mut self) {
-        self.queueimpl.shutdown();
-    }
-}
-
-// https://github.com/PyO3/pyo3/issues/1085#issuecomment-670835739
-#[pyproto]
-impl<'p> PyIterProtocol for TripleLossKmersGenerator {
-    fn __iter__(mypyself: PyRef<'p, Self>) -> PyRef<'p, Self> {
+    fn __iter__(mypyself: PyRef<Self>) -> PyRef<Self> {
         // let gil = Python::acquire_gil();
         // let py = gil.python();
         // Ok(mypyself.into_py(py))
         mypyself
     }
 
-    fn __next__(mut mypyself: PyRefMut<'p, Self>) -> IterNextOutput<PyObject, &'static str> {
+    fn __next__(mut mypyself: PyRefMut<Self>) -> IterNextOutput<PyObject, &'static str> {
         if mypyself.queueimpl.is_finished() {
             mypyself.queueimpl.shutdown();
             return IterNextOutput::Return("Finished");
@@ -785,6 +749,12 @@ impl<'p> PyIterProtocol for TripleLossKmersGenerator {
     }
 }
 
+impl Drop for TripleLossKmersGenerator {
+    fn drop(&mut self) {
+        self.queueimpl.shutdown();
+    }
+}
+
 /// Support functions for triple loss generator
 fn is_all_ns(seq: &[u8]) -> bool {
     if bytecount::count(&seq, b'N') == seq.len() {
@@ -796,7 +766,7 @@ fn is_all_ns(seq: &[u8]) -> bool {
 
 /// Support functions for triple loss generator
 fn get_random_sequence_from_id<R: Rng + ?Sized>(
-    sfasta: &mut sfasta::Sequences,
+    sfasta: &mut Sequences,
     k: usize,
     window_size: usize,
     id: &str,
@@ -806,7 +776,7 @@ fn get_random_sequence_from_id<R: Rng + ?Sized>(
 
     let mut seq;
 
-    seq = sfasta.get(&id).unwrap();
+    seq = sfasta.get_seq_by_id(&id).unwrap();
     if seq.seq.len() < needed_length {
         return None;
     }
@@ -817,12 +787,12 @@ fn get_random_sequence_from_id<R: Rng + ?Sized>(
         return None;
     }
 
-    let mut start = rng.gen_range(0, seqlen);
+    let mut start = rng.gen_range(0..seqlen);
     let mut end = start + needed_length;
     assert!(end < seq.seq.len());
 
     while is_all_ns(&seq.seq[start..end]) {
-        start = rng.gen_range(0, seqlen);
+        start = rng.gen_range(0..seqlen);
         end = start + needed_length;
     }
 
@@ -844,7 +814,7 @@ fn get_random_sequence_from_id<R: Rng + ?Sized>(
 
 /// Support functions for triple loss generator
 fn get_random_sequence_from_locs<R: Rng + ?Sized>(
-    sfasta: &mut sfasta::Sequences,
+    sfasta: &mut Sequences,
     k: usize,
     window_size: usize,
     locs: &Vec<u64>,
@@ -866,7 +836,7 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
         return None;
     }
 
-    let start = rng.gen_range(0, seqlen);
+    let start = rng.gen_range(0..seqlen);
     let mut end = start + needed_length;
     assert!(end < seq.len);
     if seq.len >= end + 1000 {
@@ -880,9 +850,9 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
         .expect("Unable to get seq slice");
 
     let workseq = io::Sequence {
-        seq: sequence,
-        end: end as usize,
-        location: start as usize,
+        sequence,
+        scores: None,
+        header: None,
         id: seq.id.clone(),
     };
 
@@ -1112,14 +1082,9 @@ impl SequenceOrderKmersGenerator {
     fn len(mypyself: PyRef<Self>) -> usize {
         mypyself.queue.len()
     }
-}
 
-#[pyproto]
-impl PyIterProtocol for SequenceOrderKmersGenerator {
     fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        Ok(mypyself.into_py(py))
+        Python::with_gil(|py| -> PyResult<_> { Ok(mypyself.into_py(py)) })
     }
 
     fn __next__(mypyself: PyRef<Self>) -> PyResult<Option<PyObject>> {
@@ -1151,20 +1116,20 @@ impl PyIterProtocol for SequenceOrderKmersGenerator {
         }
 
         let result = result.unwrap();
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        let pyout = PyDict::new(py);
-        pyout
-            .set_item("kmers", result.0)
-            .expect("Error with Python");
-        pyout
-            .set_item("order", result.1)
-            .expect("Error with Python");
+        Python::with_gil(|py| -> PyResult<_> {
+            let pyout = PyDict::new(py);
+            pyout
+                .set_item("kmers", result.0)
+                .expect("Error with Python");
+            pyout
+                .set_item("order", result.1)
+                .expect("Error with Python");
 
-        // One last unparking...
-        mypyself.wrapper.thread().unpark();
+            // One last unparking...
+            mypyself.wrapper.thread().unpark();
 
-        Ok(Some(pyout.to_object(py)))
+            Ok(Some(pyout.to_object(py)))
+        })
     }
 }
 
@@ -1182,12 +1147,10 @@ struct DiscriminatorMaskedGeneratorWrapper {
     rand: bool,
 }
 
-#[pyproto]
-impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
+#[pymethods]
+impl DiscriminatorMaskedGeneratorWrapper {
     fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        Ok(mypyself.into_py(py))
+        Python::with_gil(|py| -> PyResult<_> { Ok(mypyself.into_py(py)) })
     }
 
     fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
@@ -1241,22 +1204,19 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapper {
             batch_truth.push(truth);
         }
 
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        let pyout = PyDict::new(py);
-        pyout
-            .set_item("kmers", batch_kmers)
-            .expect("Error with Python");
-        pyout.set_item("id", batch_id).expect("Error with Python");
-        pyout
-            .set_item("truth", batch_truth)
-            .expect("Error with Python");
-        Ok(Some(pyout.to_object(py)))
+        Python::with_gil(|py| -> PyResult<_> {
+            let pyout = PyDict::new(py);
+            pyout
+                .set_item("kmers", batch_kmers)
+                .expect("Error with Python");
+            pyout.set_item("id", batch_id).expect("Error with Python");
+            pyout
+                .set_item("truth", batch_truth)
+                .expect("Error with Python");
+            Ok(Some(pyout.to_object(py)))
+        })
     }
-}
 
-#[pymethods]
-impl DiscriminatorMaskedGeneratorWrapper {
     #[new]
     fn new(
         k: usize,
@@ -1299,12 +1259,10 @@ struct DiscriminatorMaskedGeneratorWrapperNB {
     rc: bool,
 }
 
-#[pyproto]
-impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
+#[pymethods]
+impl DiscriminatorMaskedGeneratorWrapperNB {
     fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        Ok(mypyself.into_py(py))
+        Python::with_gil(|py| -> PyResult<_> { Ok(mypyself.into_py(py)) })
     }
 
     fn __next__(mut mypyself: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
@@ -1364,21 +1322,18 @@ impl PyIterProtocol for DiscriminatorMaskedGeneratorWrapperNB {
                     .map(|x| convert_string_to_array(mypyself.k, x))
                     .collect();
 
-                let gil = Python::acquire_gil();
-                let py = gil.python();
-                let pyout = PyDict::new(py);
-                // let pyout = PyTuple::new(py, [kmers, truth]);
-                pyout.set_item("kmers", kmers).expect("Py Error");
-                pyout.set_item("truths", truth).expect("Py Error");
-                Ok(Some(pyout.to_object(py)))
+                Python::with_gil(|py| -> PyResult<_> {
+                    let pyout = PyDict::new(py);
+                    // let pyout = PyTuple::new(py, [kmers, truth]);
+                    pyout.set_item("kmers", kmers).expect("Py Error");
+                    pyout.set_item("truths", truth).expect("Py Error");
+                    Ok(Some(pyout.to_object(py)))
+                })
             }
             None => Ok(None),
         }
     }
-}
 
-#[pymethods]
-impl DiscriminatorMaskedGeneratorWrapperNB {
     #[new]
     fn new(k: usize, filename: String, window_size: usize, replacement_pct: f32) -> Self {
         // Create KmerWindowGenerator
@@ -1402,22 +1357,7 @@ impl DiscriminatorMaskedGeneratorWrapperNB {
 
 #[pyfunction]
 fn convert_fasta_to_sfasta(input: String, output: String) {
-    sfasta::convert_fasta_file(&input, &output);
-}
-
-#[pyfunction]
-fn index_sfasta(input: String) -> String {
-    sfasta::index(&input)
-}
-
-#[pyfunction]
-fn get_headers_from_sfasta(input: String) -> Vec<String> {
-    sfasta::get_headers_from_sfasta(input)
-}
-
-#[pyfunction]
-fn test_sfasta(input: String) {
-    sfasta::test_sfasta(input);
+    convert_fasta_file(&input, &output);
 }
 
 // ** Fasta Kmer Generator
@@ -1434,13 +1374,13 @@ struct FastaKmersGenerator {
     rand: bool,
 }
 
-#[pyproto]
-impl<'p> PyIterProtocol for FastaKmersGenerator {
-    fn __iter__(mypyself: PyRef<'p, Self>) -> PyRef<'p, Self> {
+#[pymethods]
+impl FastaKmersGenerator {
+    fn __iter__(mypyself: PyRef<Self>) -> PyRef<Self> {
         mypyself
     }
 
-    fn __next__(mut mypyself: PyRefMut<'p, Self>) -> IterNextOutput<PyObject, &'static str> {
+    fn __next__(mut mypyself: PyRefMut<Self>) -> IterNextOutput<PyObject, &'static str> {
         let mut finished = false;
         let mut item = None;
 
@@ -1494,24 +1434,21 @@ impl<'p> PyIterProtocol for FastaKmersGenerator {
                     .map(|x| convert_string_to_array(mypyself.k, x))
                     .collect();
 
-                let gil = Python::acquire_gil();
-                let py = gil.python();
-                //                let pyout = PyDict::new(py);
-                // let pyout = PyTuple::new(py, [kmers, truth]);
-                //                pyout.set_item("kmers", kmers).expect("Py Error");
-                //                pyout.set_item("coords", coords).expect("Py Error");
-                //                pyout.set_item("ids", id).expect("Py Error");
-                //                pyout.set_item("rc", rc).expect("Py Error");
-                let result = (kmers, coords, id, rc);
-                return IterNextOutput::Yield(result.to_object(py));
+                Python::with_gil(|py| -> IterNextOutput<_, _> {
+                    //                let pyout = PyDict::new(py);
+                    // let pyout = PyTuple::new(py, [kmers, truth]);
+                    //                pyout.set_item("kmers", kmers).expect("Py Error");
+                    //                pyout.set_item("coords", coords).expect("Py Error");
+                    //                pyout.set_item("ids", id).expect("Py Error");
+                    //                pyout.set_item("rc", rc).expect("Py Error");
+                    let result = (kmers, coords, id, rc);
+                    return IterNextOutput::Yield(result.to_object(py));
+                })
             }
             None => IterNextOutput::Return("Finished"),
         }
     }
-}
 
-#[pymethods]
-impl FastaKmersGenerator {
     /// Create a new FastaKmersGenerator
     /// Arguments:
     ///     k: kmer size, integer (usize)
@@ -1564,9 +1501,6 @@ fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<MatchedKmersGenerator>()?;
     m.add_class::<TripleLossKmersGenerator>()?;
     m.add_wrapped(wrap_pyfunction!(convert_fasta_to_sfasta))?;
-    m.add_wrapped(wrap_pyfunction!(get_headers_from_sfasta))?;
-    m.add_wrapped(wrap_pyfunction!(test_sfasta))?;
-    m.add_wrapped(wrap_pyfunction!(index_sfasta))?;
 
     Ok(())
 }
