@@ -914,7 +914,8 @@ mod tests {
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 35);
-        assert!(b"GTTGGCATTTATTGTCCTCTG".to_vec() == y[0].kmers[0]);
+	println!("{:#?}", std::str::from_utf8(&y[0].kmers[0]).unwrap());
+        assert!(b"GTTGGCATTTATTGTCCTCNN".to_vec() == y[0].kmers[0]);
         println!("{:#?}", std::str::from_utf8(&y[0].kmers[0]).expect("Err"));
 
         // Test Large Multiple
