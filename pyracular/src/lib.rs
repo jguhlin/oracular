@@ -840,6 +840,7 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
         scores: None,
         header: None,
         id: orig_seq.id,
+        offset: orig_seq.offset,
     };
 
     let mut iter2 = match KmerWindowGenerator::from_sequence(

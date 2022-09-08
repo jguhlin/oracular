@@ -102,6 +102,7 @@ impl Iterator for SequenceSplitter3N {
             sequence: Some(self.curseq.sequence.as_ref().unwrap()[startloc..endloc].to_vec()),
             header: None,
             scores: None,
+            offset: startloc,
         })
     }
 }

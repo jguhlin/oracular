@@ -192,6 +192,7 @@ impl KmerWindowGenerator {
                 sequence: mut seq,
                 scores,
                 header,
+                offset
             } = curseq;
 
             utils::complement_nucleotides(&mut seq.as_mut().unwrap());
@@ -204,6 +205,7 @@ impl KmerWindowGenerator {
                 sequence: seq,
                 scores,
                 header,
+                offset
             };
         }
 
@@ -239,8 +241,7 @@ impl KmerWindowGenerator {
         offset: usize,
         rc: bool,
     ) -> Option<KmerWindowGenerator> {
-        let mut sequences = Vec::new();
-        sequences.push(sequence);
+        let sequences = vec![sequence];
 
         let mut sequences = Box::new(io::SequenceSplitter3N::new(Box::new(sequences.into_iter())));
         let mut curseq = match sequences.next() {
@@ -254,6 +255,7 @@ impl KmerWindowGenerator {
                 sequence: mut seq,
                 scores,
                 header,
+                offset
             } = curseq;
 
             utils::complement_nucleotides(&mut seq.as_mut().unwrap());
@@ -266,6 +268,7 @@ impl KmerWindowGenerator {
                 sequence: seq,
                 scores,
                 header,
+                offset
             };
         }
 
@@ -302,6 +305,7 @@ impl KmerWindowGenerator {
                     sequence: mut seq,
                     scores,
                     header,
+                    offset
                 } = curseq;
 
                 utils::complement_nucleotides(&mut seq.as_mut().unwrap());
@@ -312,6 +316,7 @@ impl KmerWindowGenerator {
                     sequence: seq,
                     scores,
                     header,
+                    offset
                 };
             }
 
@@ -368,12 +373,21 @@ impl Iterator for KmerWindowGenerator {
     }
 }
 
-#[derive(Debug)]
 pub struct KmerCoordsWindow {
     pub kmers: Vec<Kmer>,
     pub coords: Vec<Coords>,
     pub id: String,
     pub rc: bool,
+}
+
+impl std::fmt::Debug for KmerCoordsWindow {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "KmerWindow {{ kmers: {:?}, coords: {:?}, id: {:?}, rc: {:?} }}", 
+            self.kmers.iter().map(|x| std::str::from_utf8(x).unwrap()), 
+            self.coords, 
+            self.id, 
+            self.rc)
+    }
 }
 
 pub struct KmerCoordsWindowIter {
@@ -413,9 +427,10 @@ impl KmerCoordsWindowIter {
                 sequence: mut seq,
                 header,
                 scores,
+                offset
             } = curseq;
 
-            utils::complement_nucleotides(&mut seq.as_mut().unwrap());
+            utils::complement_nucleotides(seq.as_mut().unwrap());
             seq.as_mut().unwrap().reverse();
 
             curseq = io::Sequence {
@@ -423,6 +438,7 @@ impl KmerCoordsWindowIter {
                 sequence: seq,
                 header,
                 scores,
+                offset
             };
         }
 
@@ -453,9 +469,10 @@ impl KmerCoordsWindowIter {
                 sequence: mut seq,
                 scores,
                 header,
+                offset
             } = curseq;
 
-            utils::complement_nucleotides(&mut seq.as_mut().unwrap());
+            utils::complement_nucleotides(seq.as_mut().unwrap());
             seq.as_mut().unwrap().reverse();
 
             curseq = io::Sequence {
@@ -463,6 +480,7 @@ impl KmerCoordsWindowIter {
                 sequence: seq,
                 scores,
                 header,
+                offset
             };
         }
 
@@ -486,7 +504,10 @@ impl Iterator for KmerCoordsWindowIter {
         // While instead of if, because if we get a too short sequence we should skip
         // it...
         while (self.kmer_generator.len - self.kmer_generator.curpos) <= self.needed_sequence {
-            self.next_seq();
+            println!("Doing this... {} {} {}", self.kmer_generator.len, self.kmer_generator.curpos, self.needed_sequence);
+            if !self.next_seq() {
+                return None
+            }
         }
 
         let mut kmers: Vec<Vec<u8>> = Vec::with_capacity(self.window_size);
@@ -506,10 +527,10 @@ impl Iterator for KmerCoordsWindowIter {
         }
 
         // Not sure this is relevant anymore...
-        /*coords = coords
+        coords = coords
         .iter()
-        .map(|(x, y)| (x + self.curseq.location, y + self.curseq.location))
-        .collect();*/
+        .map(|(x, y)| (x + self.curseq.offset, y + self.curseq.offset))
+        .collect();
 
         Some(KmerCoordsWindow {
             kmers,
@@ -557,14 +578,14 @@ impl Iterator for Kmers {
             let end = self.offset + self.curpos + self.k;
             // println!("{} {}", start, end);
             self.curpos += self.k;
-            let coords;
+            let coords =
             if self.rc {
                 // Start counting from the BACK of the sequence
                 // Sequence already represents RC, but coords do not...
-                coords = (self.len - end, self.len - start - 1)
+                (self.len - end, self.len - start - 1)
             } else {
-                coords = (start, end - 1)
-            }
+                (start, end - 1)
+            };
 
             Some((self.seq[start..end].to_vec(), coords))
         }
@@ -572,7 +593,7 @@ impl Iterator for Kmers {
 }
 
 // Classifies Kmers as gff3 entries...
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Gff3Kmers {
     pub kmers: Vec<Vec<u8>>,
     pub id: String,
@@ -655,7 +676,7 @@ impl Iterator for Gff3KmersIter {
                     // println!("{} {}", coords[n].0, coords[n].1);
 
                     for i in lower as usize..upper as usize {
-                        for (j, m) in (*x).val.iter().enumerate() {
+                        for (j, m) in x.val.iter().enumerate() {
                             if *m == 1 {
                                 kmer_classification[i - coords[n].0][j] = 1;
                             }
@@ -780,7 +801,7 @@ mod tests {
             "test_data/test_kmer_window_generator.sfasta",
         );
 
-        let mut kmers = KmerWindowGenerator::new(
+        let kmers = KmerWindowGenerator::new(
             "test_data/test_kmer_window_generator.sfasta",
             5,
             5,
@@ -788,6 +809,7 @@ mod tests {
             false,
             false,
         );
+
         for i in kmers {
             println!("{}", i.id);
         }
@@ -1062,6 +1084,19 @@ mod tests {
         assert!(first.kmers[0] == b"ACT");
         println!("First test...");
 
+        let kmers = KmerCoordsWindowIter::new(
+            "test_data/test_kmer_coords_window_generator.sfasta",
+            3,
+            3,
+            0,
+            false,
+            false,
+        );
+
+        for k in kmers {
+            println!("{:#?}", k);
+        }
+
         let mut kmers = KmerCoordsWindowIter::new(
             "test_data/test_kmer_coords_window_generator.sfasta",
             3,
@@ -1075,6 +1110,7 @@ mod tests {
         println!("{:#?}", std::str::from_utf8(&skipped.kmers[0]).unwrap());
         assert!(skipped.kmers[0] == b"NNA");
         println!("{:#?}", skipped.coords);
+        println!("{:#?}", skipped);
         assert!(skipped.coords == [(37, 39), (40, 42), (43, 45)]);
 
         // Have to get the right coords for RC
@@ -1113,7 +1149,7 @@ mod tests {
         let mut iter = Gff3KmersIter::new("test_data/Dmel_head30.gff3", kmercoords_window_iter, 21);
 
         // println!("{:#?}", iter.next());
-        let x = iter.skip(823).next().unwrap();
+        let x = iter.nth(824).unwrap();
         for i in x.classifications {
             println!("{:#?}", i.len());
             for j in i {
@@ -1121,6 +1157,5 @@ mod tests {
             }
         }
 
-        panic!();
     }
 }
