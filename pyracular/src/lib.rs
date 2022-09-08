@@ -550,7 +550,7 @@ impl TripleLossKmersGenerator {
             let mut rc = false;
 
             let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed);
-            for i in 0..thread_number {
+            for _i in 0..thread_number {
                 rng.jump();
             }            
 
@@ -739,6 +739,7 @@ impl TripleLossKmersGenerator {
     }
 
     fn __next__(mut mypyself: PyRefMut<Self>) -> IterNextOutput<PyObject, &'static str> {
+
         if mypyself.queueimpl.is_finished() {
             mypyself.queueimpl.shutdown();
             return IterNextOutput::Return("Finished");
@@ -748,12 +749,9 @@ impl TripleLossKmersGenerator {
         mypyself.queueimpl.unpark();
 
         let mut result = mypyself.queueimpl.queue.pop();
-        let backoff = Backoff::new();
 
         // TODO: python allow_threads
         while result.is_none() {
-            mypyself.queueimpl.unpark();
-            backoff.snooze();
 
             // Check for exhaustion (or shutdown)...
             if mypyself.queueimpl.is_finished() {
