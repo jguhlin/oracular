@@ -258,7 +258,7 @@ impl KmerWindowGenerator {
                 offset
             } = curseq;
 
-            utils::complement_nucleotides(&mut seq.as_mut().unwrap());
+            utils::complement_nucleotides(seq.as_mut().unwrap());
             seq.as_mut().unwrap().reverse();
 
             // TODO: How to deal with rc?

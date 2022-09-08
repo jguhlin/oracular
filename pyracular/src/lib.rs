@@ -215,10 +215,13 @@ impl MaskedKmersGenerator {
         replacement_pct: f32,
         rand: bool,
         queue_size: usize,
+        seed: usize,
     ) -> Self {
-        let queueimpl = QueueImpl::new(queue_size, 24, move |shutdown, _exhausted, queue| {
+        let queueimpl = QueueImpl::new(queue_size, 24, seed as u64, move |shutdown, _exhausted, queue, seed, thread_number| {
             let mut offset = 0;
             let mut rc = false;
+
+            // TODO: seed and thread number?
 
             loop {
                 // Create KmerWindowGenerator
@@ -334,11 +337,17 @@ type MatchedSubmission = (MatchedKmers, Matches);
 #[pymethods]
 impl MatchedKmersGenerator {
     #[new]
-    fn new(k: usize, filename: String, window_size: usize, queue_size: usize) -> Self {
-        let queueimpl = QueueImpl::new(queue_size, 16, move |shutdown, _exhausted, queue| {
+    fn new(k: usize, filename: String, window_size: usize, queue_size: usize, seed: usize) -> Self {
+        let queueimpl = QueueImpl::new(queue_size, 16, seed as u64, move |shutdown, _exhausted, queue, seed, thread_number| {
             let mut offset = 0;
             let mut rc = false;
-            let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
+            let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed);
+
+            for i in 0..thread_number {
+                rng.jump();
+            }
+
+
 
             // TODO: Make even smarter -- Load up 1k windows and pick from there matching
             // and non-matching ones, including some RC ones as well...
@@ -534,15 +543,29 @@ impl TripleLossKmersGenerator {
         replacement_pct: f32,
         window_size: usize,
         queue_size: usize,
+        seed: usize,
     ) -> Self {
-        let queueimpl = QueueImpl::new(queue_size, 8, move |shutdown, exhausted, queue| {
+        let queueimpl = QueueImpl::new(queue_size, 4, seed as u64, move |shutdown, exhausted, queue, seed, thread_number| {
             let mut offset = 0;
             let mut rc = false;
-            let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
+
+            let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed);
+            for i in 0..thread_number {
+                rng.jump();
+            }            
 
             let mut sfasta = SfastaParser::open(&filename).expect("Unable to open file");
 
-            let locs = (0..sfasta.len()).map(|x| x as u64).collect::<Vec<u64>>();
+            let minimum_seqlength = k * window_size + k;
+
+            let locs = sfasta.get_seqlocs().unwrap().unwrap();
+            let block_size = sfasta.get_block_size();
+            
+            // Filter by minimum size
+            let locs = locs.into_iter().filter(|x| x.len(block_size) >= minimum_seqlength).collect::<Vec<_>>();
+            let mut indices = (0..locs.len()).collect::<Vec<usize>>();
+            indices.shuffle(&mut rng);
+
 
             // TODO: Make even smarter -- Load up 1k windows and pick from there matching
             // and non-matching ones, including some RC ones as well...
@@ -550,8 +573,21 @@ impl TripleLossKmersGenerator {
             loop {
                 let mut count = 0;
                 // Create KmerWindowGenerator
+
+                let cur = match indices.pop() {
+                    Some(x) => x,
+                    None => break,
+                };
+
+                let sequence = match sfasta.get_sequence_only_by_seqloc(&locs[cur]) {
+                    Ok(Some(x)) => x,
+                    Ok(None) => panic!("Unable to get sequence"),
+                    Err(_) => continue,
+                };
+
                 let mut iter1 =
-                    KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
+                    // KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
+                    KmerWindowGenerator::from_sequence(sequence, k, window_size, offset, rc).unwrap();
 
                 'inner: loop {
                     if shutdown.load(Ordering::Relaxed) {
@@ -594,11 +630,11 @@ impl TripleLossKmersGenerator {
                         matched = true;
                         reversecomplement = false;
 
-                        item2 = match get_random_sequence_from_id(
+                        item2 = match get_random_sequence_from_seqloc(
                             &mut sfasta,
                             k,
                             window_size,
-                            &item1.id,
+                            &locs[cur],
                             &mut rng,
                         ) {
                             Some(x) => x,
@@ -618,11 +654,18 @@ impl TripleLossKmersGenerator {
                         matched = false;
                         reversecomplement = false;
 
-                        item2 = match get_random_sequence_from_locs(
+                        let mut rand_seqloc = locs.choose(&mut rng).unwrap();
+
+                        // Unlikely, but to be sure...
+                        while rand_seqloc == &locs[cur] {
+                            rand_seqloc = locs.choose(&mut rng).unwrap();
+                        }
+
+                        item2 = match get_random_sequence_from_seqloc(
                             &mut sfasta,
                             k,
                             window_size,
-                            &locs,
+                            rand_seqloc,
                             &mut rng,
                         ) {
                             Some(x) => x,
@@ -670,8 +713,6 @@ impl TripleLossKmersGenerator {
                     }
                 }
 
-                println!("{} {} Total from Iter: {}", offset, rc, count);
-
                 offset += 1;
 
                 if (k == offset) && rc {
@@ -681,8 +722,6 @@ impl TripleLossKmersGenerator {
                     offset = 0;
                     rc = true;
                 }
-
-                println!("Offset: {} RC: {}", offset, rc);
             }
         });
 
@@ -711,6 +750,7 @@ impl TripleLossKmersGenerator {
         let mut result = mypyself.queueimpl.queue.pop();
         let backoff = Backoff::new();
 
+        // TODO: python allow_threads
         while result.is_none() {
             mypyself.queueimpl.unpark();
             backoff.snooze();
@@ -756,6 +796,54 @@ fn get_random_sequence_from_id<R: Rng + ?Sized>(
     let mut seq;
 
     seq = sfasta.get_sequence_by_id(id).unwrap().unwrap();
+    if seq.len() < needed_length {
+        return None;
+    }
+
+    let seqlen = seq.len().saturating_sub(needed_length);
+
+    if seqlen == 0 {
+        return None;
+    }
+
+    let mut start = rng.gen_range(0..seqlen);
+    let mut end = start + needed_length;
+    assert!(end < seq.len());
+
+    while is_all_ns(&seq.sequence.as_ref().unwrap()[start..end]) {
+        start = rng.gen_range(0..seqlen);
+        end = start + needed_length;
+    }
+
+    seq.sequence = Some(seq.sequence.unwrap()[start..end].to_vec());
+
+    let mut iter2 = match KmerWindowGenerator::from_sequence(
+        seq,
+        k,
+        window_size,
+        0, // Already a random sequence, random offset won't do anything...
+        rng.gen(),
+    ) {
+        Some(x) => x,
+        None => return None,
+    };
+
+    iter2.next()
+}
+
+/// Support functions for triple loss generator
+fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
+    sfasta: &mut Sfasta,
+    k: usize,
+    window_size: usize,
+    seqloc: &libsfasta::datatypes::SeqLoc,
+    rng: &mut R,
+) -> Option<KmerWindow> {
+    let needed_length = (k * window_size) + k;
+
+    let mut seq;
+
+    seq = sfasta.get_sequence_only_by_seqloc(seqloc).unwrap().unwrap();
     if seq.len() < needed_length {
         return None;
     }
@@ -868,9 +956,9 @@ struct QueueImpl<Q> {
 
 impl<Q> QueueImpl<Q> {
     // fn new(iter: Box<dyn Iterator<Item = I> + Send>) -> Self {
-    fn new<F>(queue_size: usize, threads: usize, func: F) -> Self
+    fn new<F>(queue_size: usize, threads: usize, seed: u64, func: F) -> Self
     where
-        F: Fn(Arc<AtomicBool>, Arc<AtomicBool>, Arc<ArrayQueue<Q>>) + Sync + 'static + Send,
+        F: Fn(Arc<AtomicBool>, Arc<AtomicBool>, Arc<ArrayQueue<Q>>, u64, usize) + Sync + 'static + Send,
         Q: Send + 'static + Sync,
     {
         let shutdown = Arc::new(AtomicBool::new(false));
@@ -881,7 +969,7 @@ impl<Q> QueueImpl<Q> {
 
         let fc = Arc::new(func);
 
-        for _i in 0..threads {
+        for i in 0..threads {
             let exhausted_handle = Arc::new(AtomicBool::new(false));
             let shutdown_c = Arc::clone(&shutdown);
             let exhausted_c = Arc::clone(&exhausted_handle);
@@ -896,6 +984,8 @@ impl<Q> QueueImpl<Q> {
                     Arc::clone(&shutdown_c),
                     Arc::clone(&exhausted_c),
                     Arc::clone(&queue_c),
+                    seed,
+                    i
                 );
                 exhausted_c.store(true, Ordering::SeqCst);
                 shutdown_c.store(true, Ordering::SeqCst);
