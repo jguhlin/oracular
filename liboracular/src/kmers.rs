@@ -66,7 +66,7 @@ impl std::cmp::PartialEq<&[u8]> for KmerCoords {
 #[derive(Debug, Clone)]
 pub struct KmerWindow {
     pub kmers: Vec<Kmer>,
-    pub id: String,
+    pub id: Option<String>,
     pub rc: bool,
 }
 
@@ -161,7 +161,7 @@ impl Iterator for DiscriminatorMaskedGenerator {
         let truth = replace_random(self.k, self.replacement_pct, &mut kmers, &mut rng);
 
         // return Some(DiscriminatorMasked { kmers, id, taxons, taxon, truth })
-        Some(DiscriminatorMasked { kmers, id, truth })
+        Some(DiscriminatorMasked { kmers, id: id.unwrap(), truth })
     }
 }
 
@@ -367,7 +367,7 @@ impl Iterator for KmerWindowGenerator {
 
         Some(KmerWindow {
             kmers,
-            id: self.curseq.id.clone().unwrap(),
+            id: self.curseq.id.clone(),
             rc: self.rc,
         })
     }
@@ -809,10 +809,6 @@ mod tests {
             false,
             false,
         );
-
-        for i in kmers {
-            println!("{}", i.id);
-        }
 
         let kmers = KmerWindowGenerator::new(
             "test_data/test_kmer_window_generator.sfasta",
