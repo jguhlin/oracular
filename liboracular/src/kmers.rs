@@ -70,6 +70,7 @@ pub struct KmerWindow {
     pub rc: bool,
 }
 
+// TODO: Work from Sfasta instead of Sequences (probably, anyways)
 pub struct KmerWindowGenerator {
     sequences: Box<dyn Iterator<Item = Sequence> + Send>,
     window_size: usize,
@@ -81,7 +82,7 @@ pub struct KmerWindowGenerator {
     rc: bool,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct DiscriminatorMasked {
     pub kmers: Vec<Vec<u8>>,
     pub id: String,
@@ -822,16 +823,19 @@ mod tests {
         assert!(window.kmers.len() == 44);
 
         let mut sfasta = SfastaParser::open("test_data/test_large.sfasta").unwrap();
-        let sequence = sfasta.get_sequence_by_index(0);
+        let sequence = match sfasta.get_sequence_by_index(0) {
+            Ok(Some(s)) => s,
+            Err(e) => panic!("Unable to get sequence: {}", e),
+            Ok(None) => panic!("Unable to get sequence"),
+        };
 
-        let mut iter =
-            KmerWindowGenerator::from_sequence(sequence.unwrap().into(), 9, 6, 0, false).unwrap();
+        let mut iter = KmerWindowGenerator::from_sequence(sequence, 9, 6, 0, false).unwrap();
 
         let y = iter.next().unwrap();
         println!("{}", y.kmers.len());
         assert!(y.kmers.len() == 6);
 
-        let seq = sfasta.get_by_id("NC_004354.4").unwrap();
+        let seq = sfasta.get_sequence_by_id("NC_004354.4").unwrap();
 
         let mut iter = KmerWindowGenerator::from_sequence(seq.unwrap(), 9, 6, 0, false).unwrap();
 
@@ -839,7 +843,7 @@ mod tests {
         println!("{}", y.kmers.len());
         assert!(y.kmers.len() == 6);
 
-        let seq = sfasta.get_by_id("NC_004354.4").unwrap();
+        let seq = sfasta.get_sequence_by_id("NC_004354.4").unwrap();
 
         let mut iter = KmerWindowGenerator::from_sequence(seq.unwrap(), 9, 6, 8, false).unwrap();
 
@@ -851,7 +855,7 @@ mod tests {
         println!("Len: {}", y.len());
         assert!(y.len() == 215);
 
-        let seq = sfasta.get_by_id("NC_004354.4").unwrap();
+        let seq = sfasta.get_sequence_by_id("NC_004354.4").unwrap();
         let mut iter = KmerWindowGenerator::from_sequence(seq.unwrap(), 9, 6, 4, true).unwrap();
 
         let y = iter.next().unwrap();

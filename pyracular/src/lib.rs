@@ -147,8 +147,6 @@ impl Gff3KmerGenerator {
                     .collect();
 
                 Python::with_gil(|py| -> IterNextOutput<pyo3::Py<pyo3::PyAny>, &str> {
-                    let pyout = PyDict::new(py);
-
                     let result = (kmers, classifications, coords, id, rc);
                     IterNextOutput::Yield(result.to_object(py))
                 })
@@ -230,9 +228,9 @@ impl MaskedKmersGenerator {
                 let discriminator_masked_generator =
                     DiscriminatorMaskedGenerator::new(replacement_pct, k, kmer_window_generator);
 
-                let mut iter = Box::new(discriminator_masked_generator);
+                let iter = Box::new(discriminator_masked_generator);
 
-                while let Some(x) = iter.next() {
+                for x in iter {
                     if shutdown.load(Ordering::Relaxed) {
                         return; // We are done, something triggered a
                                 // shutdown...
@@ -289,7 +287,7 @@ impl MaskedKmersGenerator {
         let mut result = mypyself.queueimpl.queue.pop();
         let backoff = Backoff::new();
 
-        while result == None {
+        while result.is_none() {
             mypyself.queueimpl.unpark();
             backoff.snooze();
 
@@ -476,7 +474,7 @@ impl MatchedKmersGenerator {
         let mut result = mypyself.queueimpl.queue.pop();
         let backoff = Backoff::new();
 
-        while result == None {
+        while result.is_none() {
             mypyself.queueimpl.unpark();
             backoff.snooze();
 
@@ -542,9 +540,9 @@ impl TripleLossKmersGenerator {
             let mut rc = false;
             let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
 
-            let mut sfasta = Sequences::from_file(&filename);
+            let mut sfasta = SfastaParser::open(&filename).expect("Unable to open file");
 
-            let locs = sfasta.idx.as_ref().unwrap().1.clone();
+            let locs = (0..sfasta.len()).map(|x| x as u64).collect::<Vec<u64>>();
 
             // TODO: Make even smarter -- Load up 1k windows and pick from there matching
             // and non-matching ones, including some RC ones as well...
@@ -713,7 +711,7 @@ impl TripleLossKmersGenerator {
         let mut result = mypyself.queueimpl.queue.pop();
         let backoff = Backoff::new();
 
-        while result == None {
+        while result.is_none() {
             mypyself.queueimpl.unpark();
             backoff.snooze();
 
@@ -728,24 +726,9 @@ impl TripleLossKmersGenerator {
 
         let result = result.unwrap();
 
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-
-        /*        let pool = unsafe { py.new_pool() };
-        let py = pool.python(); */
-
-        /*        let pyout = PyDict::new(py);
-        pyout
-            .set_item("kmers", result.0)
-            .expect("Error with Python");
-        pyout
-            .set_item("triple", result.1)
-            .expect("Error with Python");*/
-
-        //        Ok(Some(pyout.to_object(py)))
-        // Return tuple instead of dict is way faster...
-        // mypyself.queueimpl.shutdown();
-        return IterNextOutput::Yield(result.to_object(py));
+        Python::with_gil(|py| -> IterNextOutput<_, _> {
+            IterNextOutput::Yield(result.to_object(py))
+        })
     }
 }
 
@@ -757,16 +740,12 @@ impl Drop for TripleLossKmersGenerator {
 
 /// Support functions for triple loss generator
 fn is_all_ns(seq: &[u8]) -> bool {
-    if bytecount::count(&seq, b'N') == seq.len() {
-        true
-    } else {
-        false
-    }
+    bytecount::count(seq, b'N') == seq.len()
 }
 
 /// Support functions for triple loss generator
 fn get_random_sequence_from_id<R: Rng + ?Sized>(
-    sfasta: &mut Sequences,
+    sfasta: &mut Sfasta,
     k: usize,
     window_size: usize,
     id: &str,
@@ -776,12 +755,12 @@ fn get_random_sequence_from_id<R: Rng + ?Sized>(
 
     let mut seq;
 
-    seq = sfasta.get_seq_by_id(&id).unwrap();
-    if seq.seq.len() < needed_length {
+    seq = sfasta.get_sequence_by_id(id).unwrap().unwrap();
+    if seq.len() < needed_length {
         return None;
     }
 
-    let seqlen = seq.seq.len().saturating_sub(needed_length);
+    let seqlen = seq.len().saturating_sub(needed_length);
 
     if seqlen == 0 {
         return None;
@@ -789,14 +768,14 @@ fn get_random_sequence_from_id<R: Rng + ?Sized>(
 
     let mut start = rng.gen_range(0..seqlen);
     let mut end = start + needed_length;
-    assert!(end < seq.seq.len());
+    assert!(end < seq.len());
 
-    while is_all_ns(&seq.seq[start..end]) {
+    while is_all_ns(&seq.sequence.as_ref().unwrap()[start..end]) {
         start = rng.gen_range(0..seqlen);
         end = start + needed_length;
     }
 
-    seq.seq = seq.seq[start..end].to_vec();
+    seq.sequence = Some(seq.sequence.unwrap()[start..end].to_vec());
 
     let mut iter2 = match KmerWindowGenerator::from_sequence(
         seq,
@@ -814,7 +793,7 @@ fn get_random_sequence_from_id<R: Rng + ?Sized>(
 
 /// Support functions for triple loss generator
 fn get_random_sequence_from_locs<R: Rng + ?Sized>(
-    sfasta: &mut Sequences,
+    sfasta: &mut Sfasta,
     k: usize,
     window_size: usize,
     locs: &Vec<u64>,
@@ -822,38 +801,45 @@ fn get_random_sequence_from_locs<R: Rng + ?Sized>(
 ) -> Option<KmerWindow> {
     let needed_length = ((k * window_size) + k) as u64;
 
-    let mut loc = locs.choose(&mut rng).unwrap().clone();
-    let mut seq = sfasta.get_header_at(loc).expect("Unable to get header");
+    let mut loc = *locs.choose(&mut rng).unwrap();
+    let mut orig_seq = sfasta
+        .get_sequence_by_index(loc as usize)
+        .expect("Unable to get seq")
+        .expect("Unable to get seq");
 
-    while seq.len < needed_length {
-        loc = locs.choose(&mut rng).unwrap().clone();
-        seq = sfasta.get_header_at(loc).unwrap();
+    // TODO: Move length filter elsewhere
+    while orig_seq.len() < needed_length as usize {
+        loc = *locs.choose(&mut rng).unwrap();
+        orig_seq = sfasta.get_sequence_by_index(loc as usize).unwrap().unwrap();
     }
 
-    let seqlen = seq.len.saturating_sub(needed_length);
+    let seqlen = orig_seq.len().saturating_sub(needed_length as usize);
 
     if seqlen == 0 {
         return None;
     }
 
     let start = rng.gen_range(0..seqlen);
-    let mut end = start + needed_length;
-    assert!(end < seq.len);
-    if seq.len >= end + 1000 {
+    let mut end = start + needed_length as usize;
+    assert!(end < orig_seq.len());
+    if orig_seq.len() >= end + 1000 {
         end += 1000;
     } else {
-        end = seq.len;
+        end = orig_seq.len();
     }
 
-    let sequence = sfasta
-        .get_seq_slice(seq.id.clone(), start, end)
-        .expect("Unable to get seq slice");
+    // TODO: Replace function (and above!)
+    // So that we only extract the sequence we need (esp. for large seq's which may
+    // be in multiple blocks)
+    /*let sequence = sfasta
+    .get_seq_slice(seq.id.clone(), start, end)
+    .expect("Unable to get seq slice"); */
 
     let workseq = io::Sequence {
-        sequence,
+        sequence: Some(orig_seq.sequence.unwrap()[start..end].to_vec()),
         scores: None,
         header: None,
-        id: seq.id.clone(),
+        id: orig_seq.id,
     };
 
     let mut iter2 = match KmerWindowGenerator::from_sequence(
@@ -935,10 +921,7 @@ impl<Q> QueueImpl<Q> {
             }
         }
 
-        if self.queue.len() == 0 && (exhausted || self.shutdown.load(Ordering::Relaxed)) {
-            return true;
-        }
-        return false;
+        self.queue.len() == 0 && (exhausted || self.shutdown.load(Ordering::Relaxed))
     }
 
     #[inline]
@@ -952,7 +935,7 @@ impl<Q> QueueImpl<Q> {
         self.shutdown.store(true, Ordering::SeqCst);
         self.unpark();
         for i in self.handles.drain(..) {
-            i.join();
+            i.join().expect("Unable to shut down");
         }
     }
 }
@@ -998,75 +981,71 @@ impl SequenceOrderKmersGenerator {
             let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
 
             loop {
-                let finished = false;
+                let item = match iter.next() {
+                    Some(x) => x,
+                    None => {
+                        offset += 1;
 
-                while !finished {
-                    let item = match iter.next() {
-                        Some(x) => x,
-                        None => {
-                            offset += 1;
-
-                            if (k == offset) && rc {
-                                exhausted_c.store(true, Ordering::SeqCst);
-                                shutdown_c.store(true, Ordering::SeqCst);
-                                return;
-                            } else {
-                                if k == offset {
-                                    rc = true;
-                                    offset = 0;
-                                }
-
-                                let kmer_window_generator = KmerWindowGenerator::new(
-                                    &filename,
-                                    k,
-                                    window_size,
-                                    offset,
-                                    rc,
-                                    rand,
-                                );
-
-                                iter = Box::new(kmer_window_generator);
-                                continue;
-                            }
-                        }
-                    };
-
-                    let KmerWindow { kmers, id, rc } = item;
-
-                    if kmers.len() < window_size * 2 {
-                        continue;
-                    }
-
-                    let kmers: Vec<Vec<bool>> = kmers
-                        .iter()
-                        .map(|x| convert_string_to_array(k, x))
-                        .collect();
-                    let first = kmers[0..window_size].to_vec();
-                    let second = kmers[window_size..window_size * 2].to_vec();
-
-                    let sequence_kmers;
-                    let sequence_order;
-
-                    if rng.gen::<bool>() {
-                        sequence_kmers = (first, second);
-                        sequence_order = false; // False is in order
-                    } else {
-                        sequence_kmers = (second, first);
-                        sequence_order = true; // Out of order
-                    }
-
-                    let mut batch = (sequence_kmers, sequence_order);
-
-                    while let Err(x) = queue_handle.push(batch) {
-                        if shutdown_c.load(Ordering::Relaxed) {
-                            // Mark as exhausted too then.
+                        if (k == offset) && rc {
                             exhausted_c.store(true, Ordering::SeqCst);
-                            return; // We are done, something triggered a
-                                    // shutdown...
+                            shutdown_c.store(true, Ordering::SeqCst);
+                            return;
+                        } else {
+                            if k == offset {
+                                rc = true;
+                                offset = 0;
+                            }
+
+                            let kmer_window_generator = KmerWindowGenerator::new(
+                                &filename,
+                                k,
+                                window_size,
+                                offset,
+                                rc,
+                                rand,
+                            );
+
+                            iter = Box::new(kmer_window_generator);
+                            continue;
                         }
-                        batch = x;
-                        park(); // Queue is full, park the thread...
                     }
+                };
+
+                let KmerWindow { kmers, id, rc } = item;
+
+                if kmers.len() < window_size * 2 {
+                    continue;
+                }
+
+                let kmers: Vec<Vec<bool>> = kmers
+                    .iter()
+                    .map(|x| convert_string_to_array(k, x))
+                    .collect();
+                let first = kmers[0..window_size].to_vec();
+                let second = kmers[window_size..window_size * 2].to_vec();
+
+                let sequence_kmers;
+                let sequence_order;
+
+                if rng.gen::<bool>() {
+                    sequence_kmers = (first, second);
+                    sequence_order = false; // False is in order
+                } else {
+                    sequence_kmers = (second, first);
+                    sequence_order = true; // Out of order
+                }
+
+                let mut batch = (sequence_kmers, sequence_order);
+
+                while let Err(x) = queue_handle.push(batch) {
+                    if shutdown_c.load(Ordering::Relaxed) {
+                        // Mark as exhausted too then.
+                        exhausted_c.store(true, Ordering::SeqCst);
+                        return; // We are done, something triggered a
+                                // shutdown...
+                    }
+                    batch = x;
+                    park(); // Queue is full, park the thread...
                 }
             }
         });
