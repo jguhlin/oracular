@@ -222,7 +222,8 @@ mod tests {
     #[test]
     #[should_panic(expected = "Couldn't open test_data/empty.fna.sfasta")]
     pub fn test_3n_splitter_empty() {
-        let sequences = Box::new(Sequences::from_file("test_data/empty.fna"));
+        convert_fasta_file("test_data/empty.fna", "test_data/empty.fna.sfasta");
+        let sequences = Box::new(Sequences::from_file("test_data/empty.fna.sfasta"));
         let _ = Box::new(SequenceSplitter3N::new(sequences));
     }
 }
