@@ -551,8 +551,9 @@ pub struct Kmers {
 }
 
 impl Kmers {
-    pub fn new(seq: Vec<u8>, k: usize, offset: usize, rc: bool) -> Kmers {
+    pub fn new(mut seq: Vec<u8>, k: usize, offset: usize, rc: bool) -> Kmers {
         let len = seq.len();
+        seq.make_ascii_uppercase();
 
         assert!(offset < k);
 
@@ -576,7 +577,7 @@ impl Iterator for Kmers {
         } else {
             let start = self.offset + self.curpos;
             let end = self.offset + self.curpos + self.k;
-            // println!("{} {}", start, end);
+
             self.curpos += self.k;
             let coords =
             if self.rc {
