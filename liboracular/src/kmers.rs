@@ -504,7 +504,6 @@ impl Iterator for KmerCoordsWindowIter {
         // While instead of if, because if we get a too short sequence we should skip
         // it...
         while (self.kmer_generator.len - self.kmer_generator.curpos) <= self.needed_sequence {
-            println!("Doing this... {} {} {}", self.kmer_generator.len, self.kmer_generator.curpos, self.needed_sequence);
             if !self.next_seq() {
                 return None
             }
