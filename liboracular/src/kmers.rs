@@ -70,18 +70,6 @@ pub struct KmerWindow {
     pub rc: bool,
 }
 
-// TODO: Work from Sfasta instead of Sequences (probably, anyways)
-pub struct KmerWindowGenerator {
-    sequences: Box<dyn Iterator<Item = Sequence> + Send>,
-    window_size: usize,
-    k: usize,
-    kmer_generator: Kmers,
-    needed_sequence: usize,
-    curseq: io::Sequence,
-    offset: usize,
-    rc: bool,
-}
-
 #[derive(Debug, PartialEq, Eq)]
 pub struct DiscriminatorMasked {
     pub kmers: Vec<Vec<u8>>,
@@ -167,6 +155,17 @@ impl Iterator for DiscriminatorMaskedGenerator {
             truth,
         })
     }
+}
+
+pub struct KmerWindowGenerator {
+    sequences: Box<dyn Iterator<Item = Sequence> + Send>,
+    window_size: usize,
+    k: usize,
+    kmer_generator: Kmers,
+    needed_sequence: usize,
+    curseq: io::Sequence,
+    offset: usize,
+    rc: bool,
 }
 
 impl KmerWindowGenerator {

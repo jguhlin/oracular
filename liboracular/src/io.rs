@@ -1,15 +1,15 @@
 pub use libsfasta as sfasta;
 pub use sfasta::prelude::*;
 
-pub struct SequenceSplitter3N {
-    sequences: Box<dyn Iterator<Item = Sequence> + Send>,
+pub struct SequenceSplitter3N<'a> {
+    sequences: Box<dyn Iterator<Item = Sequence> + Send + 'a>,
     curseq: Sequence,
     curpos: usize,
     curlen: usize,
 }
 
-impl SequenceSplitter3N {
-    pub fn new(mut sequences: Box<dyn Iterator<Item = Sequence> + Send>) -> SequenceSplitter3N {
+impl<'a> SequenceSplitter3N<'a> {
+    pub fn new(mut sequences: Box<dyn Iterator<Item = Sequence> + Send + 'a>) -> SequenceSplitter3N {
         let curseq = match sequences.next() {
             Some(x) => x,
             None => panic!("File is empty!"),
@@ -42,7 +42,7 @@ impl SequenceSplitter3N {
     }
 }
 
-impl Iterator for SequenceSplitter3N {
+impl<'a> Iterator for SequenceSplitter3N<'a> {
     type Item = Sequence;
 
     fn next(&mut self) -> Option<Sequence> {
