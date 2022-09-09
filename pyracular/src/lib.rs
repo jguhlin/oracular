@@ -703,7 +703,7 @@ impl TripleLossKmersGenerator {
                                 None => continue,
                             };
 
-                            //println!("Choice2: {:#?}", start.elapsed());
+//                            println!("Choice2: {:#?}", start.elapsed());
                         }
 
                         let start = std::time::Instant::now();
