@@ -219,7 +219,6 @@ mod tests {
         assert!(count == 8);
     }
 
-
     /*
     TODO: Fix this, but upstream in libsfasta
     #[test]

@@ -161,7 +161,11 @@ impl Iterator for DiscriminatorMaskedGenerator {
         let truth = replace_random(self.k, self.replacement_pct, &mut kmers, &mut rng);
 
         // return Some(DiscriminatorMasked { kmers, id, taxons, taxon, truth })
-        Some(DiscriminatorMasked { kmers, id: id.unwrap(), truth })
+        Some(DiscriminatorMasked {
+            kmers,
+            id: id.unwrap(),
+            truth,
+        })
     }
 }
 
@@ -192,7 +196,7 @@ impl KmerWindowGenerator {
                 sequence: mut seq,
                 scores,
                 header,
-                offset
+                offset,
             } = curseq;
 
             utils::complement_nucleotides(&mut seq.as_mut().unwrap());
@@ -205,7 +209,7 @@ impl KmerWindowGenerator {
                 sequence: seq,
                 scores,
                 header,
-                offset
+                offset,
             };
         }
 
@@ -255,7 +259,7 @@ impl KmerWindowGenerator {
                 sequence: mut seq,
                 scores,
                 header,
-                offset
+                offset,
             } = curseq;
 
             utils::complement_nucleotides(seq.as_mut().unwrap());
@@ -268,7 +272,7 @@ impl KmerWindowGenerator {
                 sequence: seq,
                 scores,
                 header,
-                offset
+                offset,
             };
         }
 
@@ -305,7 +309,7 @@ impl KmerWindowGenerator {
                     sequence: mut seq,
                     scores,
                     header,
-                    offset
+                    offset,
                 } = curseq;
 
                 utils::complement_nucleotides(&mut seq.as_mut().unwrap());
@@ -316,7 +320,7 @@ impl KmerWindowGenerator {
                     sequence: seq,
                     scores,
                     header,
-                    offset
+                    offset,
                 };
             }
 
@@ -382,11 +386,14 @@ pub struct KmerCoordsWindow {
 
 impl std::fmt::Debug for KmerCoordsWindow {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        write!(f, "KmerWindow {{ kmers: {:?}, coords: {:?}, id: {:?}, rc: {:?} }}", 
-            self.kmers.iter().map(|x| std::str::from_utf8(x).unwrap()), 
-            self.coords, 
-            self.id, 
-            self.rc)
+        write!(
+            f,
+            "KmerWindow {{ kmers: {:?}, coords: {:?}, id: {:?}, rc: {:?} }}",
+            self.kmers.iter().map(|x| std::str::from_utf8(x).unwrap()),
+            self.coords,
+            self.id,
+            self.rc
+        )
     }
 }
 
@@ -427,7 +434,7 @@ impl KmerCoordsWindowIter {
                 sequence: mut seq,
                 header,
                 scores,
-                offset
+                offset,
             } = curseq;
 
             utils::complement_nucleotides(seq.as_mut().unwrap());
@@ -438,7 +445,7 @@ impl KmerCoordsWindowIter {
                 sequence: seq,
                 header,
                 scores,
-                offset
+                offset,
             };
         }
 
@@ -469,7 +476,7 @@ impl KmerCoordsWindowIter {
                 sequence: mut seq,
                 scores,
                 header,
-                offset
+                offset,
             } = curseq;
 
             utils::complement_nucleotides(seq.as_mut().unwrap());
@@ -480,7 +487,7 @@ impl KmerCoordsWindowIter {
                 sequence: seq,
                 scores,
                 header,
-                offset
+                offset,
             };
         }
 
@@ -505,7 +512,7 @@ impl Iterator for KmerCoordsWindowIter {
         // it...
         while (self.kmer_generator.len - self.kmer_generator.curpos) <= self.needed_sequence {
             if !self.next_seq() {
-                return None
+                return None;
             }
         }
 
@@ -527,9 +534,9 @@ impl Iterator for KmerCoordsWindowIter {
 
         // Not sure this is relevant anymore...
         coords = coords
-        .iter()
-        .map(|(x, y)| (x + self.curseq.offset, y + self.curseq.offset))
-        .collect();
+            .iter()
+            .map(|(x, y)| (x + self.curseq.offset, y + self.curseq.offset))
+            .collect();
 
         Some(KmerCoordsWindow {
             kmers,
@@ -578,8 +585,7 @@ impl Iterator for Kmers {
             let end = self.offset + self.curpos + self.k;
 
             self.curpos += self.k;
-            let coords =
-            if self.rc {
+            let coords = if self.rc {
                 // Start counting from the BACK of the sequence
                 // Sequence already represents RC, but coords do not...
                 (self.len - end, self.len - start - 1)
@@ -909,7 +915,7 @@ mod tests {
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 35);
-	println!("{:#?}", std::str::from_utf8(&y[0].kmers[0]).unwrap());
+        println!("{:#?}", std::str::from_utf8(&y[0].kmers[0]).unwrap());
         assert!(b"GTTGGCATTTATTGTCCTCNN".to_vec() == y[0].kmers[0]);
         println!("{:#?}", std::str::from_utf8(&y[0].kmers[0]).expect("Err"));
 
@@ -1153,6 +1159,5 @@ mod tests {
                 println!("{:#?}", j);
             }
         }
-
     }
 }

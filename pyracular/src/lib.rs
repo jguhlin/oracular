@@ -571,6 +571,9 @@ impl TripleLossKmersGenerator {
                 }
 
                 let mut sfasta = SfastaParser::open(&filename).expect("Unable to open file");
+                
+                // Disable masking
+                sfasta.masking = None;
 
                 let minimum_seqlength = k * window_size + k;
 
