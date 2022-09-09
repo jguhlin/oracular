@@ -784,18 +784,13 @@ impl TripleLossKmersGenerator {
     }
 
     fn __next__(mut mypyself: PyRefMut<Self>) -> IterNextOutput<TripleLossReturn, &'static str> {
-        if mypyself.queueimpl.is_finished() {
-            mypyself.queueimpl.shutdown();
-            return IterNextOutput::Return("Finished");
-        }
-
         let mut result = mypyself.queueimpl.queue.pop();
 
         // TODO: python allow_threads
         while result.is_none() {
             // Unpark the threads...
             mypyself.queueimpl.unpark();
-            
+
             // Check for exhaustion (or shutdown)...
             if mypyself.queueimpl.is_finished() {
                 mypyself.queueimpl.shutdown();
