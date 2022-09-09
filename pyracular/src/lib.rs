@@ -217,56 +217,64 @@ impl MaskedKmersGenerator {
         queue_size: usize,
         seed: usize,
     ) -> Self {
-        let queueimpl = QueueImpl::new(queue_size, 24, seed as u64, move |shutdown, _exhausted, queue, seed, thread_number| {
-            let mut offset = 0;
-            let mut rc = false;
+        let queueimpl = QueueImpl::new(
+            queue_size,
+            24,
+            seed as u64,
+            move |shutdown, _exhausted, queue, seed, thread_number| {
+                let mut offset = 0;
+                let mut rc = false;
 
-            // TODO: seed and thread number?
+                // TODO: seed and thread number?
 
-            loop {
-                // Create KmerWindowGenerator
-                let kmer_window_generator =
-                    KmerWindowGenerator::new(&filename, k, window_size, offset, rc, rand);
+                loop {
+                    // Create KmerWindowGenerator
+                    let kmer_window_generator =
+                        KmerWindowGenerator::new(&filename, k, window_size, offset, rc, rand);
 
-                let discriminator_masked_generator =
-                    DiscriminatorMaskedGenerator::new(replacement_pct, k, kmer_window_generator);
+                    let discriminator_masked_generator = DiscriminatorMaskedGenerator::new(
+                        replacement_pct,
+                        k,
+                        kmer_window_generator,
+                    );
 
-                let iter = Box::new(discriminator_masked_generator);
+                    let iter = Box::new(discriminator_masked_generator);
 
-                for x in iter {
-                    if shutdown.load(Ordering::Relaxed) {
-                        return; // We are done, something triggered a
-                                // shutdown...
-                    }
-
-                    let DiscriminatorMasked { kmers, id, truth } = x;
-                    let kmers = kmers
-                        .iter()
-                        .map(|x| convert_string_to_array(k, x))
-                        .collect();
-
-                    let mut batch = (kmers, id, truth);
-                    while let Err(x) = queue.push(batch) {
-                        // Test if we are prematurely shutdown...
+                    for x in iter {
                         if shutdown.load(Ordering::Relaxed) {
                             return; // We are done, something triggered a
                                     // shutdown...
                         }
-                        batch = x;
-                        park(); // Queue is full, park the thread...
+
+                        let DiscriminatorMasked { kmers, id, truth } = x;
+                        let kmers = kmers
+                            .iter()
+                            .map(|x| convert_string_to_array(k, x))
+                            .collect();
+
+                        let mut batch = (kmers, id, truth);
+                        while let Err(x) = queue.push(batch) {
+                            // Test if we are prematurely shutdown...
+                            if shutdown.load(Ordering::Relaxed) {
+                                return; // We are done, something triggered a
+                                        // shutdown...
+                            }
+                            batch = x;
+                            park(); // Queue is full, park the thread...
+                        }
+                    }
+
+                    offset += 1;
+
+                    if (k == offset) && rc {
+                        return;
+                    } else if k == offset {
+                        offset = 0;
+                        rc = true;
                     }
                 }
-
-                offset += 1;
-
-                if (k == offset) && rc {
-                    return;
-                } else if k == offset {
-                    offset = 0;
-                    rc = true;
-                }
-            }
-        });
+            },
+        );
 
         MaskedKmersGenerator { queueimpl }
     }
@@ -338,128 +346,131 @@ type MatchedSubmission = (MatchedKmers, Matches);
 impl MatchedKmersGenerator {
     #[new]
     fn new(k: usize, filename: String, window_size: usize, queue_size: usize, seed: usize) -> Self {
-        let queueimpl = QueueImpl::new(queue_size, 16, seed as u64, move |shutdown, _exhausted, queue, seed, thread_number| {
-            let mut offset = 0;
-            let mut rc = false;
-            let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed);
+        let queueimpl = QueueImpl::new(
+            queue_size,
+            16,
+            seed as u64,
+            move |shutdown, _exhausted, queue, seed, thread_number| {
+                let mut offset = 0;
+                let mut rc = false;
+                let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed);
 
-            for i in 0..thread_number {
-                rng.jump();
-            }
+                for i in 0..thread_number {
+                    rng.jump();
+                }
 
-
-
-            // TODO: Make even smarter -- Load up 1k windows and pick from there matching
-            // and non-matching ones, including some RC ones as well...
-            loop {
-                // Create KmerWindowGenerator
-                let mut iter1 =
-                    KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
-
-                let mut iter2 =
-                    KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
-
+                // TODO: Make even smarter -- Load up 1k windows and pick from there matching
+                // and non-matching ones, including some RC ones as well...
                 loop {
-                    if shutdown.load(Ordering::Relaxed) {
-                        return; // We are done, something triggered a
-                                // shutdown...
-                    }
+                    // Create KmerWindowGenerator
+                    let mut iter1 =
+                        KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
 
-                    let mut item1;
-                    let mut item2;
-                    let matched;
+                    let mut iter2 =
+                        KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
 
-                    if rng.gen::<bool>() {
-                        matched = true;
-
-                        item1 = match iter1.next() {
-                            Some(x) => x,
-                            None => break,
-                        };
-
-                        // Half the time skip a window...
-                        if rng.gen::<bool>() {
-                            iter1.next();
+                    loop {
+                        if shutdown.load(Ordering::Relaxed) {
+                            return; // We are done, something triggered a
+                                    // shutdown...
                         }
 
-                        item2 = match iter1.next() {
-                            Some(x) => x,
-                            None => break,
-                        };
+                        let mut item1;
+                        let mut item2;
+                        let matched;
 
-                        while item1.id != item2.id {
-                            item1 = item2.clone();
+                        if rng.gen::<bool>() {
+                            matched = true;
+
+                            item1 = match iter1.next() {
+                                Some(x) => x,
+                                None => break,
+                            };
+
+                            // Half the time skip a window...
+                            if rng.gen::<bool>() {
+                                iter1.next();
+                            }
 
                             item2 = match iter1.next() {
                                 Some(x) => x,
                                 None => break,
                             };
-                        }
-                    } else {
-                        matched = false;
 
-                        item1 = match iter1.next() {
-                            Some(x) => x,
-                            None => break,
-                        };
+                            while item1.id != item2.id {
+                                item1 = item2.clone();
 
-                        item2 = match iter1.next() {
-                            Some(x) => x,
-                            None => break,
-                        };
+                                item2 = match iter1.next() {
+                                    Some(x) => x,
+                                    None => break,
+                                };
+                            }
+                        } else {
+                            matched = false;
 
-                        while item1.id == item2.id {
-                            item2 = match iter2.next() {
+                            item1 = match iter1.next() {
                                 Some(x) => x,
                                 None => break,
                             };
+
+                            item2 = match iter1.next() {
+                                Some(x) => x,
+                                None => break,
+                            };
+
+                            while item1.id == item2.id {
+                                item2 = match iter2.next() {
+                                    Some(x) => x,
+                                    None => break,
+                                };
+                            }
+                        }
+
+                        let KmerWindow {
+                            kmers: kmers1,
+                            id: _,
+                            rc: _,
+                        } = item1;
+
+                        let KmerWindow {
+                            kmers: kmers2,
+                            id: _,
+                            rc: _,
+                        } = item2;
+
+                        let kmers1 = kmers1
+                            .iter()
+                            .map(|x| convert_string_to_array(k, x))
+                            .collect();
+
+                        let kmers2 = kmers2
+                            .iter()
+                            .map(|x| convert_string_to_array(k, x))
+                            .collect();
+
+                        let mut batch = ((kmers1, kmers2), matched);
+                        while let Err(x) = queue.push(batch) {
+                            // Test if we are prematurely shutdown...
+                            if shutdown.load(Ordering::Relaxed) {
+                                return; // We are done, something triggered a
+                                        // shutdown...
+                            }
+                            batch = x;
+                            park(); // Queue is full, park the thread...
                         }
                     }
 
-                    let KmerWindow {
-                        kmers: kmers1,
-                        id: _,
-                        rc: _,
-                    } = item1;
+                    offset += 1;
 
-                    let KmerWindow {
-                        kmers: kmers2,
-                        id: _,
-                        rc: _,
-                    } = item2;
-
-                    let kmers1 = kmers1
-                        .iter()
-                        .map(|x| convert_string_to_array(k, x))
-                        .collect();
-
-                    let kmers2 = kmers2
-                        .iter()
-                        .map(|x| convert_string_to_array(k, x))
-                        .collect();
-
-                    let mut batch = ((kmers1, kmers2), matched);
-                    while let Err(x) = queue.push(batch) {
-                        // Test if we are prematurely shutdown...
-                        if shutdown.load(Ordering::Relaxed) {
-                            return; // We are done, something triggered a
-                                    // shutdown...
-                        }
-                        batch = x;
-                        park(); // Queue is full, park the thread...
+                    if (k == offset) && rc {
+                        return;
+                    } else if k == offset {
+                        offset = 0;
+                        rc = true;
                     }
                 }
-
-                offset += 1;
-
-                if (k == offset) && rc {
-                    return;
-                } else if k == offset {
-                    offset = 0;
-                    rc = true;
-                }
-            }
-        });
+            },
+        );
 
         MatchedKmersGenerator { queueimpl }
     }
@@ -543,187 +554,218 @@ impl TripleLossKmersGenerator {
         replacement_pct: f32,
         window_size: usize,
         queue_size: usize,
+        threads: usize,
         seed: usize,
     ) -> Self {
-        let queueimpl = QueueImpl::new(queue_size, 4, seed as u64, move |shutdown, exhausted, queue, seed, thread_number| {
-            let mut offset = 0;
-            let mut rc = false;
+        let queueimpl = QueueImpl::new(
+            queue_size,
+            threads,
+            seed as u64,
+            move |shutdown, exhausted, queue, seed, thread_number| {
+                let mut offset = 0;
+                let mut rc = false;
 
-            let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed);
-            for _i in 0..thread_number {
-                rng.jump();
-            }            
+                let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed);
+                for _i in 0..thread_number {
+                    rng.jump();
+                }
 
-            let mut sfasta = SfastaParser::open(&filename).expect("Unable to open file");
+                let mut sfasta = SfastaParser::open(&filename).expect("Unable to open file");
 
-            let minimum_seqlength = k * window_size + k;
+                let minimum_seqlength = k * window_size + k;
 
-            let locs = sfasta.get_seqlocs().unwrap().unwrap();
-            let block_size = sfasta.get_block_size();
-            
-            // Filter by minimum size
-            let locs = locs.into_iter().filter(|x| x.len(block_size) >= minimum_seqlength).collect::<Vec<_>>();
-            let mut indices = (0..locs.len()).collect::<Vec<usize>>();
-            indices.shuffle(&mut rng);
+                let locs = sfasta.get_seqlocs().unwrap().unwrap();
+                let block_size = sfasta.get_block_size();
 
+                println!("Locs before filter: {}", locs.len());
 
-            // TODO: Make even smarter -- Load up 1k windows and pick from there matching
-            // and non-matching ones, including some RC ones as well...
+                // Filter by minimum size
+                let locs = locs
+                    .into_iter()
+                    .filter(|x| x.len(block_size) >= minimum_seqlength)
+                    .collect::<Vec<_>>();
+                let mut indices = (0..locs.len()).collect::<Vec<usize>>();
+                indices.shuffle(&mut rng);
 
-            loop {
-                let mut count = 0;
-                // Create KmerWindowGenerator
+                println!("Locs after filter: {}", locs.len());
 
-                let cur = match indices.pop() {
-                    Some(x) => x,
-                    None => break,
-                };
+                // TODO: Make even smarter -- Load up 1k windows and pick from there matching
+                // and non-matching ones, including some RC ones as well...
 
-                let sequence = match sfasta.get_sequence_only_by_seqloc(&locs[cur]) {
-                    Ok(Some(x)) => x,
-                    Ok(None) => panic!("Unable to get sequence"),
-                    Err(_) => continue,
-                };
+                loop {
+                    let mut count = 0;
+                    // Create KmerWindowGenerator
 
-                let mut iter1 =
+                    let mut cur = match indices.pop() {
+                        Some(x) => x,
+                        None => break,
+                    };
+
+                    let sequence = match sfasta.get_sequence_only_by_seqloc(&locs[cur]) {
+                        Ok(Some(x)) => x,
+                        Ok(None) => panic!("Unable to get sequence"),
+                        Err(_) => continue,
+                    };
+
+                    let mut iter1 =
                     // KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
                     KmerWindowGenerator::from_sequence(sequence, k, window_size, offset, rc).unwrap();
 
-                'inner: loop {
-                    if shutdown.load(Ordering::Relaxed) {
-                        return; // We are done, something triggered a
-                                // shutdown...
-                    }
-
-                    let mut item1;
-                    let mut item2;
-                    let matched;
-                    let reversecomplement;
-
-                    // So we have 3 states..
-                    // Matched sequence -- So kmer window 1 and 2 from the same sequence
-                    // Matched Sequence -- RC -- Kmer window 1 and it's reverse complement
-                    // Non-matched sequence -- Kmer window 1 and 2 from completely different seqs...
-                    let choice: u8 = rng.gen_range(0..3); // Give us a number between 0 and 2
-
-                    // Always need a starting window...
-                    item1 = match iter1.next() {
-                        Some(x) => x,
-                        None => {
-                            break 'inner;
+                    'inner: loop {
+                        if shutdown.load(Ordering::Relaxed) {
+                            return; // We are done, something triggered a
+                                    // shutdown...
                         }
-                    };
 
-                    count += 1;
+                        let mut item1;
+                        let mut item2;
+                        let matched;
+                        let reversecomplement;
 
-                    while item1.kmers.len() < window_size {
+                        // So we have 3 states..
+                        // Matched sequence -- So kmer window 1 and 2 from the same sequence
+                        // Matched Sequence -- RC -- Kmer window 1 and it's reverse complement
+                        // Non-matched sequence -- Kmer window 1 and 2 from completely different
+                        // seqs...
+                        let choice: u8 = rng.gen_range(0..3); // Give us a number between 0 and 2
+
+                        // Always need a starting window...
                         item1 = match iter1.next() {
                             Some(x) => x,
                             None => {
                                 break 'inner;
                             }
                         };
+
+                        count += 1;
+
+                        while item1.kmers.len() < window_size {
+                            item1 = match iter1.next() {
+                                Some(x) => x,
+                                None => {
+                                    break 'inner;
+                                }
+                            };
+                        }
+
+                        let start = std::time::Instant::now();
+
+                        // Matched Sequence
+                        if choice == 0 {
+                            matched = true;
+                            reversecomplement = false;
+
+                            item2 = match get_random_sequence_from_seqloc(
+                                &mut sfasta,
+                                k,
+                                window_size,
+                                &locs[cur],
+                                &mut rng,
+                            ) {
+                                Some(x) => x,
+                                None => continue,
+                            };
+
+                        // println!("Choice0: {:#?}", start.elapsed());
+
+                        // RC
+                        } else if choice == 1 {
+                            matched = true;
+                            reversecomplement = true;
+
+                            item2 = item1.clone();
+                            item2 = rc_kmerwindow(item2);
+
+                        // println!("Choice1: {:#?}", start.elapsed());
+                        // Not matching sequence...
+                        } else {
+                            matched = false;
+                            reversecomplement = false;
+
+                            let mut rand_seqloc = locs.choose(&mut rng).unwrap();
+
+                            // Unlikely, but to be sure...
+                            while rand_seqloc == &locs[cur] {
+                                rand_seqloc = locs.choose(&mut rng).unwrap();
+                            }
+
+                            item2 = match get_random_sequence_from_seqloc(
+                                &mut sfasta,
+                                k,
+                                window_size,
+                                rand_seqloc,
+                                &mut rng,
+                            ) {
+                                Some(x) => x,
+                                None => continue,
+                            };
+
+                            //println!("Choice2: {:#?}", start.elapsed());
+                        }
+
+                        let start = std::time::Instant::now();
+
+                        let KmerWindow {
+                            kmers: mut kmers1,
+                            id: _,
+                            rc: _,
+                        } = item1;
+                        let KmerWindow {
+                            kmers: mut kmers2,
+                            id: _,
+                            rc: _,
+                        } = item2;
+
+                        let truth1 = replace_random(k, replacement_pct, &mut kmers1, &mut rng);
+                        let truth2 = replace_random(k, replacement_pct, &mut kmers2, &mut rng);
+
+                        let kmers1 = kmers1
+                            .iter()
+                            .map(|x| convert_string_to_array(k, x))
+                            .collect();
+
+                        let kmers2 = kmers2
+                            .iter()
+                            .map(|x| convert_string_to_array(k, x))
+                            .collect();
+
+                        let mut batch = (
+                            (kmers1, kmers2),
+                            (truth1, truth2, matched, reversecomplement),
+                        );
+
+                        //println!("Prep: {:#?}", start.elapsed());
+
+                        while let Err(x) = queue.push(batch) {
+                            println!("Queue is full");
+                            // Test if we are prematurely shutdown...
+                            if shutdown.load(Ordering::Relaxed) {
+                                return; // We are done, something triggered a
+                                        // shutdown...
+                            }
+                            batch = x;
+                            park(); // Queue is full, park the thread...
+                        }
                     }
 
-                    // Matched Sequence
-                    if choice == 0 {
-                        matched = true;
-                        reversecomplement = false;
+                    offset += 1;
 
-                        item2 = match get_random_sequence_from_seqloc(
-                            &mut sfasta,
-                            k,
-                            window_size,
-                            &locs[cur],
-                            &mut rng,
-                        ) {
-                            Some(x) => x,
-                            None => continue,
-                        };
-
-                    // RC
-                    } else if choice == 1 {
-                        matched = true;
-                        reversecomplement = true;
-
-                        item2 = item1.clone();
-                        item2 = rc_kmerwindow(item2);
-
-                    // Not matching sequence...
+                    if (k == offset) && rc && indices.len() == 0 {
+                        println!("Exhausted...");
+                        exhausted.store(true, Ordering::SeqCst);
+                        return;
+                    } else if k == offset && !rc {
+                        println!("Switching to RC");
+                        offset = 0;
+                        rc = true;
                     } else {
-                        matched = false;
-                        reversecomplement = false;
-
-                        let mut rand_seqloc = locs.choose(&mut rng).unwrap();
-
-                        // Unlikely, but to be sure...
-                        while rand_seqloc == &locs[cur] {
-                            rand_seqloc = locs.choose(&mut rng).unwrap();
-                        }
-
-                        item2 = match get_random_sequence_from_seqloc(
-                            &mut sfasta,
-                            k,
-                            window_size,
-                            rand_seqloc,
-                            &mut rng,
-                        ) {
-                            Some(x) => x,
-                            None => continue,
-                        };
-                    }
-
-                    let KmerWindow {
-                        kmers: mut kmers1,
-                        id: _,
-                        rc: _,
-                    } = item1;
-                    let KmerWindow {
-                        kmers: mut kmers2,
-                        id: _,
-                        rc: _,
-                    } = item2;
-
-                    let truth1 = replace_random(k, replacement_pct, &mut kmers1, &mut rng);
-                    let truth2 = replace_random(k, replacement_pct, &mut kmers2, &mut rng);
-
-                    let kmers1 = kmers1
-                        .iter()
-                        .map(|x| convert_string_to_array(k, x))
-                        .collect();
-
-                    let kmers2 = kmers2
-                        .iter()
-                        .map(|x| convert_string_to_array(k, x))
-                        .collect();
-
-                    let mut batch = (
-                        (kmers1, kmers2),
-                        (truth1, truth2, matched, reversecomplement),
-                    );
-
-                    while let Err(x) = queue.push(batch) {
-                        // Test if we are prematurely shutdown...
-                        if shutdown.load(Ordering::Relaxed) {
-                            return; // We are done, something triggered a
-                                    // shutdown...
-                        }
-                        batch = x;
-                        park(); // Queue is full, park the thread...
+                        offset = 0;
+                        rc = false;
+                        cur = indices.pop().unwrap();
                     }
                 }
-
-                offset += 1;
-
-                if (k == offset) && rc {
-                    exhausted.store(true, Ordering::SeqCst);
-                    return;
-                } else if k == offset {
-                    offset = 0;
-                    rc = true;
-                }
-            }
-        });
+            },
+        );
 
         TripleLossKmersGenerator { queueimpl }
     }
@@ -739,7 +781,6 @@ impl TripleLossKmersGenerator {
     }
 
     fn __next__(mut mypyself: PyRefMut<Self>) -> IterNextOutput<PyObject, &'static str> {
-
         if mypyself.queueimpl.is_finished() {
             mypyself.queueimpl.shutdown();
             return IterNextOutput::Return("Finished");
@@ -752,7 +793,6 @@ impl TripleLossKmersGenerator {
 
         // TODO: python allow_threads
         while result.is_none() {
-
             // Check for exhaustion (or shutdown)...
             if mypyself.queueimpl.is_finished() {
                 mypyself.queueimpl.shutdown();
@@ -956,7 +996,10 @@ impl<Q> QueueImpl<Q> {
     // fn new(iter: Box<dyn Iterator<Item = I> + Send>) -> Self {
     fn new<F>(queue_size: usize, threads: usize, seed: u64, func: F) -> Self
     where
-        F: Fn(Arc<AtomicBool>, Arc<AtomicBool>, Arc<ArrayQueue<Q>>, u64, usize) + Sync + 'static + Send,
+        F: Fn(Arc<AtomicBool>, Arc<AtomicBool>, Arc<ArrayQueue<Q>>, u64, usize)
+            + Sync
+            + 'static
+            + Send,
         Q: Send + 'static + Sync,
     {
         let shutdown = Arc::new(AtomicBool::new(false));
@@ -983,7 +1026,7 @@ impl<Q> QueueImpl<Q> {
                     Arc::clone(&exhausted_c),
                     Arc::clone(&queue_c),
                     seed,
-                    i
+                    i,
                 );
                 exhausted_c.store(true, Ordering::SeqCst);
                 shutdown_c.store(true, Ordering::SeqCst);
