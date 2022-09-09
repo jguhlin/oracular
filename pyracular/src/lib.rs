@@ -595,14 +595,8 @@ impl TripleLossKmersGenerator {
                 // TODO: Make even smarter -- Load up 1k windows and pick from there matching
                 // and non-matching ones, including some RC ones as well...
 
-                loop {
-                    let mut count = 0;
+                while let Some(cur) = indices.pop() {
                     // Create KmerWindowGenerator
-
-                    let mut cur = match indices.pop() {
-                        Some(x) => x,
-                        None => break,
-                    };
 
                     let sequence = match sfasta.get_sequence_only_by_seqloc(&locs[cur]) {
                         Ok(Some(x)) => x,
@@ -640,8 +634,6 @@ impl TripleLossKmersGenerator {
                             }
                         };
 
-                        count += 1;
-
                         while item1.kmers.len() < window_size {
                             item1 = match iter1.next() {
                                 Some(x) => x,
@@ -669,7 +661,7 @@ impl TripleLossKmersGenerator {
                                 None => continue,
                             };
 
-                        // println!("Choice0: {:#?}", start.elapsed());
+                        println!("Choice0: {:#?}", start.elapsed());
 
                         // RC
                         } else if choice == 1 {
@@ -679,7 +671,7 @@ impl TripleLossKmersGenerator {
                             item2 = item1.clone();
                             item2 = rc_kmerwindow(item2);
 
-                        // println!("Choice1: {:#?}", start.elapsed());
+                        println!("Choice1: {:#?}", start.elapsed());
                         // Not matching sequence...
                         } else {
                             matched = false;
@@ -703,7 +695,7 @@ impl TripleLossKmersGenerator {
                                 None => continue,
                             };
 
-//                            println!("Choice2: {:#?}", start.elapsed());
+                            println!("Choice2: {:#?}", start.elapsed());
                         }
 
                         let start = std::time::Instant::now();
