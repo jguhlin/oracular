@@ -789,13 +789,13 @@ impl TripleLossKmersGenerator {
             return IterNextOutput::Return("Finished");
         }
 
-        // Unpark the threads...
-        mypyself.queueimpl.unpark();
-
         let mut result = mypyself.queueimpl.queue.pop();
 
         // TODO: python allow_threads
         while result.is_none() {
+            // Unpark the threads...
+            mypyself.queueimpl.unpark();
+            
             // Check for exhaustion (or shutdown)...
             if mypyself.queueimpl.is_finished() {
                 mypyself.queueimpl.shutdown();
