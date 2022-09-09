@@ -787,8 +787,6 @@ impl TripleLossKmersGenerator {
         let mut result = mypyself.queueimpl.queue.pop();
         let backoff = Backoff::new();
 
-        println!("{:#?}", mypyself.queueimpl.queue.len());
-
         // TODO: python allow_threads
         while result.is_none() {
             // Unpark the threads...
@@ -812,7 +810,7 @@ impl TripleLossKmersGenerator {
     }
 }
 
-#[pyclass(freelist = 1024, frozen)]
+#[pyclass(frozen)]
 pub struct TripleLossReturn {
     pub kmers1: Vec<Vec<bool>>,
     pub kmers2: Vec<Vec<bool>>,
