@@ -534,7 +534,7 @@ impl MatchedKmersGenerator {
 
 #[pyclass]
 struct TripleLossKmersGenerator {
-    queueimpl: QueueImpl<TripleLossSubmission>,
+    queueimpl: QueueImpl<TripleLossReturn>,
 }
 
 type ReverseComplement = bool;
@@ -732,10 +732,11 @@ impl TripleLossKmersGenerator {
                             .map(|x| convert_string_to_array(k, x))
                             .collect();
 
-                        let mut batch = (
+                        let mut batch = TripleLossReturn { kmers1, kmers2, truth1, truth2, matched, reversecomplement };
+/*                        let mut batch = (
                             (kmers1, kmers2),
                             (truth1, truth2, matched, reversecomplement),
-                        );
+                        ); */
 
                         //println!("Prep: {:#?}", start.elapsed());
 
@@ -753,7 +754,7 @@ impl TripleLossKmersGenerator {
 
                     offset += 1;
 
-                    if (k == offset) && rc && indices.len() == 0 {
+                    if (k == offset) && rc && indices.is_empty() {
                         println!("Exhausted...");
                         exhausted.store(true, Ordering::SeqCst);
                         return;
@@ -764,7 +765,6 @@ impl TripleLossKmersGenerator {
                     } else {
                         offset = 0;
                         rc = false;
-                        cur = indices.pop().unwrap();
                     }
                 }
             },
@@ -783,7 +783,7 @@ impl TripleLossKmersGenerator {
         mypyself
     }
 
-    fn __next__(mut mypyself: PyRefMut<Self>) -> IterNextOutput<PyObject, &'static str> {
+    fn __next__(mut mypyself: PyRefMut<Self>) -> IterNextOutput<TripleLossReturn, &'static str> {
         if mypyself.queueimpl.is_finished() {
             mypyself.queueimpl.shutdown();
             return IterNextOutput::Return("Finished");
@@ -805,12 +805,22 @@ impl TripleLossKmersGenerator {
             result = mypyself.queueimpl.queue.pop();
         }
 
-        let result = result.unwrap();
+        let result = result.unwrap();     
 
-        Python::with_gil(|py| -> IterNextOutput<_, _> {
-            IterNextOutput::Yield(result.to_object(py))
-        })
+        //Python::with_gil(|_py| -> IterNextOutput<_, _> {
+        IterNextOutput::Yield(result)
+        // })
     }
+}
+
+#[pyclass(freelist = 1024, frozen)]
+pub struct TripleLossReturn {
+    pub kmers1: Vec<Vec<bool>>,
+    pub kmers2: Vec<Vec<bool>>,
+    pub truth1: Vec<bool>,
+    pub truth2: Vec<bool>,
+    pub matched: bool,
+    pub reversecomplement: bool,
 }
 
 impl Drop for TripleLossKmersGenerator {
@@ -1606,6 +1616,7 @@ impl FastaKmersGenerator {
 /// files...
 #[pymodule]
 fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_class::<TripleLossReturn>()?;
     m.add_class::<MaskedKmersGenerator>()?;
     m.add_class::<DiscriminatorMaskedGeneratorWrapper>()?;
     m.add_class::<DiscriminatorMaskedGeneratorWrapperNB>()?;
