@@ -883,37 +883,22 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
 
     let mut seq;
 
-    let start = std::time::Instant::now();
-
-    seq = sfasta.get_sequence_only_by_seqloc(seqloc).unwrap().unwrap();
-    if seq.len() < needed_length {
-        return None;
-    }
-
-    println!("Get seq: {:#?}", start.elapsed());
-
-    let seqlen = seq.len().saturating_sub(needed_length);
+    let seqlen = seqloc.len(sfasta.parameters.block_size).saturating_sub(needed_length);
 
     if seqlen == 0 {
         return None;
     }
 
-    let start_time = std::time::Instant::now();
-
     let mut start = rng.gen_range(0..seqlen);
     let mut end = start + needed_length;
-    assert!(end < seq.len());
+
+    seq = sfasta.get_sequence_only_by_seqloc(&seqloc.slice(sfasta.parameters.block_size, start..end)).unwrap().unwrap();
 
     while is_all_ns(&seq.sequence.as_ref().unwrap()[start..end]) {
         start = rng.gen_range(0..seqlen);
         end = start + needed_length;
+        seq = sfasta.get_sequence_only_by_seqloc(&seqloc.slice(sfasta.parameters.block_size, start..end)).unwrap().unwrap();
     }
-
-    println!("Get random: {:#?}", start_time.elapsed());
-
-    let start_time = std::time::Instant::now();
-    
-    seq.sequence = Some(seq.sequence.unwrap()[start..end].to_vec());
 
     let mut iter2 = match KmerWindowGenerator::from_sequence(
         seq,
@@ -925,8 +910,6 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
         Some(x) => x,
         None => return None,
     };
-
-    println!("Get iter: {:#?}", start_time.elapsed());
 
     iter2.next()
 }
