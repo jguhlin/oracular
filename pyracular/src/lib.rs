@@ -894,7 +894,7 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
 
     seq = sfasta.get_sequence_only_by_seqloc(&seqloc.slice(sfasta.parameters.block_size, start..end)).unwrap().unwrap();
 
-    while is_all_ns(&seq.sequence.as_ref().unwrap()[start..end]) {
+    while is_all_ns(&seq.sequence.as_ref().unwrap()) {
         start = rng.gen_range(0..seqlen);
         end = start + needed_length;
         seq = sfasta.get_sequence_only_by_seqloc(&seqloc.slice(sfasta.parameters.block_size, start..end)).unwrap().unwrap();
