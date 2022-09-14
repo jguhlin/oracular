@@ -616,7 +616,7 @@ impl TripleLossKmersGenerator {
                 while let Some(cur) = indices.pop() {
                     // Create KmerWindowGenerator
 
-                    let sequence = match sfasta.get_sequence_only_by_seqloc(&locs[cur]) {
+                    let sequence = match sfasta.get_sequence_only_by_seqloc(&locs[cur], true) {
                         Ok(Some(x)) => x,
                         Ok(None) => panic!("Unable to get sequence"),
                         Err(_) => continue,
@@ -674,6 +674,7 @@ impl TripleLossKmersGenerator {
                                 window_size,
                                 &locs[cur],
                                 &mut rng,
+                                true,
                             ) {
                                 Some(x) => x,
                                 None => continue,
@@ -708,6 +709,7 @@ impl TripleLossKmersGenerator {
                                 window_size,
                                 rand_seqloc,
                                 &mut rng,
+                                false,
                             ) {
                                 Some(x) => x,
                                 None => continue,
@@ -903,6 +905,7 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
     window_size: usize,
     seqloc: &libsfasta::datatypes::SeqLoc,
     rng: &mut R,
+    caching: bool,
 ) -> Option<KmerWindow> {
     let needed_length = (k * window_size) + k;
 
@@ -922,7 +925,7 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
     let mut end = start + needed_length;
 
     seq = sfasta
-        .get_sequence_only_by_seqloc(&seqloc.seq_slice(sfasta.parameters.block_size, start..end))
+        .get_sequence_only_by_seqloc(&seqloc.seq_slice(sfasta.parameters.block_size, start..end), caching)
         .unwrap()
         .unwrap();
 
@@ -931,7 +934,7 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
         end = start + needed_length;
         seq = sfasta
             .get_sequence_only_by_seqloc(
-                &seqloc.seq_slice(sfasta.parameters.block_size, start..end),
+                &seqloc.seq_slice(sfasta.parameters.block_size, start..end), caching
             )
             .unwrap()
             .unwrap();
