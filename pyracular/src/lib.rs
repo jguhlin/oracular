@@ -920,25 +920,13 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
 
     let mut start = rng.gen_range(0..seqlen);
     let mut end = start + needed_length;
-    println!("Seq Length: {}", seqlen);
-    println!(
-        "{:#?}",
-        seqloc
-            .sequence
-            .as_ref()
-            .unwrap()
-            .iter()
-            .map(|l| l.original_format(sfasta.parameters.block_size))
-    );
-    println!("{:#?}", seqloc);
-    println!("range: {:#?}", start..end);
 
     seq = sfasta
         .get_sequence_only_by_seqloc(&seqloc.seq_slice(sfasta.parameters.block_size, start..end))
         .unwrap()
         .unwrap();
 
-    while is_all_ns(&seq.sequence.as_ref().unwrap()) {
+    while is_all_ns(seq.sequence.as_ref().unwrap()) {
         start = rng.gen_range(0..seqlen);
         end = start + needed_length;
         seq = sfasta
