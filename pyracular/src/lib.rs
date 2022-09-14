@@ -229,8 +229,14 @@ impl MaskedKmersGenerator {
 
                 loop {
                     // Create KmerWindowGenerator
-                    let kmer_window_generator =
-                        KmerWindowGenerator::new(filename.clone(), k, window_size, offset, rc, rand);
+                    let kmer_window_generator = KmerWindowGenerator::new(
+                        filename.clone(),
+                        k,
+                        window_size,
+                        offset,
+                        rc,
+                        rand,
+                    );
 
                     let discriminator_masked_generator = DiscriminatorMaskedGenerator::new(
                         replacement_pct,
@@ -363,11 +369,23 @@ impl MatchedKmersGenerator {
                 // and non-matching ones, including some RC ones as well...
                 loop {
                     // Create KmerWindowGenerator
-                    let mut iter1 =
-                        KmerWindowGenerator::new(filename.clone(), k, window_size, offset, rc, true);
+                    let mut iter1 = KmerWindowGenerator::new(
+                        filename.clone(),
+                        k,
+                        window_size,
+                        offset,
+                        rc,
+                        true,
+                    );
 
-                    let mut iter2 =
-                        KmerWindowGenerator::new(filename.clone(), k, window_size, offset, rc, true);
+                    let mut iter2 = KmerWindowGenerator::new(
+                        filename.clone(),
+                        k,
+                        window_size,
+                        offset,
+                        rc,
+                        true,
+                    );
 
                     loop {
                         if shutdown.load(Ordering::Relaxed) {
@@ -571,7 +589,7 @@ impl TripleLossKmersGenerator {
                 }
 
                 let mut sfasta = SfastaParser::open(filename.clone()).expect("Unable to open file");
-                
+
                 // Disable masking
                 sfasta.masking = None;
 
@@ -661,7 +679,7 @@ impl TripleLossKmersGenerator {
                                 None => continue,
                             };
 
-                        println!("Choice0: {:#?}", start.elapsed());
+                            println!("Choice0: {:#?}", start.elapsed());
 
                         // RC
                         } else if choice == 1 {
@@ -671,7 +689,7 @@ impl TripleLossKmersGenerator {
                             item2 = item1.clone();
                             item2 = rc_kmerwindow(item2);
 
-                        println!("Choice1: {:#?}", start.elapsed());
+                            println!("Choice1: {:#?}", start.elapsed());
                         // Not matching sequence...
                         } else {
                             matched = false;
@@ -724,8 +742,15 @@ impl TripleLossKmersGenerator {
                             .map(|x| convert_string_to_array(k, x))
                             .collect();
 
-                        let mut batch = TripleLossReturn { kmers1, kmers2, truth1, truth2, matched, reversecomplement };
-/*                        let mut batch = (
+                        let mut batch = TripleLossReturn {
+                            kmers1,
+                            kmers2,
+                            truth1,
+                            truth2,
+                            matched,
+                            reversecomplement,
+                        };
+                        /*                        let mut batch = (
                             (kmers1, kmers2),
                             (truth1, truth2, matched, reversecomplement),
                         ); */
@@ -794,7 +819,7 @@ impl TripleLossKmersGenerator {
             result = mypyself.queueimpl.queue.pop();
         }
 
-        let result = result.unwrap();     
+        let result = result.unwrap();
 
         //Python::with_gil(|_py| -> IterNextOutput<_, _> {
         IterNextOutput::Yield(result)
@@ -883,7 +908,9 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
 
     let mut seq;
 
-    let seqlen = seqloc.len(sfasta.parameters.block_size).saturating_sub(needed_length) as u32;
+    let seqlen = seqloc
+        .len(sfasta.parameters.block_size)
+        .saturating_sub(needed_length) as u32;
 
     let needed_length = needed_length as u32;
 
@@ -894,16 +921,32 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
     let mut start = rng.gen_range(0..seqlen);
     let mut end = start + needed_length;
     println!("Seq Length: {}", seqlen);
-    println!("{:#?}", seqloc.sequence.as_ref().unwrap().iter().map(|l| l.original_format(sfasta.parameters.block_size)));
+    println!(
+        "{:#?}",
+        seqloc
+            .sequence
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|l| l.original_format(sfasta.parameters.block_size))
+    );
     println!("{:#?}", seqloc);
     println!("range: {:#?}", start..end);
 
-    seq = sfasta.get_sequence_only_by_seqloc(&seqloc.seq_slice(sfasta.parameters.block_size, start..end)).unwrap().unwrap();
+    seq = sfasta
+        .get_sequence_only_by_seqloc(&seqloc.seq_slice(sfasta.parameters.block_size, start..end))
+        .unwrap()
+        .unwrap();
 
     while is_all_ns(&seq.sequence.as_ref().unwrap()) {
         start = rng.gen_range(0..seqlen);
         end = start + needed_length;
-        seq = sfasta.get_sequence_only_by_seqloc(&seqloc.seq_slice(sfasta.parameters.block_size, start..end)).unwrap().unwrap();
+        seq = sfasta
+            .get_sequence_only_by_seqloc(
+                &seqloc.seq_slice(sfasta.parameters.block_size, start..end),
+            )
+            .unwrap()
+            .unwrap();
     }
 
     let mut iter2 = match KmerWindowGenerator::from_sequence(

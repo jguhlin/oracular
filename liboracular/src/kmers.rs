@@ -615,7 +615,11 @@ pub struct Gff3KmersIter<'kmers> {
 }
 
 impl<'kmers> Gff3KmersIter<'kmers> {
-    pub fn new(gff3file: &str, generator: KmerCoordsWindowIter<'kmers>, k: usize) -> Gff3KmersIter<'kmers> {
+    pub fn new(
+        gff3file: &str,
+        generator: KmerCoordsWindowIter<'kmers>,
+        k: usize,
+    ) -> Gff3KmersIter<'kmers> {
         let (intervals, types) = gff3::get_gff3_intervals(gff3file);
 
         Gff3KmersIter {
@@ -838,8 +842,14 @@ mod tests {
             "test_data/test_large_multiple.sfasta",
         );
 
-        let mut kmers =
-            KmerWindowGenerator::new("test_data/test_large.sfasta".to_string(), 21, 512, 0, false, false);
+        let mut kmers = KmerWindowGenerator::new(
+            "test_data/test_large.sfasta".to_string(),
+            21,
+            512,
+            0,
+            false,
+            false,
+        );
         let _window = kmers.next().expect("Unable to get KmerWindow");
         let window = kmers.next().expect("Unable to get KmerWindow");
         println!("{}", window.kmers.len());
@@ -889,28 +899,55 @@ mod tests {
         println!("Len: {}", y.len());
         assert!(y.len() == 216);
 
-        let kmers = KmerWindowGenerator::new("test_data/test_large.sfasta".to_string(), 21, 16, 0, false, true);
+        let kmers = KmerWindowGenerator::new(
+            "test_data/test_large.sfasta".to_string(),
+            21,
+            16,
+            0,
+            false,
+            true,
+        );
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 35);
         assert!(b"GAATTCGTCAGAAATGAGCTA".to_vec() == y[0].kmers[0]);
 
-        let kmers = KmerWindowGenerator::new("test_data/test_large.sfasta".to_string(), 21, 16, 1, false, true);
+        let kmers = KmerWindowGenerator::new(
+            "test_data/test_large.sfasta".to_string(),
+            21,
+            16,
+            1,
+            false,
+            true,
+        );
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 35);
         assert!(b"AATTCGTCAGAAATGAGCTAA".to_vec() == y[0].kmers[0]);
         println!("{:#?}", std::str::from_utf8(&y[0].kmers[0]).expect("Err"));
 
-        let kmers =
-            KmerWindowGenerator::new("test_data/test_large.sfasta".to_string(), 21, 16, 20, false, true);
+        let kmers = KmerWindowGenerator::new(
+            "test_data/test_large.sfasta".to_string(),
+            21,
+            16,
+            20,
+            false,
+            true,
+        );
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 35);
         assert!(b"AAACAAATTTAAATCATTAAA".to_vec() == y[0].kmers[0]);
         println!("{:#?}", std::str::from_utf8(&y[0].kmers[0]).expect("Err"));
 
-        let kmers = KmerWindowGenerator::new("test_data/test_large.sfasta".to_string(), 21, 16, 20, true, true);
+        let kmers = KmerWindowGenerator::new(
+            "test_data/test_large.sfasta".to_string(),
+            21,
+            16,
+            20,
+            true,
+            true,
+        );
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 35);
