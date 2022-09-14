@@ -111,7 +111,7 @@ impl Gff3KmerGenerator {
                         }
 
                         let kmercoords_window_iter = KmerCoordsWindowIter::new(
-                            &mypyself.filename,
+                            mypyself.filename.clone(),
                             mypyself.k,
                             mypyself.window_size,
                             mypyself.offset,
@@ -165,7 +165,7 @@ impl Gff3KmerGenerator {
     ) -> Self {
         // Create KmerWindowGenerator
         let kmercoords_window_iter =
-            KmerCoordsWindowIter::new(&filename, k, window_size, 0, false, rand);
+            KmerCoordsWindowIter::new(filename.clone(), k, window_size, 0, false, rand);
 
         let iter = Gff3KmersIter::new(&gff3filename, kmercoords_window_iter, k);
         let types = iter.types.clone();
@@ -174,7 +174,7 @@ impl Gff3KmerGenerator {
             iter: Box::new(iter),
             k,
             offset: 0,
-            filename,
+            filename: filename.clone(),
             gff3filename,
             window_size,
             types,
@@ -230,7 +230,7 @@ impl MaskedKmersGenerator {
                 loop {
                     // Create KmerWindowGenerator
                     let kmer_window_generator =
-                        KmerWindowGenerator::new(&filename, k, window_size, offset, rc, rand);
+                        KmerWindowGenerator::new(filename.clone(), k, window_size, offset, rc, rand);
 
                     let discriminator_masked_generator = DiscriminatorMaskedGenerator::new(
                         replacement_pct,
@@ -364,10 +364,10 @@ impl MatchedKmersGenerator {
                 loop {
                     // Create KmerWindowGenerator
                     let mut iter1 =
-                        KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
+                        KmerWindowGenerator::new(filename.clone(), k, window_size, offset, rc, true);
 
                     let mut iter2 =
-                        KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
+                        KmerWindowGenerator::new(filename.clone(), k, window_size, offset, rc, true);
 
                     loop {
                         if shutdown.load(Ordering::Relaxed) {
@@ -570,7 +570,7 @@ impl TripleLossKmersGenerator {
                     rng.jump();
                 }
 
-                let mut sfasta = SfastaParser::open(&filename).expect("Unable to open file");
+                let mut sfasta = SfastaParser::open(filename.clone()).expect("Unable to open file");
                 
                 // Disable masking
                 sfasta.masking = None;
@@ -883,7 +883,9 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
 
     let mut seq;
 
-    let seqlen = seqloc.len(sfasta.parameters.block_size).saturating_sub(needed_length);
+    let seqlen = seqloc.len(sfasta.parameters.block_size).saturating_sub(needed_length) as u32;
+
+    let needed_length = needed_length as u32;
 
     if seqlen == 0 {
         return None;
@@ -896,12 +898,12 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
     println!("{:#?}", seqloc);
     println!("range: {:#?}", start..end);
 
-    seq = sfasta.get_sequence_only_by_seqloc(&seqloc.slice(sfasta.parameters.block_size, start..end)).unwrap().unwrap();
+    seq = sfasta.get_sequence_only_by_seqloc(&seqloc.seq_slice(sfasta.parameters.block_size, start..end)).unwrap().unwrap();
 
     while is_all_ns(&seq.sequence.as_ref().unwrap()) {
         start = rng.gen_range(0..seqlen);
         end = start + needed_length;
-        seq = sfasta.get_sequence_only_by_seqloc(&seqloc.slice(sfasta.parameters.block_size, start..end)).unwrap().unwrap();
+        seq = sfasta.get_sequence_only_by_seqloc(&seqloc.seq_slice(sfasta.parameters.block_size, start..end)).unwrap().unwrap();
     }
 
     let mut iter2 = match KmerWindowGenerator::from_sequence(
@@ -1095,7 +1097,7 @@ impl SequenceOrderKmersGenerator {
 
         // Create KmerWindowGenerator
         let kmer_window_generator =
-            KmerWindowGenerator::new(&filename, k, window_size * 2, 0, false, rand);
+            KmerWindowGenerator::new(filename.clone(), k, window_size * 2, 0, false, rand);
 
         let shutdown = Arc::new(AtomicBool::new(false));
         let exhausted = Arc::new(AtomicBool::new(false));
@@ -1130,7 +1132,7 @@ impl SequenceOrderKmersGenerator {
                             }
 
                             let kmer_window_generator = KmerWindowGenerator::new(
-                                &filename,
+                                filename.clone(),
                                 k,
                                 window_size,
                                 offset,
@@ -1286,7 +1288,7 @@ impl DiscriminatorMaskedGeneratorWrapper {
                         }
 
                         let kmer_window_generator = KmerWindowGenerator::new(
-                            &mypyself.filename,
+                            mypyself.filename.clone(),
                             mypyself.k,
                             mypyself.window_size,
                             mypyself.offset,
@@ -1340,7 +1342,7 @@ impl DiscriminatorMaskedGeneratorWrapper {
     ) -> Self {
         // Create KmerWindowGenerator
         let kmer_window_generator =
-            KmerWindowGenerator::new(&filename, k, window_size, 0, false, rand);
+            KmerWindowGenerator::new(filename.clone(), k, window_size, 0, false, rand);
 
         let discriminator_masked_generator =
             DiscriminatorMaskedGenerator::new(replacement_pct, k, kmer_window_generator);
@@ -1350,7 +1352,7 @@ impl DiscriminatorMaskedGeneratorWrapper {
             batch_size,
             k,
             offset: 0,
-            filename,
+            filename: filename.clone(),
             window_size,
             replacement_pct,
             rc: false,
@@ -1401,7 +1403,7 @@ impl DiscriminatorMaskedGeneratorWrapperNB {
                         // println!("New Offset: {} {}", mypyself.offset, mypyself.rc);
 
                         let kmer_window_generator = KmerWindowGenerator::new(
-                            &mypyself.filename,
+                            mypyself.filename.clone(),
                             mypyself.k,
                             mypyself.window_size,
                             mypyself.offset,
@@ -1450,7 +1452,7 @@ impl DiscriminatorMaskedGeneratorWrapperNB {
     fn new(k: usize, filename: String, window_size: usize, replacement_pct: f32) -> Self {
         // Create KmerWindowGenerator
         let kmer_window_generator =
-            KmerWindowGenerator::new(&filename, k, window_size, 0, false, true);
+            KmerWindowGenerator::new(filename.clone(), k, window_size, 0, false, true);
 
         let discriminator_masked_generator =
             DiscriminatorMaskedGenerator::new(replacement_pct, k, kmer_window_generator);
@@ -1459,7 +1461,7 @@ impl DiscriminatorMaskedGeneratorWrapperNB {
             iter: Box::new(discriminator_masked_generator),
             k,
             offset: 0,
-            filename,
+            filename: filename.clone(),
             window_size,
             replacement_pct,
             rc: false,
@@ -1517,7 +1519,7 @@ impl FastaKmersGenerator {
                         }
 
                         let iter = KmerCoordsWindowIter::new(
-                            &mypyself.filename,
+                            mypyself.filename.clone(),
                             mypyself.k,
                             mypyself.window_size,
                             mypyself.offset,
@@ -1580,7 +1582,7 @@ impl FastaKmersGenerator {
         rand: bool,
     ) -> Self {
         // Create KmerWindowGenerator
-        let iter = KmerCoordsWindowIter::new(&filename.clone(), k, window_size, 0, start_rc, rand);
+        let iter = KmerCoordsWindowIter::new(filename.clone(), k, window_size, 0, start_rc, rand);
 
         FastaKmersGenerator {
             iter: Box::new(iter),

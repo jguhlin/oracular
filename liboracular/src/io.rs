@@ -115,7 +115,7 @@ mod tests {
     pub fn test_iosequences() {
         convert_fasta_file("test_data/test.fna", "test_data/test_sequences.sfasta");
 
-        let mut sequences = Box::new(Sequences::from_file("test_data/test_sequences.sfasta"));
+        let mut sequences = Box::new(Sequences::from_file("test_data/test_sequences.sfasta".to_string()));
         let sequence = sequences.next().unwrap();
         println!("{:#?}", sequence);
         assert!(sequence.id.as_ref().unwrap() == "test");
@@ -125,18 +125,18 @@ mod tests {
     #[test]
     #[should_panic]
     pub fn test_empty() {
-        let sequences = Box::new(Sequences::from_file("test_data/empty.sfasta"));
+        let sequences = Box::new(Sequences::from_file("test_data/empty.sfasta".to_string()));
         Box::new(SequenceSplitter3N::new(sequences));
     }
 
     #[test]
     pub fn test_3n_splitter() {
         convert_fasta_file("test_data/test.fna", "test_data/test_3n_splitter.sfasta");
-        let sequences = Box::new(Sequences::from_file("test_data/test_3n_splitter.sfasta"));
+        let sequences = Box::new(Sequences::from_file("test_data/test_3n_splitter.sfasta".to_string()));
         let count = sequences.count();
         assert!(count == 1);
 
-        let sequences = Box::new(Sequences::from_file("test_data/test_3n_splitter.sfasta"));
+        let sequences = Box::new(Sequences::from_file("test_data/test_3n_splitter.sfasta".to_string()));
         let mut sequences = Box::new(SequenceSplitter3N::new(sequences));
         let x = sequences.next().unwrap();
         println!("{}", x.len());
@@ -192,7 +192,7 @@ mod tests {
             "test_data/test_3n_splitter.sfasta",
         );
 
-        let mut sequences = Box::new(Sequences::from_file("test_data/test_3n_splitter.sfasta"));
+        let mut sequences = Box::new(Sequences::from_file("test_data/test_3n_splitter.sfasta".to_string()));
         sequences.set_mode(SeqMode::Random);
         let mut sequences = Box::new(SequenceSplitter3N::new(sequences));
 
@@ -200,7 +200,7 @@ mod tests {
         println!("Sequences after 3N Split: {}", count);
         assert!(count == 216);
 
-        let sequences = Box::new(Sequences::from_file("test_data/test_3n_splitter.sfasta"));
+        let sequences = Box::new(Sequences::from_file("test_data/test_3n_splitter.sfasta".to_string()));
         let mut sequences = Box::new(SequenceSplitter3N::new(sequences));
         sequences.next();
         // println!("Coords: {:#?}", sequences.coords[0]);
@@ -213,7 +213,7 @@ mod tests {
             "test_data/test_multiple.fna",
             "test_data/test_sequences_impl.sfasta",
         );
-        let seqs = Box::new(Sequences::from_file("test_data/test_sequences_impl.sfasta"));
+        let seqs = Box::new(Sequences::from_file("test_data/test_sequences_impl.sfasta".to_string()));
         let count = seqs.count();
         println!("Sequences Impl Count {}", count);
         assert!(count == 8);

@@ -77,14 +77,14 @@ pub struct DiscriminatorMasked {
     pub truth: Vec<bool>,
 }
 
-pub struct DiscriminatorMaskedGenerator {
-    kmer_window_generator: KmerWindowGenerator,
+pub struct DiscriminatorMaskedGenerator<'kmers> {
+    kmer_window_generator: KmerWindowGenerator<'kmers>,
     replacement_pct: f32,
     k: usize,
     // TODO: Put alphabet here so we can train proteins as well...
 }
 
-impl DiscriminatorMaskedGenerator {
+impl<'kmers> DiscriminatorMaskedGenerator<'kmers> {
     pub fn new(
         replacement_pct: f32,
         k: usize,
@@ -129,7 +129,7 @@ pub fn replace_random<R: Rng + ?Sized>(
     truth
 }
 
-impl Iterator for DiscriminatorMaskedGenerator {
+impl<'kmers> Iterator for DiscriminatorMaskedGenerator<'kmers> {
     type Item = DiscriminatorMasked;
 
     fn next(&mut self) -> Option<DiscriminatorMasked> {
@@ -157,8 +157,8 @@ impl Iterator for DiscriminatorMaskedGenerator {
     }
 }
 
-pub struct KmerWindowGenerator {
-    sequences: Box<dyn Iterator<Item = Sequence> + Send>,
+pub struct KmerWindowGenerator<'kmers> {
+    sequences: Box<dyn Iterator<Item = Sequence> + Send + 'kmers>,
     window_size: usize,
     k: usize,
     kmer_generator: Kmers,
@@ -168,15 +168,15 @@ pub struct KmerWindowGenerator {
     rc: bool,
 }
 
-impl KmerWindowGenerator {
+impl<'kmers> KmerWindowGenerator<'kmers> {
     pub fn new(
-        filename: &str,
+        filename: String,
         k: usize,
         window_size: usize,
         offset: usize,
         rc: bool,
         rand: bool, // Mostly for debugging, but also for synteny plots and such...
-    ) -> KmerWindowGenerator {
+    ) -> KmerWindowGenerator<'kmers> {
         let mut sequences = Box::new(Sequences::from_file(filename));
 
         if rand {
@@ -243,7 +243,7 @@ impl KmerWindowGenerator {
         window_size: usize,
         offset: usize,
         rc: bool,
-    ) -> Option<KmerWindowGenerator> {
+    ) -> Option<KmerWindowGenerator<'kmers>> {
         let sequences = vec![sequence];
 
         let mut sequences = Box::new(io::SequenceSplitter3N::new(Box::new(sequences.into_iter())));
@@ -336,7 +336,7 @@ impl KmerWindowGenerator {
     }
 }
 
-impl Iterator for KmerWindowGenerator {
+impl<'kmers> Iterator for KmerWindowGenerator<'kmers> {
     type Item = KmerWindow;
 
     fn next(&mut self) -> Option<KmerWindow> {
@@ -396,8 +396,8 @@ impl std::fmt::Debug for KmerCoordsWindow {
     }
 }
 
-pub struct KmerCoordsWindowIter {
-    sequences: Box<dyn Iterator<Item = io::Sequence> + Send>,
+pub struct KmerCoordsWindowIter<'kmers> {
+    sequences: Box<dyn Iterator<Item = io::Sequence> + Send + 'kmers>,
     window_size: usize,
     k: usize,
     kmer_generator: Kmers,
@@ -407,15 +407,15 @@ pub struct KmerCoordsWindowIter {
     rc: bool,
 }
 
-impl KmerCoordsWindowIter {
+impl<'kmers> KmerCoordsWindowIter<'kmers> {
     pub fn new(
-        filename: &str,
+        filename: String,
         k: usize,
         window_size: usize,
         offset: usize,
         rc: bool,
         rand: bool,
-    ) -> KmerCoordsWindowIter {
+    ) -> KmerCoordsWindowIter<'kmers> {
         let mut sequences = Box::new(Sequences::from_file(filename));
         if rand {
             sequences.set_mode(SeqMode::Random);
@@ -503,7 +503,7 @@ impl KmerCoordsWindowIter {
     }
 }
 
-impl Iterator for KmerCoordsWindowIter {
+impl<'kmers> Iterator for KmerCoordsWindowIter<'kmers> {
     type Item = KmerCoordsWindow;
 
     fn next(&mut self) -> Option<KmerCoordsWindow> {
@@ -607,15 +607,15 @@ pub struct Gff3Kmers {
     pub rc: bool,
 }
 
-pub struct Gff3KmersIter {
-    kmercoords_window_iter: KmerCoordsWindowIter,
+pub struct Gff3KmersIter<'kmers> {
+    kmercoords_window_iter: KmerCoordsWindowIter<'kmers>,
     intervals: intervals::IntervalMap<Vec<u8>>,
     pub types: Vec<String>,
     pub k: usize,
 }
 
-impl Gff3KmersIter {
-    pub fn new(gff3file: &str, generator: KmerCoordsWindowIter, k: usize) -> Gff3KmersIter {
+impl<'kmers> Gff3KmersIter<'kmers> {
+    pub fn new(gff3file: &str, generator: KmerCoordsWindowIter<'kmers>, k: usize) -> Gff3KmersIter<'kmers> {
         let (intervals, types) = gff3::get_gff3_intervals(gff3file);
 
         Gff3KmersIter {
@@ -627,7 +627,7 @@ impl Gff3KmersIter {
     }
 }
 
-impl Iterator for Gff3KmersIter {
+impl<'kmers> Iterator for Gff3KmersIter<'kmers> {
     type Item = Gff3Kmers;
 
     fn next(&mut self) -> Option<Gff3Kmers> {
@@ -753,7 +753,7 @@ mod tests {
             "test_data/test_kmer_window_generator.sfasta",
         );
         let mut kmers = KmerWindowGenerator::new(
-            "test_data/test_kmer_window_generator.sfasta",
+            "test_data/test_kmer_window_generator.sfasta".to_string(),
             3,
             3,
             0,
@@ -774,7 +774,7 @@ mod tests {
         );
 
         let mut kmers = KmerWindowGenerator::new(
-            "test_data/test_kmer_window_generator.sfasta",
+            "test_data/test_kmer_window_generator.sfasta".to_string(),
             3,
             3,
             0,
@@ -792,7 +792,7 @@ mod tests {
         );
 
         let mut kmers = KmerWindowGenerator::new(
-            "test_data/test_kmer_window_generator.sfasta",
+            "test_data/test_kmer_window_generator.sfasta".to_string(),
             10,
             2,
             0,
@@ -807,7 +807,7 @@ mod tests {
         );
 
         let kmers = KmerWindowGenerator::new(
-            "test_data/test_kmer_window_generator.sfasta",
+            "test_data/test_kmer_window_generator.sfasta".to_string(),
             5,
             5,
             0,
@@ -816,7 +816,7 @@ mod tests {
         );
 
         let kmers = KmerWindowGenerator::new(
-            "test_data/test_kmer_window_generator.sfasta",
+            "test_data/test_kmer_window_generator.sfasta".to_string(),
             5,
             5,
             0,
@@ -839,13 +839,13 @@ mod tests {
         );
 
         let mut kmers =
-            KmerWindowGenerator::new("test_data/test_large.sfasta", 21, 512, 0, false, false);
+            KmerWindowGenerator::new("test_data/test_large.sfasta".to_string(), 21, 512, 0, false, false);
         let _window = kmers.next().expect("Unable to get KmerWindow");
         let window = kmers.next().expect("Unable to get KmerWindow");
         println!("{}", window.kmers.len());
         assert!(window.kmers.len() == 44);
 
-        let mut sfasta = SfastaParser::open("test_data/test_large.sfasta").unwrap();
+        let mut sfasta = SfastaParser::open("test_data/test_large.sfasta".to_string()).unwrap();
         let sequence = match sfasta.get_sequence_by_index(0) {
             Ok(Some(s)) => s,
             Err(e) => panic!("Unable to get sequence: {}", e),
@@ -889,13 +889,13 @@ mod tests {
         println!("Len: {}", y.len());
         assert!(y.len() == 216);
 
-        let kmers = KmerWindowGenerator::new("test_data/test_large.sfasta", 21, 16, 0, false, true);
+        let kmers = KmerWindowGenerator::new("test_data/test_large.sfasta".to_string(), 21, 16, 0, false, true);
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 35);
         assert!(b"GAATTCGTCAGAAATGAGCTA".to_vec() == y[0].kmers[0]);
 
-        let kmers = KmerWindowGenerator::new("test_data/test_large.sfasta", 21, 16, 1, false, true);
+        let kmers = KmerWindowGenerator::new("test_data/test_large.sfasta".to_string(), 21, 16, 1, false, true);
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 35);
@@ -903,14 +903,14 @@ mod tests {
         println!("{:#?}", std::str::from_utf8(&y[0].kmers[0]).expect("Err"));
 
         let kmers =
-            KmerWindowGenerator::new("test_data/test_large.sfasta", 21, 16, 20, false, true);
+            KmerWindowGenerator::new("test_data/test_large.sfasta".to_string(), 21, 16, 20, false, true);
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 35);
         assert!(b"AAACAAATTTAAATCATTAAA".to_vec() == y[0].kmers[0]);
         println!("{:#?}", std::str::from_utf8(&y[0].kmers[0]).expect("Err"));
 
-        let kmers = KmerWindowGenerator::new("test_data/test_large.sfasta", 21, 16, 20, true, true);
+        let kmers = KmerWindowGenerator::new("test_data/test_large.sfasta".to_string(), 21, 16, 20, true, true);
         let y: Vec<KmerWindow> = kmers.collect();
         println!("Len: {}", y.len());
         assert!(y.len() == 35);
@@ -920,7 +920,7 @@ mod tests {
 
         // Test Large Multiple
         let kmers = KmerWindowGenerator::new(
-            "test_data/test_large_multiple.sfasta",
+            "test_data/test_large_multiple.sfasta".to_string(),
             21,
             16,
             0,
@@ -932,7 +932,7 @@ mod tests {
         assert!(y.len() == 655);
 
         let kmers = KmerWindowGenerator::new(
-            "test_data/test_large_multiple.sfasta",
+            "test_data/test_large_multiple.sfasta".to_string(),
             21,
             16,
             1,
@@ -944,7 +944,7 @@ mod tests {
         assert!(y.len() == 655);
 
         let kmers = KmerWindowGenerator::new(
-            "test_data/test_large_multiple.sfasta",
+            "test_data/test_large_multiple.sfasta".to_string(),
             21,
             16,
             19,
@@ -956,7 +956,7 @@ mod tests {
         assert!(y.len() == 654);
 
         let kmers = KmerWindowGenerator::new(
-            "test_data/test_large_multiple.sfasta",
+            "test_data/test_large_multiple.sfasta".to_string(),
             21,
             16,
             20,
@@ -968,7 +968,7 @@ mod tests {
         assert!(y.len() == 654);
 
         let kmers = KmerWindowGenerator::new(
-            "test_data/test_large_multiple.sfasta",
+            "test_data/test_large_multiple.sfasta".to_string(),
             21,
             16,
             20,
@@ -980,7 +980,7 @@ mod tests {
         assert!(y.len() == 654);
 
         let kmers = KmerWindowGenerator::new(
-            "test_data/test_large_multiple.sfasta",
+            "test_data/test_large_multiple.sfasta".to_string(),
             21,
             16,
             3,
@@ -999,7 +999,7 @@ mod tests {
             "test_data/test_convert_kmerwindow_to_rc.sfasta",
         );
         let mut kmers = KmerWindowGenerator::new(
-            "test_data/test_convert_kmerwindow_to_rc.sfasta",
+            "test_data/test_convert_kmerwindow_to_rc.sfasta".to_string(),
             10,
             2,
             0,
@@ -1073,7 +1073,7 @@ mod tests {
             "test_data/test_kmer_coords_window_generator.sfasta",
         );
         let mut kmers = KmerCoordsWindowIter::new(
-            "test_data/test_kmer_coords_window_generator.sfasta",
+            "test_data/test_kmer_coords_window_generator.sfasta".to_string(),
             3,
             3,
             0,
@@ -1087,7 +1087,7 @@ mod tests {
         println!("First test...");
 
         let kmers = KmerCoordsWindowIter::new(
-            "test_data/test_kmer_coords_window_generator.sfasta",
+            "test_data/test_kmer_coords_window_generator.sfasta".to_string(),
             3,
             3,
             0,
@@ -1100,7 +1100,7 @@ mod tests {
         }
 
         let mut kmers = KmerCoordsWindowIter::new(
-            "test_data/test_kmer_coords_window_generator.sfasta",
+            "test_data/test_kmer_coords_window_generator.sfasta".to_string(),
             3,
             3,
             0,
@@ -1117,7 +1117,7 @@ mod tests {
 
         // Have to get the right coords for RC
         let kmers = KmerCoordsWindowIter::new(
-            "test_data/test_kmer_coords_window_generator.sfasta",
+            "test_data/test_kmer_coords_window_generator.sfasta".to_string(),
             8,
             2,
             0,
@@ -1140,7 +1140,7 @@ mod tests {
         );
 
         let kmercoords_window_iter = KmerCoordsWindowIter::new(
-            "test_data/Dmel_part_test_gff3_iter.sfasta",
+            "test_data/Dmel_part_test_gff3_iter.sfasta".to_string(),
             21,
             6,
             0,
