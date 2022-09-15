@@ -861,8 +861,10 @@ version = "0.2.0"
 dependencies = [
  "bytecount",
  "crossbeam",
+ "env_logger",
  "liboracular",
  "libsfasta",
+ "log",
  "mimalloc",
  "pyo3",
  "rand",

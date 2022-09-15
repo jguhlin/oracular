@@ -1640,6 +1640,7 @@ impl FastaKmersGenerator {
 /// files...
 #[pymodule]
 fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
+    env_logger::init();
     m.add_class::<TripleLossReturn>()?;
     m.add_class::<MaskedKmersGenerator>()?;
     m.add_class::<DiscriminatorMaskedGeneratorWrapper>()?;

@@ -26,6 +26,8 @@ mimalloc = { version = "0.1.24", default-features = false }
 rand = "0.8.5"
 rand_xoshiro = "0.6.0"
 libsfasta = { path = "../../sfasta/libsfasta" }
+env_logger = "0.9.0"
+log = "0.4.17"
 
 [package.metadata.maturin]
 classifier = [
