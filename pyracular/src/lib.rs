@@ -12,6 +12,7 @@ use std::thread::{park, JoinHandle};
 use rand::prelude::*;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use rayon::prelude::*;
 
 use mimalloc::MiMalloc;
 #[global_allocator]
@@ -597,6 +598,8 @@ impl TripleLossKmersGenerator {
 
                 let minimum_seqlength = k * window_size + k;
 
+                log::debug!("Getting SeqLocs");
+
                 let locs = sfasta.get_seqlocs().unwrap().unwrap();
                 let block_size = sfasta.get_block_size();
 
@@ -682,7 +685,7 @@ impl TripleLossKmersGenerator {
                                 None => continue,
                             };
 
-                            println!("Choice0: {:#?}", start.elapsed());
+                            log::debug!("Choice0: {:#?}", start.elapsed());
 
                         // RC
                         } else if choice == 1 {
@@ -692,7 +695,7 @@ impl TripleLossKmersGenerator {
                             item2 = item1.clone();
                             item2 = rc_kmerwindow(item2);
 
-                            println!("Choice1: {:#?}", start.elapsed());
+                            log::debug!("Choice1: {:#?}", start.elapsed());
                         // Not matching sequence...
                         } else {
                             matched = false;
@@ -717,7 +720,7 @@ impl TripleLossKmersGenerator {
                                 None => continue,
                             };
 
-                            println!("Choice2: {:#?}", start.elapsed());
+                            log::debug!("Choice2: {:#?}", start.elapsed());
                         }
 
                         let start = std::time::Instant::now();

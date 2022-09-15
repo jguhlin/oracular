@@ -28,6 +28,7 @@ rand_xoshiro = "0.6.0"
 libsfasta = { path = "../../sfasta/libsfasta" }
 env_logger = "0.9.0"
 log = "0.4.17"
+rayon = "1.5.1"
 
 [package.metadata.maturin]
 classifier = [

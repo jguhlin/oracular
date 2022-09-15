@@ -869,6 +869,7 @@ dependencies = [
  "pyo3",
  "rand",
  "rand_xoshiro",
+ "rayon",
  "twox-hash",
 ]
 
