@@ -590,6 +590,8 @@ impl TripleLossKmersGenerator {
 
                 let mut sfasta = SfastaParser::open(filename.clone()).expect("Unable to open file");
 
+                log::debug!("Generating kmers for thread {}", thread_number);
+
                 // Disable masking
                 sfasta.masking = None;
 
@@ -598,7 +600,7 @@ impl TripleLossKmersGenerator {
                 let locs = sfasta.get_seqlocs().unwrap().unwrap();
                 let block_size = sfasta.get_block_size();
 
-                println!("Locs before filter: {}", locs.len());
+                log::debug!("Locs before filter: {}", locs.len());
 
                 // Filter by minimum size
                 let locs = locs
@@ -608,7 +610,7 @@ impl TripleLossKmersGenerator {
                 let mut indices = (0..locs.len()).collect::<Vec<usize>>();
                 indices.shuffle(&mut rng);
 
-                println!("Locs after filter: {}", locs.len());
+                log::debug!("Locs after filter: {}", locs.len());
 
                 // TODO: Make even smarter -- Load up 1k windows and pick from there matching
                 // and non-matching ones, including some RC ones as well...
