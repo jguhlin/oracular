@@ -636,7 +636,6 @@ impl TripleLossKmersGenerator {
                         // Non-matched sequence -- Kmer window 1 and 2 from completely different
                         // seqs...
                         let choice: u8 = rng.gen_range(0..3); // Give us a number between 0 and 2
-                        log::debug!("Choice: {}", choice);
 
                         // Always need a starting window...
                         item1 = match iter1.next() {
@@ -890,6 +889,7 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
     rng: &mut R,
     caching: bool,
 ) -> Option<KmerWindow> {
+    let start = std::time::Instant::now();
     let needed_length = (k * window_size) + k;
 
     let mut seq;
@@ -902,6 +902,9 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
         return None;
     }
 
+    log::debug!("SeqLoc Len time: {:#?}", start.elapsed());
+
+    let start = std::time::Instant::now();
     let mut start = rng.gen_range(0..seqlen);
     let mut end = start + needed_length;
 
@@ -931,6 +934,8 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
         Some(x) => x,
         None => return None,
     };
+
+    log::debug!("Rest of the time: {:#?}", start.elapsed());
 
     iter2.next()
 }
