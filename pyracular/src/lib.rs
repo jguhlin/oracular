@@ -580,9 +580,6 @@ impl TripleLossKmersGenerator {
             threads,
             seed as u64,
             move |shutdown, exhausted, queue, seed, thread_number| {
-                let mut offset = 0;
-                let mut rc = false;
-
                 let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed);
                 for _i in 0..thread_number {
                     rng.jump();
@@ -597,34 +594,26 @@ impl TripleLossKmersGenerator {
 
                 let minimum_seqlength = k * window_size + k;
 
-                log::debug!("Getting SeqLocs");
-
-                let block_size = sfasta.get_block_size();
-                let locs = sfasta.get_seqlocs().unwrap().unwrap().clone();
-
-                log::debug!("Locs before filter: {}", locs.len());
-
-                // Filter by minimum size
-                let locs = locs
-                    .into_iter()
-                    .filter(|x| x.len(block_size) >= minimum_seqlength)
-                    .collect::<Vec<_>>();
-                let mut indices = (0..locs.len()).collect::<Vec<usize>>();
-                indices.shuffle(&mut rng);
-
-                log::debug!("Locs after filter: {}", locs.len());
+                let total_seqlocs = sfasta.seqlocs.as_ref().unwrap().total_seqlocs;
 
                 // TODO: Make even smarter -- Load up 1k windows and pick from there matching
                 // and non-matching ones, including some RC ones as well...
 
-                while let Some(cur) = indices.pop() {
-                    // Create KmerWindowGenerator
+                loop {
+                    let offset = rng.gen_range(0..k);
+                    let rc: bool = rng.gen();
+                    let seqloc_i = rng.gen_range(0..total_seqlocs);
+                    let seqloc = sfasta.get_seqloc(seqloc_i).unwrap().unwrap();
 
-                    let sequence = match sfasta.get_sequence_only_by_seqloc(&locs[cur], true) {
+                    let sequence = match sfasta.get_sequence_only_by_seqloc(&seqloc, true) {
                         Ok(Some(x)) => x,
                         Ok(None) => panic!("Unable to get sequence"),
                         Err(_) => continue,
                     };
+
+                    if sequence.len() < minimum_seqlength {
+                        continue;
+                    }
 
                     let mut iter1 =
                     // KmerWindowGenerator::new(&filename, k, window_size, offset, rc, true);
@@ -676,7 +665,7 @@ impl TripleLossKmersGenerator {
                                 &mut sfasta,
                                 k,
                                 window_size,
-                                &locs[cur],
+                                &seqloc,
                                 &mut rng,
                                 true,
                             ) {
@@ -700,18 +689,21 @@ impl TripleLossKmersGenerator {
                             matched = false;
                             reversecomplement = false;
 
-                            let mut rand_seqloc = locs.choose(&mut rng).unwrap();
+                            let mut seqloc_j = rng.gen_range(0..total_seqlocs);
+                            
 
                             // Unlikely, but to be sure...
-                            while rand_seqloc == &locs[cur] {
-                                rand_seqloc = locs.choose(&mut rng).unwrap();
+                            while seqloc_i == seqloc_j {
+                                seqloc_j = rng.gen_range(0..total_seqlocs);
                             }
+
+                            let rand_seqloc = sfasta.get_seqloc(seqloc_j).unwrap().unwrap();
 
                             item2 = match get_random_sequence_from_seqloc(
                                 &mut sfasta,
                                 k,
                                 window_size,
-                                rand_seqloc,
+                                &rand_seqloc,
                                 &mut rng,
                                 false,
                             ) {
@@ -775,20 +767,6 @@ impl TripleLossKmersGenerator {
                         }
                     }
 
-                    offset += 1;
-
-                    if (k == offset) && rc && indices.is_empty() {
-                        println!("Exhausted...");
-                        exhausted.store(true, Ordering::SeqCst);
-                        return;
-                    } else if k == offset && !rc {
-                        println!("Switching to RC");
-                        offset = 0;
-                        rc = true;
-                    } else {
-                        offset = 0;
-                        rc = false;
-                    }
                 }
             },
         );
