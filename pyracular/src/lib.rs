@@ -10,7 +10,6 @@ use std::thread;
 use std::thread::{park, JoinHandle};
 
 use rand::prelude::*;
-use rayon::prelude::*;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
@@ -929,13 +928,9 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
     let mut start = rng.gen_range(0..seqlen);
     let mut end = start + needed_length;
 
-
     let locs = sfasta.seq_slice(seqloc, start..end);
     seq = sfasta
-        .get_sequence_only_by_locs(
-            &locs,
-            caching,
-        )
+        .get_sequence_only_by_locs(&locs, caching)
         .unwrap()
         .unwrap();
 
@@ -944,10 +939,7 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
         end = start + needed_length;
         let locs = sfasta.seq_slice(seqloc, start..end);
         seq = sfasta
-            .get_sequence_only_by_locs(
-                &locs,
-                caching,
-            )
+            .get_sequence_only_by_locs(&locs, caching)
             .unwrap()
             .unwrap();
     }
