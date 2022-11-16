@@ -894,13 +894,9 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
 
     let mut seq;
 
-    let seqlen = seqloc
-        .len(sfasta.parameters.block_size)
-        .saturating_sub(needed_length) as u32;
+    let seqlen = sfasta.seqloc_len(seqloc) as u32;
 
     let needed_length = needed_length as u32;
-
-    log::debug!("Seqlen: {}, Needed Length: {}", seqlen, needed_length);
 
     if seqlen == 0 {
         return None;
