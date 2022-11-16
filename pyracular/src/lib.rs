@@ -636,7 +636,7 @@ impl TripleLossKmersGenerator {
                         // Non-matched sequence -- Kmer window 1 and 2 from completely different
                         // seqs...
                         let choice: u8 = rng.gen_range(0..3); // Give us a number between 0 and 2
-                        log::debug("Choice: {}", choice);
+                        log::debug!("Choice: {}", choice);
 
                         // Always need a starting window...
                         item1 = match iter1.next() {
