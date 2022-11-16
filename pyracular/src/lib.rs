@@ -10,9 +10,9 @@ use std::thread;
 use std::thread::{park, JoinHandle};
 
 use rand::prelude::*;
+use rayon::prelude::*;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use rayon::prelude::*;
 
 use mimalloc::MiMalloc;
 #[global_allocator]
@@ -929,8 +929,13 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
     let mut start = rng.gen_range(0..seqlen);
     let mut end = start + needed_length;
 
+    let mut buf = &mut *sfasta.buf.as_ref().unwrap().write().unwrap();
+
     seq = sfasta
-        .get_sequence_only_by_seqloc(&seqloc.seq_slice(sfasta.parameters.block_size, start..end), caching)
+        .get_sequence_only_by_locs(
+            &seqloc.seq_slice(sfasta.parameters.block_size, buf, sfasta.get_block_size(), start..end),
+            caching,
+        )
         .unwrap()
         .unwrap();
 
@@ -938,8 +943,9 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
         start = rng.gen_range(0..seqlen);
         end = start + needed_length;
         seq = sfasta
-            .get_sequence_only_by_seqloc(
-                &seqloc.seq_slice(sfasta.parameters.block_size, start..end), caching
+            .get_sequence_only_by_locs(
+                &seqloc.seq_slice(sfasta.parameters.block_size, buf, sfasta.get_block_size(), start..end),
+                caching,
             )
             .unwrap()
             .unwrap();
