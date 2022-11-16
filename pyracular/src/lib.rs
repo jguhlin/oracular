@@ -636,6 +636,7 @@ impl TripleLossKmersGenerator {
                         // Non-matched sequence -- Kmer window 1 and 2 from completely different
                         // seqs...
                         let choice: u8 = rng.gen_range(0..3); // Give us a number between 0 and 2
+                        log::debug("Choice: {}", choice);
 
                         // Always need a starting window...
                         item1 = match iter1.next() {
@@ -673,7 +674,7 @@ impl TripleLossKmersGenerator {
                                 None => continue,
                             };
 
-                            log::debug!("Choice0: {:#?}", start.elapsed());
+                            log::debug!("Choice 0: {:#?}", start.elapsed());
 
                         // RC
                         } else if choice == 1 {
@@ -683,7 +684,7 @@ impl TripleLossKmersGenerator {
                             item2 = item1.clone();
                             item2 = rc_kmerwindow(item2);
 
-                            log::debug!("Choice1: {:#?}", start.elapsed());
+                            log::debug!("Choice 1: {:#?}", start.elapsed());
                         // Not matching sequence...
                         } else {
                             matched = false;
@@ -711,7 +712,7 @@ impl TripleLossKmersGenerator {
                                 None => continue,
                             };
 
-                            log::debug!("Choice2: {:#?}", start.elapsed());
+                            log::debug!("Choice 2: {:#?}", start.elapsed());
                         }
 
                         let start = std::time::Instant::now();
