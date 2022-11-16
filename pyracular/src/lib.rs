@@ -600,8 +600,8 @@ impl TripleLossKmersGenerator {
 
                 log::debug!("Getting SeqLocs");
 
-                let locs = sfasta.get_seqlocs().unwrap().unwrap();
                 let block_size = sfasta.get_block_size();
+                let locs = sfasta.get_seqlocs().unwrap().unwrap().clone();
 
                 log::debug!("Locs before filter: {}", locs.len());
 
@@ -929,11 +929,11 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
     let mut start = rng.gen_range(0..seqlen);
     let mut end = start + needed_length;
 
-    let mut buf = &mut *sfasta.buf.as_ref().unwrap().write().unwrap();
 
+    let locs = sfasta.seq_slice(seqloc, start..end);
     seq = sfasta
         .get_sequence_only_by_locs(
-            &seqloc.seq_slice(sfasta.parameters.block_size, buf, sfasta.get_block_size(), start..end),
+            &locs,
             caching,
         )
         .unwrap()
@@ -942,9 +942,10 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
     while is_all_ns(seq.sequence.as_ref().unwrap()) {
         start = rng.gen_range(0..seqlen);
         end = start + needed_length;
+        let locs = sfasta.seq_slice(seqloc, start..end);
         seq = sfasta
             .get_sequence_only_by_locs(
-                &seqloc.seq_slice(sfasta.parameters.block_size, buf, sfasta.get_block_size(), start..end),
+                &locs,
                 caching,
             )
             .unwrap()
