@@ -904,7 +904,7 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
 
     log::debug!("SeqLoc Len time: {:#?}", start.elapsed());
 
-    let start = std::time::Instant::now();
+    let start_time = std::time::Instant::now();
     let mut start = rng.gen_range(0..seqlen);
     let mut end = start + needed_length;
 
@@ -935,7 +935,7 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
         None => return None,
     };
 
-    log::debug!("Rest of the time: {:#?}", start.elapsed());
+    log::debug!("Rest of the time: {:#?}", start_time.elapsed());
 
     iter2.next()
 }
