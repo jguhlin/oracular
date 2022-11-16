@@ -900,6 +900,8 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
 
     let needed_length = needed_length as u32;
 
+    log::debug!("Seqlen: {}, Needed Length: {}", seqlen, needed_length);
+
     if seqlen == 0 {
         return None;
     }
