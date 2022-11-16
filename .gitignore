@@ -24,3 +24,4 @@ test_data/*sfasta
 .clj-kondo*
 Cargo.lock
 Cargo.lock
+Cargo.lock
