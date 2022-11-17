@@ -651,6 +651,9 @@ impl TripleLossKmersGenerator {
                             log::debug!("{} {}", item1.kmers.len(), window_size);
                             item1 = match iter1.next() {
                                 Some(x) => {
+                                    if x.kmers.is_empty() {
+                                        break 'inner;
+                                    }
                                     x
                                 },
                                 None => {
@@ -658,7 +661,6 @@ impl TripleLossKmersGenerator {
                                 }
                             };
                         }
-
 
                         let start = std::time::Instant::now();
 
