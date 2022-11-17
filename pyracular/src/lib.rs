@@ -586,6 +586,7 @@ impl TripleLossKmersGenerator {
                 }
 
                 // let mut sfasta = SfastaParser::open(filename.clone()).expect("Unable to open file");
+                // TODO: Make sfasta shareable across threads
                 let mut buf = std::io::BufReader::new(std::fs::File::open(filename.clone()).expect("Unable to open file"));
                 let mut sfasta = SfastaParser::open_from_buffer(&mut buf, false).unwrap();
                 sfasta.get_seqlocs();
@@ -891,6 +892,8 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
     let seqlen = sfasta.seqloc_len(seqloc) as u32;
 
     let needed_length = needed_length as u32;
+
+    let seqlen = seqlen.saturating_sub(needed_length);
 
     if seqlen == 0 {
         return None;
