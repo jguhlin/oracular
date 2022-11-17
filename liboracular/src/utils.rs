@@ -83,6 +83,7 @@ pub fn capitalize_nucleotides(slice: &mut [u8]) {
     }
 }
 
+// TODO: Make into the faster version
 #[inline]
 const fn _complement_nucl(nucl: u8) -> u8 {
     // Should all be capitalized by now...

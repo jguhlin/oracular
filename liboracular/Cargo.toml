@@ -30,7 +30,8 @@ rust-lapper = "1.0.1"
 
 linked_hash_set = "0.1.3"
 jetscii = "0.5.3"
-hashbrown = "0.12.3"
+hashbrown = "0.13.1"
 libsfasta = { path = "../../sfasta/libsfasta" }
+pulp = "0.8.0"
 
 
