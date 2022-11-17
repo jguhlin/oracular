@@ -653,7 +653,10 @@ impl TripleLossKmersGenerator {
                         while item1.kmers.len() < window_size {
                             log::debug!("{} {}", item1.kmers.len(), window_size);
                             item1 = match iter1.next() {
-                                Some(x) => x,
+                                Some(x) => {
+                                    log::debug!("Got a match");
+                                    x
+                                },
                                 None => {
                                     log::debug!("Break inner due to window size too low");
                                     break 'inner;
