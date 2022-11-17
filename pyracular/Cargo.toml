@@ -22,7 +22,7 @@ bytecount = "0.6.1"
 twox-hash = "1.5.0"
 liboracular = { path = "../liboracular/" }
 crossbeam = "0.8.2"
-mimalloc = { version = "0.1.24", default-features = false }
+mimalloc = { version = "0.1.32", default-features = false }
 rand = "0.8.5"
 rand_xoshiro = "0.6.0"
 libsfasta = { path = "../../sfasta/libsfasta" }
