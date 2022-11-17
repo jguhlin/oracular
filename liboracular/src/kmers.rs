@@ -348,10 +348,15 @@ impl<'kmers> Iterator for KmerWindowGenerator<'kmers> {
         let mut kmers: Vec<Vec<u8>> = Vec::with_capacity(self.window_size);
         let mut coords: Vec<Coords> = Vec::with_capacity(self.window_size);
 
-        while kmers.len() == 0 {
+        log::debug!("KmerWindowGenerator::next()");
+
+        'outer: while kmers.is_empty() {
+            log::debug!("KmerWindowGenerator::next()::while");
             for _ in 0..self.window_size {
+                log::debug!("KmerWindowGenerator::next()::while::for");
                 match self.kmer_generator.next() {
                     Some((x, c)) => {
+                        log::debug!("KmerWindowGenerator::next()::while::for::Some");
                         if x.len() == self.k {
                             kmers.push(x);
                             coords.push(c);
@@ -359,11 +364,14 @@ impl<'kmers> Iterator for KmerWindowGenerator<'kmers> {
                             panic!("Invalid Kmer");
                         }
                     }
-                    None => break,
+                    None => {
+                        log::debug!("KmerWindowGenerator::next()::while::for::None");
+                        break 'outer
+                    }
                 };
             }
 
-            if kmers.len() == 0 && !self.next_seq() {
+            if kmers.is_empty() && !self.next_seq() {
                 return None; // We are finished!
             }
         }

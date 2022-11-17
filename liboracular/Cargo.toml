@@ -33,5 +33,7 @@ jetscii = "0.5.3"
 hashbrown = "0.13.1"
 libsfasta = { path = "../../sfasta/libsfasta" }
 pulp = "0.8.0"
+log = "0.4.17"
+
 
 
