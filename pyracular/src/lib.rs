@@ -586,6 +586,7 @@ impl TripleLossKmersGenerator {
                 }
 
                 let mut sfasta = SfastaParser::open(filename.clone()).expect("Unable to open file");
+                sfasta.get_seqlocs();
 
                 log::debug!("Generating kmers for thread {}", thread_number);
 
