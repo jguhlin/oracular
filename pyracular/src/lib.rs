@@ -648,8 +648,10 @@ impl TripleLossKmersGenerator {
                                 break 'inner;
                             }
                         };
+                        log::debug!("Past first match");
 
                         while item1.kmers.len() < window_size {
+                            log::debug!("{} {}", item1.kmers.len(), window_size);
                             item1 = match iter1.next() {
                                 Some(x) => x,
                                 None => {
