@@ -174,7 +174,7 @@ impl Gff3KmerGenerator {
             iter: Box::new(iter),
             k,
             offset: 0,
-            filename: filename.clone(),
+            filename,
             gff3filename,
             window_size,
             types,
@@ -691,7 +691,6 @@ impl TripleLossKmersGenerator {
 
                             let mut seqloc_j = rng.gen_range(0..total_seqlocs);
                             
-
                             // Unlikely, but to be sure...
                             while seqloc_i == seqloc_j {
                                 seqloc_j = rng.gen_range(0..total_seqlocs);
@@ -713,8 +712,6 @@ impl TripleLossKmersGenerator {
 
                             log::debug!("Choice 2: {:#?}", start.elapsed());
                         }
-
-                        let start = std::time::Instant::now();
 
                         let KmerWindow {
                             kmers: mut kmers1,
@@ -748,15 +745,8 @@ impl TripleLossKmersGenerator {
                             matched,
                             reversecomplement,
                         };
-                        /*                        let mut batch = (
-                            (kmers1, kmers2),
-                            (truth1, truth2, matched, reversecomplement),
-                        ); */
-
-                        //println!("Prep: {:#?}", start.elapsed());
 
                         while let Err(x) = queue.push(batch) {
-                            println!("Queue is full");
                             // Test if we are prematurely shutdown...
                             if shutdown.load(Ordering::Relaxed) {
                                 return; // We are done, something triggered a
@@ -778,9 +768,6 @@ impl TripleLossKmersGenerator {
         mypyself.queueimpl.queue.len()
     }
     fn __iter__(mypyself: PyRef<Self>) -> PyRef<Self> {
-        // let gil = Python::acquire_gil();
-        // let py = gil.python();
-        // Ok(mypyself.into_py(py))
         mypyself
     }
 
@@ -805,9 +792,7 @@ impl TripleLossKmersGenerator {
 
         let result = result.unwrap();
 
-        //Python::with_gil(|_py| -> IterNextOutput<_, _> {
         IterNextOutput::Yield(result)
-        // })
     }
 }
 
@@ -889,7 +874,6 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
     rng: &mut R,
     caching: bool,
 ) -> Option<KmerWindow> {
-    let start = std::time::Instant::now();
     let needed_length = (k * window_size) + k;
 
     let mut seq;
@@ -902,9 +886,6 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
         return None;
     }
 
-    log::debug!("SeqLoc Len time: {:#?}", start.elapsed());
-
-    let start_time = std::time::Instant::now();
     let mut start = rng.gen_range(0..seqlen);
     let mut end = start + needed_length;
 
@@ -934,8 +915,6 @@ fn get_random_sequence_from_seqloc<R: Rng + ?Sized>(
         Some(x) => x,
         None => return None,
     };
-
-    log::debug!("Rest of the time: {:#?}", start_time.elapsed());
 
     iter2.next()
 }
