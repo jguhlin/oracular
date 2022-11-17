@@ -638,37 +638,30 @@ impl TripleLossKmersGenerator {
                         // Non-matched sequence -- Kmer window 1 and 2 from completely different
                         // seqs...
                         let choice: u8 = rng.gen_range(0..3); // Give us a number between 0 and 2
-                        log::debug!("Choice: {}", choice);
 
                         // Always need a starting window...
                         item1 = match iter1.next() {
                             Some(x) => x,
                             None => {
-                                log::debug!("Breaking inner loop");
                                 break 'inner;
                             }
                         };
-                        log::debug!("Past first match");
 
                         while item1.kmers.len() < window_size {
                             log::debug!("{} {}", item1.kmers.len(), window_size);
                             item1 = match iter1.next() {
                                 Some(x) => {
-                                    log::debug!("Got a match");
                                     x
                                 },
                                 None => {
-                                    log::debug!("Break inner due to window size too low");
                                     break 'inner;
                                 }
                             };
                         }
 
-                        log::debug!("Past second match");
 
                         let start = std::time::Instant::now();
 
-                        log::debug!("Acting on Choice: {}", choice);
                         // Matched Sequence
                         if choice == 0 {
                             matched = true;
