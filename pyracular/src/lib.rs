@@ -661,6 +661,8 @@ impl TripleLossKmersGenerator {
                             };
                         }
 
+                        log::debug!("Past second match");
+
                         let start = std::time::Instant::now();
 
                         log::debug!("Acting on Choice: {}", choice);
