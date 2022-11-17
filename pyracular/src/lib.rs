@@ -585,7 +585,13 @@ impl TripleLossKmersGenerator {
                     rng.jump();
                 }
 
-                let mut sfasta = SfastaParser::open(filename.clone()).expect("Unable to open file");
+                let fh = std::fs::File::open(filename.clone()).expect("Error opening file");
+                let reader = std::io::BufReader::new(fh);
+
+                //let mut sfasta = SfastaParser::open(filename.clone()).expect("Unable to open file");
+                let mut sfasta = SfastaParser::open_from_buffer(reader, false)
+                    .expect("Unable to open file");
+                    
                 sfasta.get_seqlocs();
 
                 log::debug!("Generating kmers for thread {}", thread_number);
