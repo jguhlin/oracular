@@ -20,7 +20,7 @@ pub fn rc_kmerwindow(mut window: KmerWindow) -> KmerWindow {
             let mut y = x.clone();
             y.reverse();
             utils::complement_nucleotides(&mut y);
-            return y;
+            y
         })
         .collect::<Vec<Vec<u8>>>();
     reversed.reverse();

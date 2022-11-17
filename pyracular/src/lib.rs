@@ -644,6 +644,7 @@ impl TripleLossKmersGenerator {
                         item1 = match iter1.next() {
                             Some(x) => x,
                             None => {
+                                log::debug!("Breaking inner loop");
                                 break 'inner;
                             }
                         };
@@ -652,6 +653,7 @@ impl TripleLossKmersGenerator {
                             item1 = match iter1.next() {
                                 Some(x) => x,
                                 None => {
+                                    log::debug!("Break inner due to window size too low");
                                     break 'inner;
                                 }
                             };
@@ -659,6 +661,7 @@ impl TripleLossKmersGenerator {
 
                         let start = std::time::Instant::now();
 
+                        log::debug!("Acting on Choice: {}", choice);
                         // Matched Sequence
                         if choice == 0 {
                             matched = true;
