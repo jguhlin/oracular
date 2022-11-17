@@ -586,7 +586,7 @@ impl TripleLossKmersGenerator {
                 }
 
                 // let mut sfasta = SfastaParser::open(filename.clone()).expect("Unable to open file");
-                let mut buf = std::io::BufReader::with_capacity(128 * 1024, std::fs::File::open(filename.clone()).expect("Unable to open file"));
+                let mut buf = std::io::BufReader::new(std::fs::File::open(filename.clone()).expect("Unable to open file"));
                 let mut sfasta = SfastaParser::open_from_buffer(&mut buf, false).unwrap();
                 sfasta.get_seqlocs();
 
