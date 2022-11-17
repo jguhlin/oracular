@@ -613,6 +613,7 @@ impl TripleLossKmersGenerator {
                     };
 
                     if sequence.len() < minimum_seqlength {
+                        log::debug!("Skipping sequence due to length");
                         continue;
                     }
 
