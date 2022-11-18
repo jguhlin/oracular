@@ -809,11 +809,17 @@ impl TripleLossKmersGenerator {
 
 #[pyclass(frozen)]
 pub struct TripleLossReturn {
+    #[pyo3(get)]
     pub kmers1: Vec<Vec<bool>>,
+    #[pyo3(get)]
     pub kmers2: Vec<Vec<bool>>,
+    #[pyo3(get)]
     pub truth1: Vec<bool>,
+    #[pyo3(get)]
     pub truth2: Vec<bool>,
+    #[pyo3(get)]
     pub matched: bool,
+    #[pyo3(get)]
     pub reversecomplement: bool,
 }
 
