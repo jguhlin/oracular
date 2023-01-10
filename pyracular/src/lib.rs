@@ -20,7 +20,7 @@ static GLOBAL: MiMalloc = MiMalloc;
 use rand_xoshiro::rand_core::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 
-// NOTE: New naming convention
+// NOTE: New naming conventionconvert_string_to_array
 // Rust-y stuff is "iter" Python is "Generator"
 
 use liboracular::io;
@@ -31,19 +31,12 @@ use liboracular::kmers::{
 };
 use libsfasta::prelude::*;
 
-use pyo3::prelude::*;
-// use pyo3::wrap_pyfunction;
 use pyo3::class::iter::IterNextOutput;
+use pyo3::prelude::*;
 use pyo3::types::PyDict;
-
-// use pyo3::wrap_pyfunction;
 
 use pyo3::wrap_pyfunction;
 
-// use std::fs::File;
-// use std::io::BufReader;
-
-// TODO: Should be literals to concatenate...
 #[inline]
 fn convert_string_to_array(k: usize, s: &[u8]) -> Vec<bool> {
     let mut out: Vec<bool> = vec![false; k * 5];
@@ -56,11 +49,45 @@ fn convert_string_to_array(k: usize, s: &[u8]) -> Vec<bool> {
             71 => out[5*x+4] = true, // G
             78 => out[5*x+2] = true, // N
             _  => out[5*x+2] = true, // N for everything else...
-            // A_  => { out[5*x+2] = 1; println!("Invalid Character! {} in {}", c, std::str::from_utf8(s).unwrap()) }  // N
         };
     }
 
     out
+}
+
+#[pyfunction]
+// The end is chopped off.
+// TODO: Handle if longer than k + ws
+fn convert_sequence_to_array(k: usize, ws: usize, s: &str) -> Vec<bool> {
+    let mut out: Vec<bool> = Vec::with_capacity(s.len() * 5);
+
+    let kmers = f32::floor(s.len() as f32 / k as f32) as usize;
+    for i in 0..kmers {
+        let mut kmer = convert_string_to_array(k, &s[i*k..(i+1)*k].as_bytes());
+        out.append(&mut kmer);
+    }
+
+    out
+}
+
+#[pyfunction]
+// Given k as kmer length
+// and window_size as the window size
+// Generate a mask for each kmer (1 to pay attention to it, 0 to ignore)
+// Return is the new sequence (with padding) and the mask
+fn pad_and_mask(k: usize, window_size: usize, mut seq: Vec<bool>) -> (Vec<bool>, Vec<bool>) {
+    let mut mask: Vec<bool> = vec![false; window_size];
+
+    for i in 0..(seq.len() / (5 * k)) as usize {
+        mask[i] = true;
+    }
+
+    if seq.len() < window_size * k * 5 {
+        let mut pad = vec![false; window_size * k * 5 - seq.len()];
+        seq.append(&mut pad);
+    }
+
+    (seq, mask)
 }
 
 // ** Kmer Classification GFF3
@@ -79,12 +106,6 @@ struct Gff3KmerGenerator {
 
 #[pymethods]
 impl Gff3KmerGenerator {
-    /* fn __iter__(mypyself: PyRefMut<Self>) -> PyResult<PyObject> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        Ok(mypyself.into_py(py))
-    } */
-
     fn __iter__(mypyself: PyRef<Self>) -> PyRef<Self> {
         mypyself
     }
@@ -585,9 +606,11 @@ impl TripleLossKmersGenerator {
                     rng.jump();
                 }
 
-                // let mut sfasta = SfastaParser::open(filename.clone()).expect("Unable to open file");
-                // TODO: Make sfasta shareable across threads
-                let mut buf = std::io::BufReader::new(std::fs::File::open(filename.clone()).expect("Unable to open file"));
+                // let mut sfasta = SfastaParser::open(filename.clone()).expect("Unable to open
+                // file"); TODO: Make sfasta shareable across threads
+                let mut buf = std::io::BufReader::new(
+                    std::fs::File::open(filename.clone()).expect("Unable to open file"),
+                );
                 let mut sfasta = SfastaParser::open_from_buffer(&mut buf, false).unwrap();
                 sfasta.get_seqlocs();
 
@@ -658,7 +681,7 @@ impl TripleLossKmersGenerator {
                                         break 'inner;
                                     }
                                     x
-                                },
+                                }
                                 None => {
                                     break 'inner;
                                 }
@@ -701,7 +724,7 @@ impl TripleLossKmersGenerator {
                             reversecomplement = false;
 
                             let mut seqloc_j = rng.gen_range(0..total_seqlocs);
-                            
+
                             // Unlikely, but to be sure...
                             while seqloc_i == seqloc_j {
                                 seqloc_j = rng.gen_range(0..total_seqlocs);
@@ -767,7 +790,6 @@ impl TripleLossKmersGenerator {
                             park(); // Queue is full, park the thread...
                         }
                     }
-
                 }
             },
         );
@@ -1634,7 +1656,9 @@ fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<SequenceOrderKmersGenerator>()?;
     m.add_class::<MatchedKmersGenerator>()?;
     m.add_class::<TripleLossKmersGenerator>()?;
-    m.add_wrapped(wrap_pyfunction!(convert_fasta_to_sfasta))?;
+    // m.add_wrapped(wrap_pyfunction!(convert_fasta_to_sfasta))?;
+    m.add_wrapped(wrap_pyfunction!(pad_and_mask));
+    m.add_wrapped(wrap_pyfunction!(convert_sequence_to_array))?;
 
     Ok(())
 }

@@ -359,9 +359,7 @@ impl<'kmers> Iterator for KmerWindowGenerator<'kmers> {
                             panic!("Invalid Kmer");
                         }
                     }
-                    None => {
-                        break 'outer
-                    }
+                    None => break 'outer,
                 };
             }
 
