@@ -626,10 +626,16 @@ impl TripleLossKmersGenerator {
                 // TODO: Make even smarter -- Load up 1k windows and pick from there matching
                 // and non-matching ones, including some RC ones as well...
 
+                let choice_dist = rand::distributions::WeightedIndex::new([1, 1, 2]).unwrap();
+                let offset_dist = rand::distributions::Uniform::from(0..k);
+                let seqloc_dist = rand::distributions::Uniform::from(0..total_seqlocs);
+
                 loop {
-                    let offset = rng.gen_range(0..k);
+                    // let offset = rng.gen_range(0..k);
+                    let offset = offset_dist.sample(&mut rng);
                     let rc: bool = rng.gen();
-                    let seqloc_i = rng.gen_range(0..total_seqlocs);
+                    // let seqloc_i = rng.gen_range(0..total_seqlocs);
+                    let seqloc_i = seqloc_dist.sample(&mut rng);
                     let seqloc = sfasta.get_seqloc(seqloc_i).unwrap().unwrap();
 
                     let sequence = match sfasta.get_sequence_only_by_seqloc(&seqloc, true) {
@@ -663,7 +669,8 @@ impl TripleLossKmersGenerator {
                         // Matched Sequence -- RC -- Kmer window 1 and it's reverse complement
                         // Non-matched sequence -- Kmer window 1 and 2 from completely different
                         // seqs...
-                        let choice: u8 = rng.gen_range(0..3); // Give us a number between 0 and 2
+                        // let choice: u8 = rng.gen_range(0..3); // Give us a number between 0 and 2
+                        let choice: u8 = choice_dist.sample(&mut rng) as u8;
 
                         // Always need a starting window...
                         item1 = match iter1.next() {
@@ -723,11 +730,13 @@ impl TripleLossKmersGenerator {
                             matched = false;
                             reversecomplement = false;
 
-                            let mut seqloc_j = rng.gen_range(0..total_seqlocs);
+                            // let mut seqloc_j = rng.gen_range(0..total_seqlocs);
+                            let mut seqloc_j = seqloc_dist.sample(&mut rng);
 
                             // Unlikely, but to be sure...
                             while seqloc_i == seqloc_j {
-                                seqloc_j = rng.gen_range(0..total_seqlocs);
+                                //seqloc_j = rng.gen_range(0..total_seqlocs);
+                                seqloc_j = seqloc_dist.sample(&mut rng);
                             }
 
                             let rand_seqloc = sfasta.get_seqloc(seqloc_j).unwrap().unwrap();
