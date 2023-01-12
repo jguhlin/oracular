@@ -37,14 +37,6 @@ use pyo3::types::PyDict;
 
 use pyo3::wrap_pyfunction;
 
-/* TODOs:
-  - Return sequences smaller than required length, and use pad_and_mask fn to accomodate
-  - Returns masks as well
-  - Random mask sometimes (so that it trains at different lengths)
-  - Will probably need a minimum window size?
-  - Not straighforward as we randomize the start and end of the sequence (And whether it's RC or not...), so if it's too small, should still offset between 0..k
- */
-
 #[inline]
 fn convert_string_to_array(k: usize, s: &[u8]) -> Vec<bool> {
     let mut out: Vec<bool> = vec![false; k * 5];
@@ -422,7 +414,22 @@ impl MatchedKmersGenerator {
                                     // shutdown...
                         }
 
-                        let mut item1;choice_dist
+                        let mut item1;
+                        let mut item2;
+                        let matched;
+
+                        if rng.gen::<bool>() {
+                            matched = true;
+
+                            item1 = match iter1.next() {
+                                Some(x) => x,
+                                None => break,
+                            };
+
+                            // Half the time skip a window...
+                            if rng.gen::<bool>() {
+                                iter1.next();
+                            }
 
                             item2 = match iter1.next() {
                                 Some(x) => x,
@@ -605,7 +612,20 @@ impl TripleLossKmersGenerator {
                     std::fs::File::open(filename.clone()).expect("Unable to open file"),
                 );
                 let mut sfasta = SfastaParser::open_from_buffer(&mut buf, false).unwrap();
-                sfasta.get_seqlocs();
+                sfasta.get_seqlocs().expect("Unable to get seqlocs");
+
+                let mut valid_indices = Vec::new();
+                for i in 0..sfasta.seqlocs.as_ref().unwrap().total_seqlocs {
+                    let seqloc = sfasta
+                        .get_seqloc(i)
+                        .expect("Unable to get seqloc");
+
+                    if let Some(seqloc) = seqloc {
+                        if seqloc.sequence.is_some() && sfasta.seqloc_len(&seqloc) >= k * window_size + k {
+                            valid_indices.push(i);
+                        }
+                    }
+                }
 
                 log::debug!("Generating kmers for thread {}", thread_number);
 
@@ -621,13 +641,14 @@ impl TripleLossKmersGenerator {
 
                 let choice_dist = rand::distributions::WeightedIndex::new([1, 1, 2]).unwrap();
                 let offset_dist = rand::distributions::Uniform::from(0..k);
-                let seqloc_dist = rand::distributions::Uniform::from(0..total_seqlocs);
+                let seqloc_dist = rand::distributions::Uniform::from(0..valid_indices.len());
 
                 loop {
+                    // let offset = rng.gen_range(0..k);
                     let offset = offset_dist.sample(&mut rng);
                     let rc: bool = rng.gen();
-
-                    let seqloc_i = seqloc_dist.sample(&mut rng);
+                    // let seqloc_i = rng.gen_range(0..total_seqlocs);
+                    let seqloc_i = valid_indices[seqloc_dist.sample(&mut rng)];
                     let seqloc = sfasta.get_seqloc(seqloc_i).unwrap().unwrap();
 
                     let sequence = match sfasta.get_sequence_only_by_seqloc(&seqloc, true) {
@@ -723,12 +744,12 @@ impl TripleLossKmersGenerator {
                             reversecomplement = false;
 
                             // let mut seqloc_j = rng.gen_range(0..total_seqlocs);
-                            let mut seqloc_j = seqloc_dist.sample(&mut rng);
+                            let mut seqloc_j = valid_indices[seqloc_dist.sample(&mut rng)];
 
                             // Unlikely, but to be sure...
                             while seqloc_i == seqloc_j {
                                 //seqloc_j = rng.gen_range(0..total_seqlocs);
-                                seqloc_j = seqloc_dist.sample(&mut rng);
+                                seqloc_j = valid_indices[seqloc_dist.sample(&mut rng)];
                             }
 
                             let rand_seqloc = sfasta.get_seqloc(seqloc_j).unwrap().unwrap();
@@ -1658,7 +1679,7 @@ fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<MatchedKmersGenerator>()?;
     m.add_class::<TripleLossKmersGenerator>()?;
     // m.add_wrapped(wrap_pyfunction!(convert_fasta_to_sfasta))?;
-    m.add_wrapped(wrap_pyfunction!(pad_and_mask))?;
+    m.add_wrapped(wrap_pyfunction!(pad_and_mask));
     m.add_wrapped(wrap_pyfunction!(convert_sequence_to_array))?;
 
     Ok(())
