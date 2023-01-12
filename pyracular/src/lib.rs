@@ -41,6 +41,8 @@ use pyo3::wrap_pyfunction;
   - Return sequences smaller than required length, and use pad_and_mask fn to accomodate
   - Returns masks as well
   - Random mask sometimes (so that it trains at different lengths)
+  - Will probably need a minimum window size?
+  - Not straighforward as we randomize the start and end of the sequence (And whether it's RC or not...), so if it's too small, should still offset between 0..k
  */
 
 #[inline]
