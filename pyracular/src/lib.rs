@@ -37,6 +37,12 @@ use pyo3::types::PyDict;
 
 use pyo3::wrap_pyfunction;
 
+/* TODOs:
+  - Return sequences smaller than required length, and use pad_and_mask fn to accomodate
+  - Returns masks as well
+  - Random mask sometimes (so that it trains at different lengths)
+ */
+
 #[inline]
 fn convert_string_to_array(k: usize, s: &[u8]) -> Vec<bool> {
     let mut out: Vec<bool> = vec![false; k * 5];
@@ -414,22 +420,7 @@ impl MatchedKmersGenerator {
                                     // shutdown...
                         }
 
-                        let mut item1;
-                        let mut item2;
-                        let matched;
-
-                        if rng.gen::<bool>() {
-                            matched = true;
-
-                            item1 = match iter1.next() {
-                                Some(x) => x,
-                                None => break,
-                            };
-
-                            // Half the time skip a window...
-                            if rng.gen::<bool>() {
-                                iter1.next();
-                            }
+                        let mut item1;choice_dist
 
                             item2 = match iter1.next() {
                                 Some(x) => x,
@@ -631,10 +622,9 @@ impl TripleLossKmersGenerator {
                 let seqloc_dist = rand::distributions::Uniform::from(0..total_seqlocs);
 
                 loop {
-                    // let offset = rng.gen_range(0..k);
                     let offset = offset_dist.sample(&mut rng);
                     let rc: bool = rng.gen();
-                    // let seqloc_i = rng.gen_range(0..total_seqlocs);
+
                     let seqloc_i = seqloc_dist.sample(&mut rng);
                     let seqloc = sfasta.get_seqloc(seqloc_i).unwrap().unwrap();
 
@@ -1666,7 +1656,7 @@ fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<MatchedKmersGenerator>()?;
     m.add_class::<TripleLossKmersGenerator>()?;
     // m.add_wrapped(wrap_pyfunction!(convert_fasta_to_sfasta))?;
-    m.add_wrapped(wrap_pyfunction!(pad_and_mask));
+    m.add_wrapped(wrap_pyfunction!(pad_and_mask))?;
     m.add_wrapped(wrap_pyfunction!(convert_sequence_to_array))?;
 
     Ok(())
