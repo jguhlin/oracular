@@ -129,6 +129,28 @@ pub fn replace_random<R: Rng + ?Sized>(
     truth
 }
 
+// Replace with the blank token (MASK, all 0's)
+pub fn replace_blank<R: Rng + ?Sized>(
+    k: usize,
+    replacement_pct: f32,
+    kmers: &mut Vec<Vec<u8>>,
+    mut rng: &mut R,
+) -> Vec<bool> {
+    let mut truth: Vec<bool> = Vec::with_capacity(kmers.len());
+    for kmer in kmers.iter_mut() {
+        if rng.gen::<f32>() < replacement_pct {
+            // Replace with all 0's
+            let mut new_kmer: Vec<u8> = vec![0; k];
+            *kmer = new_kmer;
+            truth.push(false);
+        } else {
+            truth.push(true);
+        }
+    }
+
+    truth
+}
+
 impl<'kmers> Iterator for DiscriminatorMaskedGenerator<'kmers> {
     type Item = DiscriminatorMasked;
 

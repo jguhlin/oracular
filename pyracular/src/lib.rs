@@ -26,8 +26,9 @@ use rand_xoshiro::Xoshiro256PlusPlus;
 use liboracular::io;
 use liboracular::kmers::KmerWindow;
 use liboracular::kmers::{
-    rc_kmerwindow, replace_random, DiscriminatorMasked, DiscriminatorMaskedGenerator, Gff3Kmers,
-    Gff3KmersIter, KmerCoordsWindow, KmerCoordsWindowIter, KmerWindowGenerator,
+    rc_kmerwindow, replace_blank, replace_random, DiscriminatorMasked,
+    DiscriminatorMaskedGenerator, Gff3Kmers, Gff3KmersIter, KmerCoordsWindow, KmerCoordsWindowIter,
+    KmerWindowGenerator,
 };
 use libsfasta::prelude::*;
 
@@ -43,12 +44,12 @@ fn convert_string_to_array(k: usize, s: &[u8]) -> Vec<bool> {
 
     for (x, c) in s.iter().enumerate() {
         match c {
-            65 => out[5*x] = true,   // A
-            84 => out[5*x+1] = true, // T
-            67 => out[5*x+3] = true, // C
-            71 => out[5*x+4] = true, // G
-            78 => out[5*x+2] = true, // N
-            _  => out[5*x+2] = true, // N for everything else...
+            65 => out[5 * x] = true,     // A
+            84 => out[5 * x + 1] = true, // T
+            67 => out[5 * x + 3] = true, // C
+            71 => out[5 * x + 4] = true, // G
+            78 => out[5 * x + 2] = true, // N
+            _ => out[5 * x + 2] = true,  // N for everything else...
         };
     }
 
@@ -63,7 +64,7 @@ fn convert_sequence_to_array(k: usize, ws: usize, s: &str) -> Vec<bool> {
 
     let kmers = f32::floor(s.len() as f32 / k as f32) as usize;
     for i in 0..kmers {
-        let mut kmer = convert_string_to_array(k, &s[i*k..(i+1)*k].as_bytes());
+        let mut kmer = convert_string_to_array(k, &s[i * k..(i + 1) * k].as_bytes());
         out.append(&mut kmer);
     }
 
@@ -616,12 +617,12 @@ impl TripleLossKmersGenerator {
 
                 let mut valid_indices = Vec::new();
                 for i in 0..sfasta.seqlocs.as_ref().unwrap().total_seqlocs {
-                    let seqloc = sfasta
-                        .get_seqloc(i)
-                        .expect("Unable to get seqloc");
+                    let seqloc = sfasta.get_seqloc(i).expect("Unable to get seqloc");
 
                     if let Some(seqloc) = seqloc {
-                        if seqloc.sequence.is_some() && sfasta.seqloc_len(&seqloc) >= k * window_size + k {
+                        if seqloc.sequence.is_some()
+                            && sfasta.seqloc_len(&seqloc) >= k * window_size + k
+                        {
                             valid_indices.push(i);
                         }
                     }
@@ -780,8 +781,21 @@ impl TripleLossKmersGenerator {
                             rc: _,
                         } = item2;
 
-                        let truth1 = replace_random(k, replacement_pct, &mut kmers1, &mut rng);
-                        let truth2 = replace_random(k, replacement_pct, &mut kmers2, &mut rng);
+                        // kmers3
+                        let kmers1_truth = kmers1
+                            .clone()
+                            .iter()
+                            .map(|x| convert_string_to_array(k, x))
+                            .collect();
+
+                        let kmers2_truth = kmers2
+                            .clone()
+                            .iter()
+                            .map(|x| convert_string_to_array(k, x))
+                            .collect();
+
+                        let truth1 = replace_blank(k, replacement_pct, &mut kmers1, &mut rng);
+                        let truth2 = replace_blank(k, replacement_pct, &mut kmers2, &mut rng);
 
                         let kmers1 = kmers1
                             .iter()
@@ -796,6 +810,8 @@ impl TripleLossKmersGenerator {
                         let mut batch = TripleLossReturn {
                             kmers1,
                             kmers2,
+                            kmers3: kmers1_truth,
+                            kmers4: kmers2_truth,
                             truth1,
                             truth2,
                             matched,
@@ -857,6 +873,10 @@ pub struct TripleLossReturn {
     pub kmers1: Vec<Vec<bool>>,
     #[pyo3(get)]
     pub kmers2: Vec<Vec<bool>>,
+    #[pyo3(get)]
+    pub kmers3: Vec<Vec<bool>>,
+    #[pyo3(get)]
+    pub kmers4: Vec<Vec<bool>>,
     #[pyo3(get)]
     pub truth1: Vec<bool>,
     #[pyo3(get)]
