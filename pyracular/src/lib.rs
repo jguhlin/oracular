@@ -1,8 +1,3 @@
-extern crate crossbeam;
-extern crate mimalloc;
-extern crate rand;
-extern crate rand_xoshiro;
-
 use crossbeam::queue::ArrayQueue;
 use crossbeam::utils::Backoff;
 use std::sync::atomic::Ordering;
@@ -20,7 +15,7 @@ static GLOBAL: MiMalloc = MiMalloc;
 use rand_xoshiro::rand_core::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 
-// NOTE: New naming conventionconvert_string_to_array
+// NOTE: New naming convention
 // Rust-y stuff is "iter" Python is "Generator"
 
 use liboracular::io;
@@ -37,6 +32,9 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use pyo3::wrap_pyfunction;
+
+pub mod taxonomy;
+pub use taxonomy::*;
 
 #[inline]
 fn convert_string_to_array(k: usize, s: &[u8]) -> Vec<bool> {
