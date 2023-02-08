@@ -40,13 +40,13 @@ pub struct TaxonomyReturn {
 // ** Taxonomic Classification **
 #[pyclass]
 struct TaxonomicSequenceGenerator {
-    queueimpl: QueueImpl<TaxonomyReturn>,
+    // queueimpl: QueueImpl<TaxonomyReturn>,
     child_taxons: Vec<(usize, String)>,
 }
 
 impl Drop for TaxonomicSequenceGenerator {
     fn drop(&mut self) {
-        self.queueimpl.shutdown();
+        // self.queueimpl.shutdown();
     }
 }
 
@@ -81,7 +81,7 @@ impl TaxonomicSequenceGenerator {
 
         let child_taxon_rank = acc2tax::get_taxon_rank(child_taxons[0].0);
 
-        let mut balancer: HashMap<usize, usize> = HashMap::with_capacity(child_taxons.len());
+        let mut balancer: HashMap<usize, usize> = child_taxons.iter().map(|(taxon, _)| (*taxon, 0)).collect();
 
         let mut buf = std::io::BufReader::new(std::fs::File::open(filename.clone()).unwrap());
         let mut sfasta = SfastaParser::open_from_buffer(&mut buf, false).unwrap();
@@ -92,59 +92,33 @@ impl TaxonomicSequenceGenerator {
         sfasta.get_seqlocs().expect("Unable to get seqlocs");
 
         let mut valid_indices = Vec::new();
-        let mut valid_indices_len = 0;
 
         let min_length = window_size_min * k;
 
         for i in 0..sfasta.seqlocs.as_ref().unwrap().total_seqlocs {
             let seqloc = sfasta.get_seqloc(i).expect("Unable to get seqloc");
             if let Some(seqloc) = seqloc {
+                // If the sequence is too small we skip it
                 if sfasta.seqloc_len(&seqloc) < min_length {
                     continue;
                 }
 
+                // Sequence must also be part of a child taxon
                 if let Some(ids_loc) = &seqloc.ids {
                     let id = sfasta.get_id(ids_loc).expect("Unable to get id");
                     // Get taxons and check if any match the children
+                    let taxon = acc2tax::get_taxon(id);
+                    let taxons = acc2tax::get_complete_taxonomy(taxon as usize);
+                    if taxons.iter().any(|x| balancer.contains_key(x)) {
+                        valid_indices.push(i);
+                    }
                 }
             }
         }
 
-
-
-
-
-
-
-
-
-
-
-        
-
-
-
-
-
-
-
-
-
         Ok(Self {
-            queueimpl: QueueImpl::new(
-                k, 
-                filename, 
-                window_size_min, 
-                window_size_max,
-                taxon_rank,
-                queue_size,
-                threads,
-                seed,
-            )
+            child_taxons,
         })
-
-
-
 
     }
 }
