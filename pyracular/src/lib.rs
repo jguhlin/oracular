@@ -1697,8 +1697,11 @@ fn pyracular(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<MatchedKmersGenerator>()?;
     m.add_class::<TripleLossKmersGenerator>()?;
     // m.add_wrapped(wrap_pyfunction!(convert_fasta_to_sfasta))?;
-    m.add_wrapped(wrap_pyfunction!(pad_and_mask));
+    m.add_wrapped(wrap_pyfunction!(pad_and_mask))?;
     m.add_wrapped(wrap_pyfunction!(convert_sequence_to_array))?;
+    m.add_class::<Taxon>()?;
+    m.add_class::<TaxonomyReturn>()?;
+    m.add_class::<TaxonomicSequenceGenerator>()?;
 
     Ok(())
 }
