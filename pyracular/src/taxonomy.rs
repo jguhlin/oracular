@@ -1,12 +1,12 @@
 // Std crates
 use std::collections::HashMap;
 use std::f32::consts::E;
+use std::io::Write;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::thread;
 use std::thread::{park, JoinHandle};
-use std::io::Write;
 
 // External crates
 use crossbeam::queue::ArrayQueue;
@@ -56,14 +56,14 @@ pub struct Taxon {
 // ** Taxonomic Classification **
 #[pyclass]
 pub struct TaxonomicSequenceGenerator {
-    // queueimpl: QueueImpl<TaxonomyReturn>,
+    queueimpl: QueueImpl<TaxonomyReturn>,
     #[pyo3(get)]
     pub child_taxons: Vec<Taxon>,
 }
 
 impl Drop for TaxonomicSequenceGenerator {
     fn drop(&mut self) {
-        // self.queueimpl.shutdown();
+        self.queueimpl.shutdown();
     }
 }
 
@@ -84,7 +84,6 @@ impl TaxonomicSequenceGenerator {
         acc2tax_nodes_filename: String,
         acc2tax_names_filename: String,
     ) -> PyResult<Self> {
-
         assert!(window_size_min <= window_size_max);
         assert!(window_size_min > 0);
         assert!(window_size_max > 0);
@@ -122,10 +121,12 @@ impl TaxonomicSequenceGenerator {
         assert!(!child_taxons.is_empty());
         println!("Identified {} child taxons", child_taxons.len());
 
-        let mut buf = std::io::BufReader::new(std::fs::File::open(filename.clone()).unwrap());
-        let mut sfasta = SfastaParser::open_from_buffer(&mut buf, true).unwrap();
+        if Python::with_gil(|py| py.check_signals()).is_err() {
+            panic!("Interrupted");
+        };
 
-        let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed as u64);
+        let mut buf = std::io::BufReader::new(std::fs::File::open(filename.clone()).unwrap());
+        let sfasta = SfastaParser::open_from_buffer(&mut buf, true).unwrap();
 
         // This preloads the seqlocs if not already loaded
         // sfasta.get_seqlocs().expect("Unable to get seqlocs");
@@ -134,37 +135,41 @@ impl TaxonomicSequenceGenerator {
         let min_length = window_size_min * k;
 
         let idx = sfasta.seqlocs.as_ref().unwrap().index.as_ref().unwrap();
-        let valid_indices = idx.iter().enumerate().filter_map(|(i, seqloc)| 
-            { 
+
+        let valid_indices = idx
+            .par_iter()
+            .enumerate()
+            .filter_map(|(i, seqloc)| {
                 let seqlen = sfasta.seqloc_len_loaded(seqloc);
                 if seqlen >= min_length {
                     Some((i, seqloc, seqlen))
                 } else {
                     None
                 }
-            }
-        )
-        .map(|(i, seqloc, seqlen)| {
-            let id = sfasta.get_id_loaded(&seqloc.ids.as_ref().unwrap()).expect("Unable to get id Locs");
-            if Python::with_gil(|py| py.check_signals()).is_err() {
-                panic!("Interrupted");
-            };
-            (i, seqloc, seqlen, id)
-        })  
-        .filter_map(|(i, _seqloc, seqlen, id)| 
-            {
-            if Python::with_gil(|py| py.check_signals()).is_err() {
-                panic!("Interrupted");
-            };
-            // Get taxons and check if any match the children
-            let taxon = acc2tax::get_taxon(id.clone());
-            let taxons = acc2tax::get_complete_taxonomy(taxon as usize);
-            if let Some(x) = taxons.iter().filter(|x| balancer.contains_key(x)).next() {
-                return Some((*x, i, seqlen, id))
-            }
-            None
-            }
-        ).collect::<Vec<(usize, usize, usize,String)>>();
+            })
+            .map(|(i, seqloc, seqlen)| {
+                let id = sfasta
+                    .get_id_loaded(&seqloc.ids.as_ref().unwrap())
+                    .expect("Unable to get id Locs");
+                (i, seqloc, seqlen, id)
+            })
+            .filter_map(|(i, _seqloc, seqlen, id)| {
+                // if Python::with_gil(|py| py.check_signals()).is_err() {
+                // panic!("Interrupted");
+                // };
+                // Get taxons and check if any match the children
+                let taxon = acc2tax::get_taxon(id.clone());
+                let taxons = acc2tax::get_complete_taxonomy(taxon as usize);
+                if let Some(x) = taxons.iter().filter(|x| balancer.contains_key(x)).next() {
+                    return Some((*x, i, seqlen, id));
+                }
+                None
+            })
+            .collect::<Vec<(usize, usize, usize, String)>>();
+
+        if Python::with_gil(|py| py.check_signals()).is_err() {
+            panic!("Interrupted");
+        };
 
         println!("Identified {} valid sequences", valid_indices.len());
         valid_indices.iter().for_each(|(taxon, _i, seqlen, _id)| {
@@ -172,13 +177,13 @@ impl TaxonomicSequenceGenerator {
             total_seq_len.entry(*taxon).and_modify(|x| *x += seqlen);
         });
 
-        // let taxon_indices: HashMap<usize, Vec<usize>> = HashMap::new();
-        let taxon_indices = valid_indices
-            .iter()
-            .fold(HashMap::new(), |mut acc, (taxon, i, _seqlen, _id)| {
-                acc.entry(*taxon).or_insert_with(Vec::new).push(*i);
-                acc
-            });
+        let taxon_indices =
+            valid_indices
+                .iter()
+                .fold(HashMap::new(), |mut acc, (taxon, i, _seqlen, _id)| {
+                    acc.entry(*taxon).or_insert_with(Vec::new).push(*i);
+                    acc
+                });
 
         println!("{:#?}", totals);
 
@@ -199,9 +204,62 @@ impl TaxonomicSequenceGenerator {
         // Write the taxon counts to a file
         let mut f = std::fs::File::create("taxon_counts.csv").unwrap();
         for taxon in child_taxons.iter() {
-            writeln!(f, "{}\t{}\t{}\t{}", taxon.id, taxon.name, taxon.seq_count, taxon.seq_length).unwrap();
+            writeln!(
+                f,
+                "{}\t{}\t{}\t{}",
+                taxon.id, taxon.name, taxon.seq_count, taxon.seq_length
+            )
+            .unwrap();
         }
 
-        Ok(Self { child_taxons })
+        let child_taxon_dist = rand::distributions::Uniform::from(0..child_taxons.len());
+
+        let mut queueimpl = QueueImpl::manual(queue_size);
+
+        let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed as u64);
+
+        for _i in 0..threads {
+            rng.jump();
+            let mut rng = rng.clone();
+
+            let exhausted_handle = Arc::new(AtomicBool::new(false));
+            let shutdown_c = Arc::clone(&queueimpl.shutdown);
+            let exhausted_c = Arc::clone(&exhausted_handle);
+            let child_taxon_dist = child_taxon_dist.clone();
+            queueimpl.exhausted.push(exhausted_handle);
+            let queue_c = Arc::clone(&queueimpl.queue);
+            let filename = filename.clone();
+
+            let handle = thread::spawn(move || {
+                let mut buf = std::io::BufReader::new(
+                    std::fs::File::open(filename.clone()).expect("Unable to open file"),
+                );
+                let mut sfasta = SfastaParser::open_from_buffer(&mut buf, false).unwrap();
+                sfasta.get_seqlocs().expect("Unable to get seqlocs");
+
+                // Disable masking
+                sfasta.masking = None;
+
+                // Pick a window size between min and max (inclusive on both ends)
+                let window_size_dist = rand::distributions::Uniform::from(
+                    window_size_min..=window_size_max,
+                );
+
+                // Main loop
+                
+                // RC?
+                let rc: bool = rng.gen();
+
+                
+
+               
+
+            });
+        }
+
+        Ok(Self {
+            child_taxons,
+            queueimpl,
+        })
     }
 }

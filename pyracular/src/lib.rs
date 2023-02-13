@@ -601,9 +601,7 @@ impl TripleLossKmersGenerator {
             seed as u64,
             move |shutdown, exhausted, queue, seed, thread_number| {
                 let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed);
-                for _i in 0..thread_number {
-                    rng.jump();
-                }
+                (0..thread_number).for_each(|_| rng.jump());
 
                 // let mut sfasta = SfastaParser::open(filename.clone()).expect("Unable to open
                 // file"); TODO: Make sfasta shareable across threads
@@ -1076,7 +1074,6 @@ struct QueueImpl<Q> {
 }
 
 impl<Q> QueueImpl<Q> {
-    // fn new(iter: Box<dyn Iterator<Item = I> + Send>) -> Self {
     fn new<F>(queue_size: usize, threads: usize, seed: u64, func: F) -> Self
     where
         F: Fn(Arc<AtomicBool>, Arc<AtomicBool>, Arc<ArrayQueue<Q>>, u64, usize)
@@ -1117,6 +1114,25 @@ impl<Q> QueueImpl<Q> {
 
             handles.push(handle);
         }
+
+        QueueImpl {
+            shutdown,
+            exhausted,
+            queue,
+            handles,
+        }
+    }
+
+    /// Create a QueueImpl without the auto-threading syntactic sugar...
+    fn manual(queue_size: usize) -> Self
+    where
+        Q: Send + 'static + Sync,
+    {
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let exhausted = Vec::new();
+        let queue = Arc::new(ArrayQueue::new(queue_size));
+
+        let handles = Vec::new();
 
         QueueImpl {
             shutdown,
