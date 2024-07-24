@@ -241,19 +241,13 @@ impl TaxonomicSequenceGenerator {
                 sfasta.masking = None;
 
                 // Pick a window size between min and max (inclusive on both ends)
-                let window_size_dist = rand::distributions::Uniform::from(
-                    window_size_min..=window_size_max,
-                );
+                let window_size_dist =
+                    rand::distributions::Uniform::from(window_size_min..=window_size_max);
 
                 // Main loop
-                
+
                 // RC?
                 let rc: bool = rng.gen();
-
-                
-
-               
-
             });
         }
 
